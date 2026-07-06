@@ -559,6 +559,20 @@
   .geo-row-body.open { display:block; }
   .geo-field-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
 
+
+  /* Multi-select filter dropdown */
+  .multi-filter-wrap { position:relative; display:inline-block; }
+  .multi-filter-btn { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px 12px; font-size:12px; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:6px; min-width:120px; user-select:none; }
+  .multi-filter-btn:hover { border-color:var(--accent); }
+  .multi-filter-btn.active { border-color:var(--accent); background:var(--surface3); }
+  .multi-filter-dropdown { display:none; position:absolute; top:100%; left:0; z-index:200; background:var(--surface3); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow-md); min-width:180px; max-height:260px; overflow-y:auto; padding:6px 0; }
+  .multi-filter-dropdown.open { display:block; }
+  .multi-filter-item { display:flex; align-items:center; gap:8px; padding:7px 14px; cursor:pointer; font-size:12px; color:var(--text); }
+  .multi-filter-item:hover { background:var(--surface2); }
+  .multi-filter-item input[type=checkbox] { accent-color:var(--accent); width:14px; height:14px; }
+  .multi-filter-clear { padding:6px 14px; font-size:11px; color:var(--accent); cursor:pointer; border-top:1px solid var(--border); margin-top:4px; }
+  .multi-filter-clear:hover { text-decoration:underline; }
+
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -624,7 +638,7 @@
 <div class="container">
   <div class="stats-bar" id="statsBar"></div>
   <div class="toolbar">
-    <div class="toolbar-title">Dealers Added <span id="addedCount" style="font-size:13px;font-weight:400;color:var(--text-muted);">(0)</span></div>
+    <div class="toolbar-title">Dealers Added <span id="addedCount" style="font-size:13px;font-weight:400;color:var(--text-muted);">(0)</span> <span id="dealerFilterCount" style="display:none;font-size:12px;color:var(--accent);font-weight:500;margin-left:6px;"></span></div>
     <!-- Dealer picker -->
     <div class="dealer-picker-wrap" id="dealerPickerWrap">
       <button class="dealer-picker-btn" onclick="toggleDealerPicker()">+ Add Dealer ▾</button>
@@ -669,7 +683,24 @@
       <option value="4wc_turbo|red">4WCT — 🔴 Red</option>
       <option value="4wc_turbo|na">4WCT — N/A</option>
     </select>
-    <select class="filter-select" id="filterVfPoc" onchange="renderDealers()"><option value="">All VF SPOCs</option></select>
+    <div class="multi-filter-wrap" id="pocFilterWrap">
+      <div class="multi-filter-btn" id="pocFilterBtn" onclick="toggleMultiFilter('poc')">
+        <span id="pocFilterLabel">All VF SPOCs</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
+      </div>
+      <div class="multi-filter-dropdown" id="pocFilterDropdown">
+        <div id="pocFilterItems"></div>
+        <div class="multi-filter-clear" onclick="clearMultiFilter('poc')">✕ Clear</div>
+      </div>
+    </div>
+    <div class="multi-filter-wrap" id="locFilterWrap">
+      <div class="multi-filter-btn" id="locFilterBtn" onclick="toggleMultiFilter('loc')">
+        <span id="locFilterLabel">All Locations</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
+      </div>
+      <div class="multi-filter-dropdown" id="locFilterDropdown">
+        <div id="locFilterItems"></div>
+        <div class="multi-filter-clear" onclick="clearMultiFilter('loc')">✕ Clear</div>
+      </div>
+    </div>
     <button class="btn btn-secondary btn-sm" onclick="clearDealerFilters()">✕ Clear</button>
     <button class="btn btn-secondary btn-sm" onclick="exportDealerDashboard()">⬇ Export Excel</button>
     <button class="btn btn-primary btn-sm" onclick="openStatsModal()">📊 Stats</button>
@@ -923,6 +954,15 @@
     <select class="filter-select" id="dmFilterState" onchange="renderDealerMaster()"><option value="">All States</option></select>
     <select class="filter-select" id="dmFilterStatus" onchange="renderDealerMaster()"><option value="">All Statuses</option></select>
     <select class="filter-select" id="dmFilterType" onchange="renderDealerMaster()"><option value="">DODO / COCO</option></select>
+    <div class="multi-filter-wrap" id="dmPocFilterWrap">
+      <div class="multi-filter-btn" id="dmPocFilterBtn" onclick="toggleDmPocFilter()">
+        <span id="dmPocFilterLabel">All VF SPOCs</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
+      </div>
+      <div class="multi-filter-dropdown" id="dmPocFilterDropdown">
+        <div id="dmPocFilterItems"></div>
+        <div class="multi-filter-clear" onclick="clearDmPocFilter()">✕ Clear</div>
+      </div>
+    </div>
     <button class="btn btn-secondary btn-sm" onclick="clearDealerMasterFilters()">✕ Clear</button>
     <button class="btn btn-secondary btn-sm" onclick="exportDealerMaster()">⬇ Export Excel</button>
   </div>
@@ -1496,44 +1536,185 @@
     <div class="page-sub">Enter customer profile to find matching financiers available at a dealer for a selected product.</div>
   </div>
 
-  <!-- Step 1: Dealer + Product + Type -->
+  <!-- Step 1: Select Dealer -->
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);">
-    <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Step 1 — Select Dealer, Product & Customer Type</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
-      <div class="form-group" style="margin:0;">
-        <label class="form-label">Dealer <span style="color:var(--flag);">*</span></label>
-        <select class="form-select" id="matcherDealer" onchange="onMatcherDealerChange()"><option value="">— Select Dealer —</option></select>
-      </div>
-      <div class="form-group" style="margin:0;">
-        <label class="form-label">Product <span style="color:var(--flag);">*</span></label>
-        <select class="form-select" id="matcherProduct" onchange="runMatcher()">
-          <option value="">— Select Product —</option>
-          ${PRODUCTS ? '' : ''}
-        </select>
-      </div>
-      <div class="form-group" style="margin:0;">
-        <label class="form-label">Customer Type <span style="color:var(--flag);">*</span></label>
-        <select class="form-select" id="matcherType" onchange="onMatcherTypeChange()">
-          <option value="">— Select Type —</option>
-          <option value="ind">Individual</option>
-          <option value="co">Company Owned</option>
-        </select>
-      </div>
+    <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px;">Step 1 — Select Dealer</div>
+    <div class="form-group" style="margin:0;max-width:340px;">
+      <label class="form-label">Dealer <span style="color:var(--flag);">*</span></label>
+      <select class="form-select" id="matcherDealer" onchange="onMatcherDealerChange()"><option value="">— Select Dealer —</option></select>
     </div>
   </div>
 
-  <!-- Step 2: Customer Profile -->
-  <div id="matcherProfileSection" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Step 2 — Customer Profile</div>
-      <button class="btn btn-primary btn-sm" onclick="runMatcher()">🔍 Find Matching FIs</button>
+  <!-- Step 2: Customer Type -->
+  <div id="matcherTypeSection" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);">
+    <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px;">Step 2 — Customer Profile Type</div>
+    <div class="form-group" style="margin:0;max-width:340px;">
+      <label class="form-label">Customer Type <span style="color:var(--flag);">*</span></label>
+      <select class="form-select" id="matcherType" onchange="onMatcherTypeChange()">
+        <option value="">— Select Type —</option>
+        <option value="ind">Individual</option>
+        <option value="co">Company Owned</option>
+      </select>
     </div>
-    <div id="matcherProfileFields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;"></div>
   </div>
+
+  <!-- Step 3: Individual Profile -->
+  <div id="matcherIndSection" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);">
+    <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:16px;">Step 3 — Individual Customer Profile</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+
+      <!-- NTC toggle + CIBIL -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">New to Credit (NTC)?</label>
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
+          <div id="ind_ntc_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
+          <div id="ind_ntc_track" onclick="toggleMatcherNTC()" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
+            <div id="ind_ntc_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CIBIL Score (hidden when NTC = Yes) -->
+      <div class="form-group" style="margin:0;" id="ind_cibil_wrap">
+        <label class="form-label">CIBIL Score</label>
+        <input type="number" class="form-select" id="ind_cibil" placeholder="e.g. 720" min="300" max="900" oninput="setTimeout(validateMatcherInd,0)">
+      </div>
+
+      <!-- Residence -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Residence <span style="color:var(--flag);">*</span></label>
+        <select class="form-select" id="ind_residence" onchange="setTimeout(validateMatcherInd,0)">
+          <option value="">— Select —</option>
+          <option value="Own">Own</option>
+          <option value="Rented">Rented</option>
+        </select>
+      </div>
+
+      <!-- License Type -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">License Type <span style="color:var(--flag);">*</span></label>
+        <select class="form-select" id="ind_license" onchange="setTimeout(validateMatcherInd,0)">
+          <option value="">— Select —</option>
+          <option value="DL">DL (Driving License)</option>
+          <option value="LLR">LLR (Learner's License)</option>
+        </select>
+      </div>
+
+      <!-- FTU + FTB Toggles side by side -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">FTU / FTB</label>
+        <div style="display:flex;gap:20px;padding:6px 0;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;color:var(--text-muted);">FTU</span>
+            <div id="ind_ftu_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
+            <div id="ind_ftu_track" onclick="toggleMatcherToggle('ftu')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
+              <div id="ind_ftu_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;color:var(--text-muted);">FTB</span>
+            <div id="ind_ftb_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
+            <div id="ind_ftb_track" onclick="toggleMatcherToggle('ftb')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
+              <div id="ind_ftb_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vehicle Requirement (last) -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Vehicle Requirement <span style="color:var(--flag);">*</span></label>
+<span id="matcherVehicleCount" style="display:none;font-size:11px;color:var(--cat-b);background:var(--cat-b-bg);border:1px solid var(--cat-b-border);border-radius:4px;padding:2px 8px;"></span>
+        <select class="form-select" id="ind_vehicle" onchange="updateVehicleCount(); setTimeout(validateMatcherInd, 0);">
+          <option value="">— Select Vehicle —</option>
+          <option value="3wc">3WC</option>
+          <option value="3wp">3W Paxx</option>
+          <option value="4wc_turbo">Turbo</option>
+          <option value="4wc_storm">Storm</option>
+        </select>
+      </div>
+
+    </div>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;">
+      <button class="btn btn-primary" id="matcherFindBtn" onclick="runMatcher()">🔍 Find Eligible Financiers</button>
+      <span id="matcherIndHint" style="font-size:12px;color:var(--text-hint);">Fill all mandatory fields to enable</span>
+    </div>
+  </div>
+
+  <!-- Step 3: Company Owned Profile -->
+  <div id="matcherCoSection" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);">
+    <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:16px;">Step 3 — Company Owned Customer Profile</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+
+      <!-- Vintage -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Vintage <span style="color:var(--flag);">*</span> <span style="font-size:10px;color:var(--text-hint);">(years)</span></label>
+        <input type="number" class="form-select" id="co_vintage" placeholder="e.g. 3" min="0" oninput="validateMatcherCo()">
+      </div>
+
+      <!-- ITR / Company Financial Toggle -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">ITR / Company Financial Available?</label>
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
+          <div id="co_itr_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
+          <div id="co_itr_track" onclick="toggleMatcherCoToggle('itr')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
+            <div id="co_itr_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Turnover -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Turnover <span style="color:var(--flag);">*</span> <span style="font-size:10px;color:var(--text-hint);">(Avg. Last 2 yrs, in ₹ Lacs)</span></label>
+        <input type="number" class="form-select" id="co_turnover" placeholder="e.g. 50" min="0" oninput="validateMatcherCo()">
+      </div>
+
+      <!-- Existing Fleet -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Existing Fleet <span style="color:var(--flag);">*</span></label>
+        <select class="form-select" id="co_existingFleet" onchange="onCoExistingFleetChange(); validateMatcherCo();">
+          <option value="">— Select —</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
+      </div>
+
+      <!-- Fleet Size (shown only when Existing Fleet = Yes) -->
+      <div class="form-group" style="margin:0;" id="co_fleetSize_wrap" style="display:none;">
+        <label class="form-label">Fleet Size <span style="color:var(--flag);">*</span> <span style="font-size:10px;color:var(--text-hint);">(no. of vehicles)</span></label>
+        <input type="number" class="form-select" id="co_fleetSize" placeholder="e.g. 5" min="1" oninput="validateMatcherCo()">
+      </div>
+
+      <!-- Vehicle Requirement (last) -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Vehicle Requirement <span style="color:var(--flag);">*</span></label>
+        <span id="matcherCoVehicleCount" style="display:none;font-size:11px;color:var(--cat-b);background:var(--cat-b-bg);border:1px solid var(--cat-b-border);border-radius:4px;padding:2px 8px;"></span>
+        <select class="form-select" id="co_vehicle" onchange="updateCoVehicleCount(); validateMatcherCo();">
+          <option value="">— Select Vehicle —</option>
+          <option value="3wc">3WC</option>
+          <option value="3wp">3W Paxx</option>
+          <option value="4wc_turbo">Turbo</option>
+          <option value="4wc_storm">Storm</option>
+        </select>
+      </div>
+
+    </div>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;">
+      <button class="btn btn-primary" id="matcherCoFindBtn" onclick="runMatcherCo()" disabled style="opacity:0.4;cursor:not-allowed;">🔍 Find Eligible Financiers</button>
+      <span id="matcherCoHint" style="font-size:12px;color:var(--text-hint);">Fill all mandatory fields to enable</span>
+    </div>
+  </div>
+
+  <!-- Old hidden elements for compatibility -->
+  <select id="matcherProduct" style="display:none;"><option value="">— Select Product —</option></select>
+  <div id="matcherProfileSection" style="display:none;"><div id="matcherProfileFields"></div></div>
 
   <!-- Results -->
   <div id="matcherResults" style="display:none;">
-    <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Results</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Results</div>
+      <div id="matcherSummaryBar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
+    </div>
     <div id="matcherResultsContent"></div>
   </div>
 </div>
@@ -1908,6 +2089,13 @@ async function loadState() {
     });
     setSaveStatus('saved');
     if (loader) { loader.classList.add('hide'); setTimeout(() => { loader.style.display = 'none'; }, 350); }
+    // Init matcher buttons as disabled
+    setTimeout(function(){
+      var fb = document.getElementById('matcherFindBtn');
+      if (fb) { fb.disabled=true; fb.style.opacity='0.4'; fb.style.cursor='not-allowed'; }
+      var cb = document.getElementById('matcherCoFindBtn');
+      if (cb) { cb.disabled=true; cb.style.opacity='0.4'; cb.style.cursor='not-allowed'; }
+    }, 100);
   } catch(e) {
     setSaveStatus('error');
     console.error('Load error:', e);
@@ -2180,19 +2368,17 @@ function renderDealers() {
   const finF           = document.getElementById("filterFinancier").value;
   const healthF        = document.getElementById("filterHealth").value;
   const productHealthF = document.getElementById("filterProductHealth").value;
-  const vfPocF         = document.getElementById("filterVfPoc") ? document.getElementById("filterVfPoc").value : '';
+  var selPocs = _multiFilterState ? _multiFilterState.poc : [];
+  var selLocs = _multiFilterState ? _multiFilterState.loc : [];
 
-  // Populate VF SPOC dropdown dynamically from current addedDealers
-  const pocSel = document.getElementById("filterVfPoc");
-  if (pocSel) {
-    const pocs = [...new Set(state.addedDealers.map(d => d.vfPoc||'').filter(Boolean))].sort();
-    const curPoc = pocSel.value;
-    pocSel.innerHTML = '<option value="">All VF SPOCs</option>' +
-      pocs.map(function(p){ return '<option value="'+escHtml(p)+'"'+(p===curPoc?' selected':'')+'>'+escHtml(p)+'</option>'; }).join('');
-  }
-  document.getElementById("addedCount").textContent = "("+state.addedDealers.length+"/"+getDealerMasterList().filter(function(d){ return (d.dealerStatus||'').toLowerCase() !== 'closed'; }).length+")";
+  // Populate multi-select filters
+  populateMultiFilters();
+  var totalDealers = getDealerMasterList().filter(function(d){ return (d.dealerStatus||'').toLowerCase() !== 'closed'; }).length;
+  var totalDealers = getDealerMasterList().filter(function(d){ return (d.dealerStatus||'').toLowerCase() !== 'closed'; }).length;
   const grid = document.getElementById("dealerGrid");
   if (state.addedDealers.length === 0) {
+    document.getElementById("addedCount").textContent = "(0/"+totalDealers+")";
+    var dfc0 = document.getElementById('dealerFilterCount'); if (dfc0) dfc0.style.display='none';
     grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🏪</div><div style="font-size:14px;font-weight:500;margin-bottom:6px;">No dealers added yet</div><div style="font-size:13px;">Click <strong>+ Add Dealer</strong> above to get started.</div></div>';
     return;
   }
@@ -2209,9 +2395,15 @@ function renderDealers() {
       const h = (state.dealerHealth[dealerKey(d.dealer,d.location||'')] || state.dealerHealth[d.dealer] || {})[prodKey] || 'na';
       if (h !== prodHealth) return false;
     }
-    if (vfPocF && (d.vfPoc||'') !== vfPocF) return false;
+    if (selPocs.length && selPocs.indexOf(d.vfPoc||'') === -1) return false;
+    if (selLocs.length && selLocs.indexOf(d.location||'') === -1) return false;
     return true;
   });
+  // Update count display
+  var isFiltered = dealers.length < state.addedDealers.length;
+  document.getElementById("addedCount").textContent = "(" + dealers.length + "/" + totalDealers + ")";
+  var dfcEl = document.getElementById('dealerFilterCount');
+  if (dfcEl) dfcEl.style.display = 'none';
   if (!dealers.length) { grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div>No dealers match your filter.</div></div>'; return; }
   grid.innerHTML = dealers.map(d => renderDealerCard(d)).join("");
   dealers.forEach(d => {
@@ -2249,7 +2441,7 @@ function renderDealerCard(d) {
         const healthClass = (!h || h === 'na') ? 'none' : h;
         const healthLabel = h ? (h === 'na' ? 'N/A' : h.charAt(0).toUpperCase() + h.slice(1)) : '—';
         const finText = cnt > 0 ? `${cnt} FI${cnt!==1?'s':''}` : '—';
-        return `<button class="health-btn ${healthClass}" style="font-family:'DM Mono',monospace;font-size:10px;gap:4px;" onclick="event.stopPropagation();openHealthModal('${escJs(d.dealer)}','${p.key}','${escJs(p.label)}')">
+        return `<button class="health-btn ${healthClass}" style="font-family:'DM Mono',monospace;font-size:10px;gap:4px;" onclick="event.stopPropagation();openHealthModal('${escJs(d.dealer)}','${p.key}','${escJs(p.label)}','${escJs(d.location||'')}')">
           <span class="health-dot health-${healthClass}"></span>
           <span style="font-weight:700;">${p.label}</span>
           <span style="opacity:0.6;">${finText}</span>
@@ -2656,13 +2848,81 @@ function toggleGapCard(dealerName, cardId) {
 // PAGE 3 — FINANCIER LIST MASTER
 // ══════════════════════════════════════════════════════════════
 
+// ── MULTI-SELECT FILTERS ────────────────────────────────────
+var _multiFilterState = { poc: [], loc: [] };
+
+function toggleMultiFilter(key) {
+  var dropdown = document.getElementById(key + 'FilterDropdown');
+  var btn      = document.getElementById(key + 'FilterBtn');
+  if (!dropdown) return;
+  var isOpen = dropdown.classList.contains('open');
+  ['poc','loc'].forEach(function(k) {
+    var d = document.getElementById(k+'FilterDropdown');
+    var b = document.getElementById(k+'FilterBtn');
+    if (d) d.classList.remove('open');
+    if (b) b.classList.remove('active');
+  });
+  if (!isOpen) { dropdown.classList.add('open'); btn.classList.add('active'); }
+}
+
+function populateMultiFilters() {
+  var pocs = Array.from(new Set(state.addedDealers.map(function(d){ return d.vfPoc||''; }).filter(Boolean))).sort();
+  var locs = Array.from(new Set(state.addedDealers.map(function(d){ return d.location||''; }).filter(Boolean))).sort();
+  function buildItems(key, values) {
+    var container = document.getElementById(key + 'FilterItems');
+    if (!container) return;
+    container.innerHTML = values.map(function(v) {
+      var checked = _multiFilterState[key].indexOf(v) > -1;
+      return '<label class="multi-filter-item"><input type="checkbox" value="' + escHtml(v) + '" ' + (checked?'checked':'') + '><span>' + escHtml(v) + '</span></label>';
+    }).join('');
+    container.querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        var val = cb.value;
+        var arr = _multiFilterState[key];
+        if (cb.checked) { if (arr.indexOf(val)===-1) arr.push(val); }
+        else { var i=arr.indexOf(val); if (i>-1) arr.splice(i,1); }
+        updateMultiFilterLabels();
+        renderDealers();
+      });
+    });
+  }
+  buildItems('poc', pocs);
+  buildItems('loc', locs);
+  updateMultiFilterLabels();
+}
+
+function onMultiFilterChange(checkbox, key) {
+  var val = checkbox.value;
+  var arr = _multiFilterState[key];
+  if (checkbox.checked) { if (arr.indexOf(val)===-1) arr.push(val); }
+  else { var idx=arr.indexOf(val); if (idx>-1) arr.splice(idx,1); }
+  updateMultiFilterLabels();
+  renderDealers();
+}
+
+function clearMultiFilter(key) {
+  _multiFilterState[key] = [];
+  populateMultiFilters();
+  renderDealers();
+}
+
+function updateMultiFilterLabels() {
+  var pocCount = _multiFilterState.poc.length;
+  var locCount = _multiFilterState.loc.length;
+  var pocLabel = document.getElementById('pocFilterLabel');
+  var locLabel = document.getElementById('locFilterLabel');
+  if (pocLabel) pocLabel.textContent = pocCount ? pocCount+' SPOC'+(pocCount>1?'s':'')+' selected' : 'All VF SPOCs';
+  if (locLabel) locLabel.textContent = locCount ? locCount+' Location'+(locCount>1?'s':'')+' selected' : 'All Locations';
+}
+
 function clearDealerFilters() {
   document.getElementById('searchBox').value = '';
   document.getElementById('filterFinancier').value = '';
   document.getElementById('filterHealth').value = '';
   document.getElementById('filterProductHealth').value = '';
-  var pocSel = document.getElementById('filterVfPoc');
-  if (pocSel) pocSel.value = '';
+  _multiFilterState.poc = [];
+  _multiFilterState.loc = [];
+  populateMultiFilters();
   renderDealers();
 }
 
@@ -2701,7 +2961,10 @@ function renderFinancierMaster() {
       return true;
     });
 
-  document.getElementById("finMasterCount").textContent = "(" + state.financiers.length + ")";
+  var finFiltered = filtered ? filtered.length : state.financiers.length;
+  var finTotal = state.financiers.length;
+  var finCountStr = finFiltered < finTotal ? finFiltered + ' of ' + finTotal : finTotal + '';
+  document.getElementById("finMasterCount").textContent = "(" + finCountStr + ")";
 
   var activeCount = state.financiers.filter(function(n) {
     var m = state.financiersMeta.find(function(x){ return x.name === n; });
@@ -2970,7 +3233,55 @@ function getDealerMasterList() {
   return (state.dealersMaster && state.dealersMaster.length) ? state.dealersMaster : [];
 }
 
+var _dmPocFilter = [];
+
+function toggleDmPocFilter() {
+  var dropdown = document.getElementById('dmPocFilterDropdown');
+  var btn      = document.getElementById('dmPocFilterBtn');
+  if (!dropdown) return;
+  var isOpen = dropdown.classList.contains('open');
+  // Close other multi-filters
+  ['poc','loc'].forEach(function(k) {
+    var d = document.getElementById(k+'FilterDropdown');
+    var b = document.getElementById(k+'FilterBtn');
+    if (d) d.classList.remove('open');
+    if (b) b.classList.remove('active');
+  });
+  if (isOpen) { dropdown.classList.remove('open'); btn.classList.remove('active'); }
+  else         { dropdown.classList.add('open');    btn.classList.add('active');    }
+}
+
+function populateDmPocFilter() {
+  var container = document.getElementById('dmPocFilterItems');
+  if (!container) return;
+  var pocs = Array.from(new Set(getDealerMasterList().map(function(d){ return d.vfPoc||''; }).filter(Boolean))).sort();
+  container.innerHTML = pocs.map(function(v) {
+    var checked = _dmPocFilter.indexOf(v) > -1;
+    return '<label class="multi-filter-item"><input type="checkbox" value="' + escHtml(v) + '" ' + (checked?'checked':'') + '><span>' + escHtml(v) + '</span></label>';
+  }).join('');
+  container.querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      var val = cb.value;
+      if (cb.checked) { if (_dmPocFilter.indexOf(val)===-1) _dmPocFilter.push(val); }
+      else { var i=_dmPocFilter.indexOf(val); if (i>-1) _dmPocFilter.splice(i,1); }
+      var label = document.getElementById('dmPocFilterLabel');
+      if (label) label.textContent = _dmPocFilter.length ? _dmPocFilter.length+' SPOC'+(_dmPocFilter.length>1?'s':'')+' selected' : 'All VF SPOCs';
+      renderDealerMaster();
+    });
+  });
+}
+
+function clearDmPocFilter() {
+  _dmPocFilter = [];
+  var label = document.getElementById('dmPocFilterLabel');
+  if (label) label.textContent = 'All VF SPOCs';
+  populateDmPocFilter();
+  renderDealerMaster();
+}
+
 function clearDealerMasterFilters() {
+  _dmPocFilter = [];
+  var lbl = document.getElementById('dmPocFilterLabel'); if (lbl) lbl.textContent='All VF SPOCs';
   document.getElementById("dealerMasterSearch").value = "";
   document.getElementById("dmFilterZone").value = "";
   document.getElementById("dmFilterState").value = "";
@@ -3004,6 +3315,7 @@ function renderDealerMaster() {
   const fState      = document.getElementById("dmFilterState").value;
   const fStatus     = document.getElementById("dmFilterStatus").value;
   const fType       = document.getElementById("dmFilterType").value;
+  var dmSelPocs = typeof _dmPocFilter !== 'undefined' ? _dmPocFilter : [];
 
   const filtered = list.filter(function(d) {
     if (search && !(d.dealerName||"").toLowerCase().includes(search) &&
@@ -3013,10 +3325,13 @@ function renderDealerMaster() {
     if (fState  && d.state !== fState)              return false;
     if (fStatus && d.dealerStatus !== fStatus)      return false;
     if (fType   && d.dodoCocoType !== fType)        return false;
+    if (dmSelPocs.length && dmSelPocs.indexOf(d.vfPoc||'') === -1) return false;
     return true;
   });
 
-  document.getElementById("dealerMasterCount").textContent = "(" + list.length + ")";
+  populateDmPocFilter();
+  var dmTotal = getDealerMasterList().length;
+  document.getElementById("dealerMasterCount").textContent = filtered.length < dmTotal ? "(" + filtered.length + " of " + dmTotal + " filtered)" : "(" + dmTotal + ")";
 
   // Summary
   const zones   = [...new Set(list.map(d=>d.zone).filter(Boolean))].length;
@@ -4048,14 +4363,16 @@ function computeOverallHealth(dealerName, location) {
   return 'amber';
 }
 
-function openHealthModal(dealerName, productKey, productLabel) {
+var healthModalLocation = '';
+function openHealthModal(dealerName, productKey, productLabel, dealerLocation) {
+  dealerLocation = dealerLocation || (state.addedDealers.find(function(d){ return d.dealer===dealerName; })||{}).location||'';
+  healthModalLocation = dealerLocation;
   healthContext = { dealerName, productKey, productLabel };
-  const hCtx = state.addedDealers.find(d=>d.dealer===dealerName)||{};
-  const hkCtx = dealerKey(dealerName, hCtx.location||'');
-  selectedHealth = (state.dealerHealth[hkCtx] || state.dealerHealth[dealerName] || {})[productKey] || null;
+  const hkCtx = dealerKey(dealerName, dealerLocation);
+  selectedHealth = (state.dealerHealth[hkCtx] || {})[productKey] || null;
   document.getElementById("healthModalTitle").textContent = "Health Status";
   document.getElementById("healthModalSub").textContent = `${dealerName} · ${productLabel}`;
-  ['green','amber','red','na'].forEach(h => {
+  ['star','green','amber','red','na'].forEach(h => {
     const el = document.getElementById("hopt_" + h);
     if (el) el.className = "health-picker-opt" + (selectedHealth === h ? " selected-" + (h === 'na' ? 'na' : h) : "");
   });
@@ -4078,15 +4395,13 @@ function selectHealth(val) {
 function saveHealthStatus() {
   if (!healthContext) return;
   const { dealerName, productKey } = healthContext;
-  const hk2 = dealerKey(dealerName, (state.addedDealers.find(d=>d.dealer===dealerName)||{}).location||'');
+  const hk2 = dealerKey(dealerName, healthModalLocation);
   if (!state.dealerHealth[hk2]) state.dealerHealth[hk2] = {};
   if (selectedHealth) { state.dealerHealth[hk2][productKey] = selectedHealth; }
   else { delete state.dealerHealth[hk2][productKey]; }
   closeHealthModal();
-  const locHA = (state.addedDealers.find(d=>d.dealer===dealerName)||{}).location||'';
-  openDealerCards.add(dealerKey(dealerName, locHA));
-  const locH = (state.addedDealers.find(d=>d.dealer===dealerName)||{}).location||"";
-  saveDealerHealthToSheet(dealerName, locH);
+  openDealerCards.add(dealerKey(dealerName, healthModalLocation));
+  saveDealerHealthToSheet(dealerName, healthModalLocation);
   renderAll();
   toast(selectedHealth ? "Health set to "+selectedHealth : "Health status cleared.");
 }
@@ -4135,31 +4450,364 @@ function initMatcher() {
   document.getElementById("matcherResults").style.display = 'none';
 }
 
+// onMatcherDealerChange — moved above
 function onMatcherDealerChange() {
-  document.getElementById("matcherResults").style.display = 'none';
-  var type = document.getElementById("matcherType").value;
-  var product = document.getElementById("matcherProduct").value;
-  if (type && product) runMatcher();
+  var dealer = document.getElementById("matcherDealer").value;
+  var typeSection = document.getElementById("matcherTypeSection");
+  if (typeSection) typeSection.style.display = dealer ? '' : 'none';
+  var typeEl = document.getElementById("matcherType");
+  if (typeEl) typeEl.value = '';
+  var indSec = document.getElementById("matcherIndSection");
+  var coSec  = document.getElementById("matcherCoSection");
+  if (indSec) indSec.style.display = 'none';
+  if (coSec)  coSec.style.display  = 'none';
+  var res = document.getElementById("matcherResults");
+  if (res) res.style.display = 'none';
 }
 
+// onMatcherTypeChange — moved above
 function onMatcherTypeChange() {
   var type = document.getElementById("matcherType").value;
-  var profileSection = document.getElementById("matcherProfileSection");
-  var fieldsDiv = document.getElementById("matcherProfileFields");
-  document.getElementById("matcherResults").style.display = 'none';
+  var indSec = document.getElementById("matcherIndSection");
+  var coSec  = document.getElementById("matcherCoSection");
+  if (indSec) indSec.style.display = (type === 'ind') ? '' : 'none';
+  if (coSec)  coSec.style.display  = (type === 'co')  ? '' : 'none';
+  // Hide results when type changes — user must re-run
+  var res = document.getElementById("matcherResults");
+  if (res) res.style.display = 'none';
+  // Validate whichever section is now active (don't reset fields)
+  if (type === 'ind') validateMatcherInd();
+  if (type === 'co')  validateMatcherCo();
+}
 
-  if (!type) { profileSection.style.display = 'none'; return; }
 
-  profileSection.style.display = '';
-  var fields = type === 'ind' ? MATCHER_IND_FIELDS : MATCHER_CO_FIELDS;
+function updateCoVehicleCount() {
+  var dealerName = document.getElementById("matcherDealer") ? document.getElementById("matcherDealer").value : '';
+  var vehicle    = document.getElementById("co_vehicle")    ? document.getElementById("co_vehicle").value    : '';
+  var countEl    = document.getElementById('matcherCoVehicleCount');
+  if (!dealerName || !vehicle || !countEl) return;
+  var matcherDealerObj = state.addedDealers.find(function(d){ return d.dealer===dealerName; }) || {};
+  var fins = getDealerFinanciers(dealerName, matcherDealerObj.location||'');
+  var count = Object.entries(fins).filter(function(e){
+    var pd = e[1].products[vehicle];
+    return pd && pd.enabled;
+  }).length;
+  var label = { '3wc':'3WC','3wp':'3W Paxx','4wc_turbo':'Turbo','4wc_storm':'Storm' }[vehicle]||vehicle;
+  countEl.textContent = count + ' FI' + (count!==1?'s':'') + ' mapped for ' + label + ' at this dealer';
+  countEl.style.display = '';
+}
 
-  fieldsDiv.innerHTML = fields.map(function(f) {
-    var input = f.type === 'number'
-      ? '<input type="number" class="form-select" id="mc_' + f.key + '" placeholder="' + (f.placeholder||'') + '" min="0" oninput="runMatcher()">'
-      : '<select class="form-select" id="mc_' + f.key + '" onchange="runMatcher()"><option value="">— Select —</option>' +
-        f.opts.map(function(o){ return '<option>' + o + '</option>'; }).join('') + '</select>';
-    return '<div class="form-group" style="margin:0;"><label class="form-label">' + escHtml(f.label) + '</label>' + input + '</div>';
-  }).join('');
+function onCoExistingFleetChange() {
+  var val  = document.getElementById('co_existingFleet') ? document.getElementById('co_existingFleet').value : '';
+  var wrap = document.getElementById('co_fleetSize_wrap');
+  if (wrap) wrap.style.display = (val === 'Yes') ? '' : 'none';
+  if (val !== 'Yes') {
+    var fs = document.getElementById('co_fleetSize');
+    if (fs) fs.value = '';
+  }
+}
+
+function toggleMatcherCoToggle(key) {
+  var label = document.getElementById('co_'+key+'_label');
+  var track = document.getElementById('co_'+key+'_track');
+  var thumb = document.getElementById('co_'+key+'_thumb');
+  if (!label) return;
+  var isOff = label.textContent === 'No';
+  if (isOff) {
+    label.textContent='Yes'; label.style.color='var(--ok)';
+    track.style.background='var(--ok)'; thumb.style.left='18px';
+  } else {
+    label.textContent='No'; label.style.color='var(--cat-d)';
+    track.style.background='#ddd'; thumb.style.left='2px';
+  }
+  validateMatcherCo();
+}
+
+function validateMatcherCo() {
+  var btn  = document.getElementById('matcherCoFindBtn');
+  var hint = document.getElementById('matcherCoHint');
+  if (!btn) return;
+  var vintage  = document.getElementById('co_vintage')       ? document.getElementById('co_vintage').value.trim()       : '';
+  var turnover = document.getElementById('co_turnover')      ? document.getElementById('co_turnover').value.trim()      : '';
+  var fleet    = document.getElementById('co_existingFleet') ? document.getElementById('co_existingFleet').value        : '';
+  var fleetSz  = document.getElementById('co_fleetSize')     ? document.getElementById('co_fleetSize').value.trim()     : '';
+  var vehicle  = document.getElementById('co_vehicle')       ? document.getElementById('co_vehicle').value              : '';
+  var missing  = [];
+  if (!vintage)  missing.push('Vintage');
+  if (!turnover) missing.push('Turnover');
+  if (!fleet)    missing.push('Existing Fleet');
+  if (fleet === 'Yes' && !fleetSz) missing.push('Fleet Size');
+  if (!vehicle)  missing.push('Vehicle Requirement');
+  if (missing.length) {
+    btn.disabled=true; btn.style.opacity='0.4'; btn.style.cursor='not-allowed';
+    if (hint) hint.textContent = 'Required: ' + missing.join(', ');
+  } else {
+    btn.disabled=false; btn.style.opacity='1'; btn.style.cursor='pointer';
+    if (hint) hint.textContent = 'All fields filled — click to find eligible FIs';
+    var resultsEl = document.getElementById('matcherResults');
+    if (resultsEl && resultsEl.style.display !== 'none') {
+      var activeType = document.getElementById('matcherType') ? document.getElementById('matcherType').value : '';
+      if (activeType === 'co') runMatcherCo();
+    }
+  }
+}
+
+function getMatcherCoProfile() {
+  return {
+    vintage:   document.getElementById('co_vintage')       ? document.getElementById('co_vintage').value.trim()       : '',
+    itr:       document.getElementById('co_itr_label')     ? document.getElementById('co_itr_label').textContent      : 'No',
+    turnover:  document.getElementById('co_turnover')      ? document.getElementById('co_turnover').value.trim()      : '',
+    existingFleet: document.getElementById('co_existingFleet') ? document.getElementById('co_existingFleet').value    : '',
+    fleetSize: document.getElementById('co_fleetSize')     ? document.getElementById('co_fleetSize').value.trim()     : '',
+    vehicle:   document.getElementById('co_vehicle')       ? document.getElementById('co_vehicle').value              : '',
+  };
+}
+
+function runMatcherCo() {
+  var dealerName = document.getElementById("matcherDealer").value;
+  var prof = getMatcherCoProfile();
+  var productKey = prof.vehicle;
+  var type = 'co';
+  console.log('[runMatcherCo] dealer:', dealerName, '| vehicle:', productKey, '| prof:', prof);
+  if (!dealerName || !productKey) { console.log('[runMatcherCo] missing dealer or vehicle'); return; }
+
+  var matcherDealerObj = state.addedDealers.find(function(d){ return d.dealer===dealerName; }) || {};
+  var fins = getDealerFinanciers(dealerName, matcherDealerObj.location||'');
+  console.log('[runMatcherCo] fins:', Object.keys(fins));
+
+  var onboardedFIs = Object.keys(fins).filter(function(finName){
+    var pd = fins[finName].products[productKey];
+    return pd && pd.enabled;
+  }).map(function(finName){ return [finName, fins[finName]]; });
+  console.log('[runMatcherCo] onboarded for', productKey, ':', onboardedFIs.map(function(e){return e[0];}));
+
+  document.getElementById("matcherResults").style.display = '';
+
+  if (!onboardedFIs.length) {
+    var vLbl = { '3wc':'3WC','3wp':'3W Paxx','4wc_turbo':'Turbo','4wc_storm':'Storm' }[productKey]||productKey;
+    var sb = document.getElementById("matcherSummaryBar");
+    if (sb) sb.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Vehicle: <b>' + escHtml(vLbl) + '</b></span><span style="font-size:12px;background:var(--cat-d-bg);color:var(--cat-d);border:1px solid var(--cat-d-border);border-radius:4px;padding:2px 8px;">0 FIs mapped</span>';
+    document.getElementById("matcherResultsContent").innerHTML =
+      '<div style="padding:24px;text-align:center;color:var(--text-hint);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);">No financiers are onboarded at this dealer for the selected product.</div>';
+    return;
+  }
+
+  var eligible = [], partial = [], ineligible = [], unknown = [];
+
+  onboardedFIs.forEach(function(e) {
+    var finName = e[0];
+    var pol = getEffectivePolicy(finName, productKey, matcherDealerObj.state||'', matcherDealerObj.location||'');
+    console.log('[runMatcherCo]', finName, '| pol.co_applicable:', pol ? pol.co_applicable : 'NO POLICY', '| pol.co:', pol ? pol.co : null);
+    if (!pol) { unknown.push({ name: finName, result: { status: 'unknown', issues: ['Policy not defined'], matches: [] } }); return; }
+    var result = checkEligibilityCo(pol, prof);
+    console.log('[runMatcherCo]', finName, '| result:', result.status, result.issues);
+    if (result.status === 'eligible')        eligible.push({ name: finName, result: result });
+    else if (result.status === 'partial')    partial.push({ name: finName, result: result });
+    else if (result.status === 'ineligible') ineligible.push({ name: finName, result: result });
+    else unknown.push({ name: finName, result: result }); // catches 'unknown' and 'na'
+  });
+
+  function rankFIsCo(list) {
+    return list.slice().sort(function(a, b) {
+      var pa = ((getEffectivePolicy(a.name, productKey, matcherDealerObj.state||'', matcherDealerObj.location||'')||{}).co)||{};
+      var pb = ((getEffectivePolicy(b.name, productKey, matcherDealerObj.state||'', matcherDealerObj.location||'')||{}).co)||{};
+      var ia = parseFloat(pa.minIrr||'999')||999, ib = parseFloat(pb.minIrr||'999')||999;
+      if (ia !== ib) return ia - ib;
+      return (parseFloat(pb.maxLoan||'0')||0) - (parseFloat(pa.maxLoan||'0')||0);
+    });
+  }
+  eligible = rankFIsCo(eligible);
+  partial  = rankFIsCo(partial);
+
+  var vLabel = { '3wc':'3WC','3wp':'3W Paxx','4wc_turbo':'Turbo','4wc_storm':'Storm' }[productKey]||productKey;
+  var sb2 = document.getElementById("matcherSummaryBar");
+  if (sb2) {
+    sb2.innerHTML =
+      '<span style="font-size:12px;color:var(--text-muted);">Vehicle: <b>'+escHtml(vLabel)+'</b></span>' +
+      '<span style="font-size:12px;background:var(--cat-b-bg);color:var(--cat-b);border:1px solid var(--cat-b-border);border-radius:4px;padding:2px 8px;">'+onboardedFIs.length+' FI'+(onboardedFIs.length!==1?'s':'')+' mapped</span>' +
+      '<span style="font-size:12px;background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border);border-radius:4px;padding:2px 8px;">✅ '+eligible.length+' eligible</span>' +
+      (partial.length ? '<span style="font-size:12px;background:#451a03;color:#fbbf24;border:1px solid #78350f;border-radius:4px;padding:2px 8px;">⚠ '+partial.length+' partial</span>' : '') +
+      (ineligible.length ? '<span style="font-size:12px;background:var(--cat-d-bg);color:var(--cat-d);border:1px solid var(--cat-d-border);border-radius:4px;padding:2px 8px;">❌ '+ineligible.length+' ineligible</span>' : '');
+  }
+
+  var html = '';
+  if (eligible.length) {
+    html += '<div style="font-size:12px;font-weight:700;color:var(--ok);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">✅ Eligible ('+eligible.length+')</div>';
+    eligible.forEach(function(i, idx){ html += renderFICard(i, '#16a34a', '✅', 'Eligible', idx+1, productKey, 'co', matcherDealerObj); });
+    html += '<div style="margin-bottom:16px;"></div>';
+  }
+  if (partial.length) {
+    html += '<div style="font-size:12px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">⚠ Partial Match ('+partial.length+')</div>';
+    partial.forEach(function(i, idx){ html += renderFICard(i, '#d97706', '⚠️', 'Partial Match', idx+1, productKey, 'co', matcherDealerObj); });
+    html += '<div style="margin-bottom:16px;"></div>';
+  }
+  if (unknown.length) {
+    html += '<div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">❓ Policy Not Defined ('+unknown.length+')</div>';
+    unknown.forEach(function(i){ html += renderFICard(i, '#9ca3af', '❓', 'No Policy', null, productKey, 'co', matcherDealerObj); });
+    html += '<div style="margin-bottom:16px;"></div>';
+  }
+  if (ineligible.length) {
+    html += '<div style="font-size:12px;font-weight:700;color:var(--cat-d);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">❌ Not Eligible ('+ineligible.length+')</div>';
+    ineligible.forEach(function(i){ html += renderFICard(i, '#dc2626', '❌', 'Not Eligible', null, productKey, 'co', matcherDealerObj); });
+  }
+  if (!html) html = '<div style="padding:24px;text-align:center;color:var(--text-hint);">No results found.</div>';
+  document.getElementById("matcherResultsContent").innerHTML = html;
+}
+
+function checkEligibilityCo(policy, prof) {
+  var issues = [], matches = [];
+  var seg = policy.co || {};
+  if (!policy.co_applicable) return { status: 'na', issues: ['Not applicable for Company Owned'], matches: [] };
+
+  // Vintage
+  if (seg.vintage && prof.vintage) {
+    if (Number(prof.vintage) >= Number(seg.vintage)) matches.push('Vintage: ✓ (' + prof.vintage + ' yrs ≥ ' + seg.vintage + ' yrs)');
+    else issues.push('Vintage: ' + prof.vintage + ' yrs < required ' + seg.vintage + ' yrs');
+  }
+
+  // ITR
+  if (seg.itr) {
+    if (seg.itr === 'Yes' && prof.itr !== 'Yes') issues.push('ITR / Company Financial: FI requires ITR, not available');
+    else matches.push('ITR / Company Financial: ✓');
+  }
+
+  // Turnover — match against tier table if defined
+  if (seg.tiers && prof.turnover) {
+    try {
+      var tiers = typeof seg.tiers === 'string' ? JSON.parse(seg.tiers) : seg.tiers;
+      if (Array.isArray(tiers) && tiers.length) {
+        var custTurnover = Number(prof.turnover);
+        var matchedTier = tiers.find(function(t){
+          var min = Number(t.minTurnover||0), max = Number(t.maxTurnover||999999);
+          return custTurnover >= min && custTurnover <= max;
+        });
+        if (matchedTier) {
+          if (prof.fleetSize && Number(prof.fleetSize) >= Number(matchedTier.minFleet||0)) {
+            matches.push('Turnover & Fleet: ✓ (₹' + prof.turnover + 'L, fleet ' + prof.fleetSize + ')');
+          } else if (prof.fleetSize) {
+            issues.push('Fleet Size: ' + prof.fleetSize + ' < required ' + matchedTier.minFleet + ' for this turnover');
+          } else {
+            matches.push('Turnover: ✓ (₹' + prof.turnover + 'L in eligible range)');
+          }
+        } else {
+          issues.push('Turnover: ₹' + prof.turnover + 'L not in any eligible tier');
+        }
+      }
+    } catch(e) {}
+  }
+
+  var status = issues.length === 0 && matches.length > 0 ? 'eligible'
+             : issues.length === 0 && matches.length === 0 ? 'unknown'
+             : matches.length > 0 ? 'partial' : 'ineligible';
+  return { status: status, issues: issues, matches: matches };
+}
+
+
+function resetMatcherIndToggles() {
+  ['ntc','ftu','ftb'].forEach(function(key) {
+    var label = document.getElementById('ind_'+key+'_label');
+    var track = document.getElementById('ind_'+key+'_track');
+    var thumb = document.getElementById('ind_'+key+'_thumb');
+    if (label) { label.textContent='No'; label.style.color='var(--cat-d)'; }
+    if (track) track.style.background = '#ddd';
+    if (thumb) thumb.style.left = '2px';
+  });
+  var cibilWrap = document.getElementById('ind_cibil_wrap');
+  if (cibilWrap) cibilWrap.style.display = '';
+  var cibilEl = document.getElementById('ind_cibil');
+  if (cibilEl) cibilEl.value = '';
+  var resEl = document.getElementById('ind_residence');
+  if (resEl) resEl.value = '';
+  var licEl = document.getElementById('ind_license');
+  if (licEl) licEl.value = '';
+  var vehEl = document.getElementById('ind_vehicle');
+  if (vehEl) vehEl.value = '';
+  // Reset find button
+  var btn = document.getElementById('matcherFindBtn');
+  var hint = document.getElementById('matcherIndHint');
+  if (btn) { btn.disabled=true; btn.style.opacity='0.4'; btn.style.cursor='not-allowed'; }
+  if (hint) hint.textContent = 'Fill all mandatory fields to enable';
+}
+
+function toggleMatcherNTC() {
+  var label = document.getElementById('ind_ntc_label');
+  var track = document.getElementById('ind_ntc_track');
+  var thumb = document.getElementById('ind_ntc_thumb');
+  var cibilWrap = document.getElementById('ind_cibil_wrap');
+  var isNtc = label.textContent === 'No';
+  if (isNtc) {
+    label.textContent='Yes'; label.style.color='var(--ok)';
+    track.style.background='var(--ok)'; thumb.style.left='18px';
+    if (cibilWrap) cibilWrap.style.display = 'none';
+  } else {
+    label.textContent='No'; label.style.color='var(--cat-d)';
+    track.style.background='#ddd'; thumb.style.left='2px';
+    if (cibilWrap) cibilWrap.style.display = '';
+  }
+  validateMatcherInd();
+}
+
+function toggleMatcherToggle(key) {
+  var label = document.getElementById('ind_'+key+'_label');
+  var track = document.getElementById('ind_'+key+'_track');
+  var thumb = document.getElementById('ind_'+key+'_thumb');
+  var isOff = label.textContent === 'No';
+  if (isOff) {
+    label.textContent='Yes'; label.style.color='var(--ok)';
+    track.style.background='var(--ok)'; thumb.style.left='18px';
+  } else {
+    label.textContent='No'; label.style.color='var(--cat-d)';
+    track.style.background='#ddd'; thumb.style.left='2px';
+  }
+  validateMatcherInd();
+}
+
+function validateMatcherInd() {
+  var btn  = document.getElementById('matcherFindBtn');
+  var hint = document.getElementById('matcherIndHint');
+  if (!btn) return;
+
+  var ntc      = document.getElementById('ind_ntc_label')  ? document.getElementById('ind_ntc_label').textContent === 'Yes' : false;
+  var cibil    = document.getElementById('ind_cibil')      ? document.getElementById('ind_cibil').value.trim()              : '';
+  var residence= document.getElementById('ind_residence')  ? document.getElementById('ind_residence').value                 : '';
+  var license  = document.getElementById('ind_license')    ? document.getElementById('ind_license').value                   : '';
+
+  var vehicle  = document.getElementById('ind_vehicle')    ? document.getElementById('ind_vehicle').value                    : '';
+  var missing = [];
+  if (!ntc && !cibil)    missing.push('CIBIL Score');
+  if (!residence)        missing.push('Residence');
+  if (!license)          missing.push('License Type');
+  if (!vehicle)          missing.push('Vehicle Requirement');
+
+  if (missing.length) {
+    btn.disabled = true;
+    btn.style.opacity = '0.4';
+    btn.style.cursor = 'not-allowed';
+    if (hint) hint.textContent = 'Required: ' + missing.join(', ');
+  } else {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+    if (hint) hint.textContent = 'All fields filled — click to find eligible FIs';
+    // Auto-refresh ONLY if results already visible
+    var resultsEl = document.getElementById('matcherResults');
+    if (resultsEl && resultsEl.style.display !== 'none') {
+      var activeType = document.getElementById('matcherType') ? document.getElementById('matcherType').value : '';
+      if (activeType === 'ind') runMatcher();
+    }
+  }
+}
+
+function getMatcherIndProfile() {
+  return {
+    ntc:       document.getElementById('ind_ntc_label')  ? document.getElementById('ind_ntc_label').textContent  : 'No',
+    ftu:       document.getElementById('ind_ftu_label')  ? document.getElementById('ind_ftu_label').textContent  : 'No',
+    ftb:       document.getElementById('ind_ftb_label')  ? document.getElementById('ind_ftb_label').textContent  : 'No',
+    cibil:     document.getElementById('ind_cibil')      ? (document.getElementById('ind_cibil').value||'')      : '',
+    residence: document.getElementById('ind_residence')  ? document.getElementById('ind_residence').value        : '',
+    license:   document.getElementById('ind_license')    ? document.getElementById('ind_license').value          : '',
+    vehicle:   document.getElementById('ind_vehicle')    ? document.getElementById('ind_vehicle').value          : '',
+  };
 }
 
 function getCustomerProfile(type) {
@@ -4173,50 +4821,106 @@ function getCustomerProfile(type) {
 }
 
 function checkEligibility(policy, profile, type) {
-  // Returns { eligible: bool, issues: [], matches: [] }
-  var issues = [];
+  var issues  = [];
   var matches = [];
   var seg = policy[type] || {};
   if (!policy[type + '_applicable']) return { status: 'na', issues: ['Not applicable for ' + (type==='ind'?'Individual':'Company Owned')], matches: [] };
 
-  function check(policyVal, customerVal, label, mode) {
-    if (!policyVal || policyVal === '' || policyVal === '—') return; // policy field not set — skip
-    if (!customerVal || customerVal === '') return; // customer field not filled — skip
+  var isNTC = profile.ntc === 'Yes';
 
-    if (mode === 'min_cibil') {
-      // customer CIBIL must be >= policy min CIBIL
-      if (Number(customerVal) >= Number(policyVal)) matches.push(label + ': ✓ (' + customerVal + ' ≥ ' + policyVal + ')');
-      else issues.push(label + ': CIBIL ' + customerVal + ' < required ' + policyVal);
-    } else if (mode === 'max_loan') {
-      // loan amount customer wants must be <= policy max loan
-      if (Number(customerVal) <= Number(policyVal)) matches.push(label + ': ✓');
-      else issues.push(label + ': Required ₹' + Number(customerVal).toLocaleString('en-IN') + ' > max ₹' + Number(policyVal).toLocaleString('en-IN'));
-    } else if (mode === 'min_vintage') {
-      if (Number(customerVal) >= Number(policyVal)) matches.push(label + ': ✓');
-      else issues.push(label + ': ' + customerVal + ' yrs < required ' + policyVal + ' yrs');
-    } else if (mode === 'min_turnover') {
-      if (Number(customerVal) >= Number(policyVal)) matches.push(label + ': ✓');
-      else issues.push(label + ': ₹' + Number(customerVal).toLocaleString('en-IN') + ' < required ₹' + Number(policyVal).toLocaleString('en-IN'));
-    } else if (mode === 'match_or_either') {
-      // policy is "Either Scenario" = always ok; else must match
-      if (policyVal === 'Either Scenario') matches.push(label + ': ✓ (Either Scenario)');
-      else if (customerVal === policyVal) matches.push(label + ': ✓');
-      else issues.push(label + ': Customer has ' + customerVal + ', FI requires ' + policyVal);
-    } else if (mode === 'ntc') {
-      // if customer is NTC, FI must offer NTC loans
-      if (customerVal === 'Yes' && policyVal === 'No') issues.push('NTC: FI does not provide NTC loans');
+  if (type === 'ind') {
+
+    // ── CIBIL (skip if customer is NTC) ──
+    if (!isNTC) {
+      var custCibil = Number(profile.cibil||0);
+      var polCibil  = Number(seg.minCibil||0);
+      if (polCibil > 0) {
+        if (custCibil >= polCibil) matches.push('CIBIL: ✓ (' + custCibil + ' ≥ ' + polCibil + ')');
+        else issues.push('CIBIL: ' + custCibil + ' < required ' + polCibil);
+      }
+    }
+
+    // ── NTC ──
+    if (seg.ntc) {
+      if (isNTC && seg.ntc === 'No')  issues.push('NTC: FI does not provide NTC loans');
+      else if (!isNTC && seg.ntc === 'Yes') matches.push('NTC: ✓ (FI offers NTC, customer has credit history)');
       else matches.push('NTC: ✓');
     }
-  }
 
-  check(seg.minCibil,          profile.minCibil,          'Min CIBIL',          'min_cibil');
-  check(seg.maxLoan,           profile.maxLoan,            'Max Loan Amount',    'max_loan');
-  check(seg.residence,         profile.residence,          'Residence',          'match_or_either');
-  check(seg.bankStatement,     profile.bankStatement,      'L6M Bank Statement', 'match_or_either');
-  check(seg.licenseType,       profile.licenseType,        'License Type',       'match_or_either');
-  check(seg.ntc,               profile.ntc,                'NTC',                'ntc');
-  check(seg.vintage,           profile.vintage,            'Vintage',            'min_vintage');
-  check(seg.annualTurnover,    profile.annualTurnover,     'Annual Turnover',    'min_turnover');
+    // ── FTU ──
+    if (seg.ftu) {
+      var custFtu = profile.ftu === 'Yes';
+      if (custFtu && seg.ftu === 'No')   issues.push('FTU: FI does not provide FTU loans');
+      else matches.push('FTU: ✓');
+    }
+
+    // ── FTB ──
+    if (seg.ftb) {
+      var custFtb = profile.ftb === 'Yes';
+      if (custFtb && seg.ftb === 'No')   issues.push('FTB: FI does not provide FTB loans');
+      else matches.push('FTB: ✓');
+    }
+
+    // ── Residence (skip check if FI policy = Either Scenario) ──
+    if (seg.residence && seg.residence !== 'Either Scenario' && seg.residence !== '') {
+      if (!profile.residence) {
+        // no input — skip
+      } else if (profile.residence === seg.residence) {
+        matches.push('Residence: ✓ (' + profile.residence + ')');
+      } else {
+        issues.push('Residence: Customer is ' + profile.residence + ', FI requires ' + seg.residence);
+      }
+    } else if (seg.residence === 'Either Scenario') {
+      matches.push('Residence: ✓ (Either Scenario accepted)');
+    }
+
+    // ── License Type (skip check if FI policy = Either Scenario) ──
+    if (seg.licenseType && seg.licenseType !== 'Either Scenario' && seg.licenseType !== '') {
+      if (!profile.license) {
+        // no input — skip
+      } else if (profile.license === seg.licenseType) {
+        matches.push('License: ✓ (' + profile.license + ')');
+      } else {
+        issues.push('License: Customer has ' + profile.license + ', FI requires ' + seg.licenseType);
+      }
+    } else if (seg.licenseType === 'Either Scenario') {
+      matches.push('License: ✓ (Either Scenario accepted)');
+    }
+
+    // ── Existing CV ──
+    if (seg.existingCvRequired === 'Yes') {
+      var custCvTotal = Number(profile.existingCvTotal||0);
+      var polCvTotal  = Number(seg.existingCvCount||0);
+      var polCvEv     = Number(seg.existingCvType||0);
+      var custCvEv    = Number(profile.existingCvEv||0);
+
+      if (polCvTotal > 0) {
+        if (custCvTotal < polCvTotal) {
+          issues.push('Existing CV: Customer owns ' + custCvTotal + ' CV(s), min ' + polCvTotal + ' required');
+        } else {
+          matches.push('Existing CV Total: ✓ (' + custCvTotal + ' ≥ ' + polCvTotal + ')');
+          if (polCvEv > 0) {
+            if (custCvEv < polCvEv) {
+              issues.push('Existing EV CV: Customer has ' + custCvEv + ' EV CV(s), min ' + polCvEv + ' required');
+            } else {
+              matches.push('Existing EV CV: ✓ (' + custCvEv + ' ≥ ' + polCvEv + ')');
+            }
+          }
+        }
+      }
+    }
+
+  } else {
+    // ── Company Owned checks (to be expanded) ──
+    if (seg.vintage && profile.vintage) {
+      if (Number(profile.vintage) >= Number(seg.vintage)) matches.push('Vintage: ✓');
+      else issues.push('Vintage: ' + profile.vintage + ' yrs < required ' + seg.vintage + ' yrs');
+    }
+    if (seg.annualTurnover && profile.annualTurnover) {
+      if (Number(profile.annualTurnover) >= Number(seg.annualTurnover)) matches.push('Turnover: ✓');
+      else issues.push('Turnover: ₹' + profile.annualTurnover + 'L < required ₹' + seg.annualTurnover + 'L');
+    }
+  }
 
   var status = issues.length === 0 && matches.length > 0 ? 'eligible'
              : issues.length === 0 && matches.length === 0 ? 'unknown'
@@ -4226,26 +4930,50 @@ function checkEligibility(policy, profile, type) {
 
 function runMatcher() {
   var dealerName = document.getElementById("matcherDealer").value;
-  var productKey = document.getElementById("matcherProduct").value;
   var type       = document.getElementById("matcherType").value;
-
-  if (!dealerName || !productKey || !type) {
+  if (!dealerName || !type) {
     document.getElementById("matcherResults").style.display = 'none';
     return;
   }
 
-  var profile = getCustomerProfile(type);
+  // Get profile and product key from new ind fields
+  var profile = {};
+  var productKey = '';
+
+  if (type === 'ind') {
+    var indProf = getMatcherIndProfile();
+    productKey = indProf.vehicle;
+    profile = {
+      ntc:       indProf.ntc,
+      ftu:       indProf.ftu,
+      ftb:       indProf.ftb,
+      cibil:     indProf.cibil,
+      residence: indProf.residence,
+      license:   indProf.license,
+    };
+  } else {
+    // Company Owned — to be built
+    productKey = document.getElementById("matcherProduct") ? document.getElementById("matcherProduct").value : '';
+    profile = getCustomerProfile(type);
+  }
+
+  if (!productKey) {
+    document.getElementById("matcherResults").style.display = 'none';
+    return;
+  }
+
   var matcherDealerObj = state.addedDealers.find(function(d){ return d.dealer===dealerName; }) || {};
   var fins = getDealerFinanciers(dealerName, matcherDealerObj.location||'');
 
-  // Filter FIs onboarded for this product
+  // Filter FIs onboarded at dealer for this product
   var onboardedFIs = Object.entries(fins).filter(function(e) {
     var pd = e[1].products[productKey];
     return pd && pd.enabled;
   });
 
+  document.getElementById("matcherResults").style.display = '';
+
   if (!onboardedFIs.length) {
-    document.getElementById("matcherResults").style.display = '';
     document.getElementById("matcherResultsContent").innerHTML =
       '<div style="padding:24px;text-align:center;color:var(--text-hint);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);">No financiers are onboarded at this dealer for the selected product.</div>';
     return;
@@ -4255,60 +4983,114 @@ function runMatcher() {
 
   onboardedFIs.forEach(function(e) {
     var finName = e[0];
-    var policy = (state.fiPolicy[finName] || {})[productKey];
-    if (!policy) { unknown.push({ name: finName, result: { status: 'unknown', issues: [], matches: [] } }); return; }
-    var result = checkEligibility(policy, profile, type);
+    var pol = getEffectivePolicy(finName, productKey, matcherDealerObj.state||'', matcherDealerObj.location||'');
+    if (!pol) { unknown.push({ name: finName, result: { status: 'unknown', issues: [], matches: [] } }); return; }
+    var result = checkEligibility(pol, profile, type);
     if (result.status === 'eligible')   eligible.push({ name: finName, result: result });
     else if (result.status === 'partial')    partial.push({ name: finName, result: result });
     else if (result.status === 'ineligible') ineligible.push({ name: finName, result: result });
     else unknown.push({ name: finName, result: result });
   });
 
-  function renderFICard(item, color, icon, label) {
-    var meta = state.financiersMeta.find(function(m){ return m.name === item.name; }) || {};
-    var matchChips = item.result.matches.map(function(m){
-      return '<span style="font-size:10px;background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border);border-radius:4px;padding:1px 6px;">' + escHtml(m) + '</span>';
-    }).join('');
-    var issueChips = item.result.issues.map(function(m){
-      return '<span style="font-size:10px;background:var(--cat-d-bg);color:var(--cat-d);border:1px solid var(--cat-d-border);border-radius:4px;padding:1px 6px;">' + escHtml(m) + '</span>';
-    }).join('');
-    return '<div style="background:var(--surface);border:1px solid ' + color + ';border-left:4px solid ' + color + ';border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
-        '<span style="font-size:16px;">' + icon + '</span>' +
-        '<span style="font-weight:600;font-size:13px;">' + escHtml(item.name) + '</span>' +
-        '<span class="badge badge-count">' + escHtml(meta.category||'—') + '</span>' +
-        '<span class="badge" style="margin-left:auto;background:' + color + '1a;color:' + color + ';border:1px solid ' + color + ';">' + label + '</span>' +
-      '</div>' +
-      (matchChips || issueChips ? '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + matchChips + issueChips + '</div>' : '') +
-    '</div>';
+  // ── Rank eligible and partial by: lowest IRR first, then highest max loan ──
+  function getPolMetrics(finName) {
+    var pol = getEffectivePolicy(finName, productKey, matcherDealerObj.state||'', matcherDealerObj.location||'');
+    var seg = (pol && pol[type]) || {};
+    var irr     = parseFloat(seg.minIrr||'999') || 999;
+    var maxLoan = parseFloat(seg.maxLoan||'0')  || 0;
+    var maxLoanPct = parseFloat(seg.maxLoanPct||'0') || 0;
+    return { irr: irr, maxLoan: maxLoan, maxLoanPct: maxLoanPct };
   }
+
+  function rankFIs(list) {
+    return list.slice().sort(function(a, b) {
+      var ma = getPolMetrics(a.name), mb = getPolMetrics(b.name);
+      if (ma.irr !== mb.irr) return ma.irr - mb.irr;           // lower IRR first
+      if (mb.maxLoan !== ma.maxLoan) return mb.maxLoan - ma.maxLoan; // higher loan first
+      return mb.maxLoanPct - ma.maxLoanPct;                    // higher loan % first
+    });
+  }
+
+  eligible = rankFIs(eligible);
+  partial  = rankFIs(partial);
+
 
   var html = '';
 
   if (eligible.length) {
     html += '<div style="font-size:12px;font-weight:700;color:var(--ok);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">✅ Eligible (' + eligible.length + ')</div>';
-    eligible.forEach(function(i){ html += renderFICard(i, '#16a34a', '✅', 'Eligible'); });
+    eligible.forEach(function(i, idx){ html += renderFICard(i, '#16a34a', '✅', 'Eligible', idx+1, productKey, type, matcherDealerObj); });
     html += '<div style="margin-bottom:16px;"></div>';
   }
   if (partial.length) {
     html += '<div style="font-size:12px;font-weight:700;color:var(--cat-c);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">⚠ Partial Match (' + partial.length + ')</div>';
-    partial.forEach(function(i){ html += renderFICard(i, '#d97706', '⚠️', 'Partial Match'); });
+    partial.forEach(function(i, idx){ html += renderFICard(i, '#d97706', '⚠️', 'Partial Match', idx+1, productKey, type, matcherDealerObj); });
     html += '<div style="margin-bottom:16px;"></div>';
   }
   if (unknown.length) {
     html += '<div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">❓ Policy Not Defined (' + unknown.length + ')</div>';
-    unknown.forEach(function(i){ html += renderFICard(i, '#9ca3af', '❓', 'No Policy'); });
+    unknown.forEach(function(i){ html += renderFICard(i, '#9ca3af', '❓', 'No Policy', null, productKey, type, matcherDealerObj); });
     html += '<div style="margin-bottom:16px;"></div>';
   }
   if (ineligible.length) {
     html += '<div style="font-size:12px;font-weight:700;color:var(--cat-d);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">❌ Not Eligible (' + ineligible.length + ')</div>';
-    ineligible.forEach(function(i){ html += renderFICard(i, '#dc2626', '❌', 'Not Eligible'); });
+    ineligible.forEach(function(i){ html += renderFICard(i, '#dc2626', '❌', 'Not Eligible', null, productKey, type, matcherDealerObj); });
   }
 
   if (!html) html = '<div style="padding:24px;text-align:center;color:var(--text-hint);">Fill in the customer profile above to see results.</div>';
 
   document.getElementById("matcherResults").style.display = '';
+
+  // Summary bar
+  var vLabel = { '3wc': '3WC', '3wp': '3W Paxx', '4wc_turbo': 'Turbo', '4wc_storm': 'Storm' }[productKey] || productKey;
+  var totalMapped = onboardedFIs.length;
+  var summaryBar = document.getElementById("matcherSummaryBar");
+  if (summaryBar) {
+    summaryBar.innerHTML =
+      '<span style="font-size:12px;color:var(--text-muted);">Vehicle: <b>' + escHtml(vLabel) + '</b></span>' +
+      '<span style="font-size:12px;background:var(--cat-b-bg);color:var(--cat-b);border:1px solid var(--cat-b-border);border-radius:4px;padding:2px 8px;">' + totalMapped + ' FI' + (totalMapped!==1?'s':'') + ' mapped</span>' +
+      '<span style="font-size:12px;background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border);border-radius:4px;padding:2px 8px;">✅ ' + eligible.length + ' eligible</span>' +
+      (partial.length ? '<span style="font-size:12px;background:var(--cat-c-bg,#451a03);color:#fbbf24;border:1px solid #78350f;border-radius:4px;padding:2px 8px;">⚠ ' + partial.length + ' partial</span>' : '') +
+      (ineligible.length ? '<span style="font-size:12px;background:var(--cat-d-bg);color:var(--cat-d);border:1px solid var(--cat-d-border);border-radius:4px;padding:2px 8px;">❌ ' + ineligible.length + ' ineligible</span>' : '');
+  }
+
   document.getElementById("matcherResultsContent").innerHTML = html;
+}
+
+function renderFICard(item, color, icon, label, rank, _pk, _type, _dObj) {
+  var meta = state.financiersMeta.find(function(m){ return m.name === item.name; }) || {};
+  var pol  = (_pk && _dObj) ? getEffectivePolicy(item.name, _pk, _dObj.state||'', _dObj.location||'') : null;
+  var seg  = (pol && _type && pol[_type]) || {};
+  var irr        = seg.minIrr     ? seg.minIrr + '%'                                  : '—';
+  var loanOn     = seg.loanOn     ? seg.loanOn                                         : '';
+  var maxLoan    = seg.maxLoan    ? '₹' + Number(seg.maxLoan).toLocaleString('en-IN') : '';
+  var maxLoanPct = seg.maxLoanPct ? seg.maxLoanPct + '% of cost'                      : '';
+  var loanStr    = [maxLoan, maxLoanPct].filter(Boolean).join(' / ') || '—';
+  if (loanOn) loanStr += ' <span style="font-size:10px;background:var(--cat-b-bg);color:var(--cat-b);border:1px solid var(--cat-b-border);border-radius:4px;padding:1px 5px;margin-left:4px;">' + loanOn + '</span>';
+  var flexibility = seg.flexibility || '';
+  var flexColor = { 'High': '#4ade80', 'Medium': '#fbbf24', 'Low': '#f87171', 'NA': 'var(--text-hint)' }[flexibility] || '';
+  var flexBadge = flexibility ? '<span style="font-size:10px;color:' + flexColor + ';margin-left:4px;">● ' + flexibility + ' Flexibility</span>' : '';
+  var rankBadge = rank ? '<span style="font-size:11px;font-weight:700;background:' + color + ';color:white;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">' + rank + '</span>' : '';
+  var matchChips = item.result.matches.map(function(m){
+    return '<span style="font-size:10px;background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border);border-radius:4px;padding:1px 6px;">' + escHtml(m) + '</span>';
+  }).join('');
+  var issueChips = item.result.issues.map(function(m){
+    return '<span style="font-size:10px;background:var(--cat-d-bg);color:var(--cat-d);border:1px solid var(--cat-d-border);border-radius:4px;padding:1px 6px;">' + escHtml(m) + '</span>';
+  }).join('');
+  return '<div style="background:var(--surface);border:1px solid ' + color + ';border-left:4px solid ' + color + ';border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+      rankBadge +
+      '<span style="font-weight:600;font-size:13px;">' + escHtml(item.name) + '</span>' +
+      '<span class="badge badge-count">' + escHtml(meta.category||'—') + '</span>' +
+      flexBadge +
+      '<span class="badge" style="margin-left:auto;background:' + color + '1a;color:' + color + ';border:1px solid ' + color + ';">' + label + '</span>' +
+    '</div>' +
+    '<div style="display:flex;gap:16px;margin-bottom:' + (matchChips||issueChips?'8':'0') + 'px;flex-wrap:wrap;">' +
+      '<div style="font-size:12px;"><span style="color:var(--text-muted);">Min IRR:</span> <span style="font-weight:600;color:var(--accent);">' + irr + '</span></div>' +
+      '<div style="font-size:12px;"><span style="color:var(--text-muted);">Max Loan:</span> <span style="font-weight:600;">' + loanStr + '</span></div>' +
+    '</div>' +
+    (matchChips || issueChips ? '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + matchChips + issueChips + '</div>' : '') +
+  '</div>';
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -4496,6 +5278,11 @@ function renderTAIF() {
     '<div class="sum-card"><div class="sum-label">Documentation Stage</div><div class="sum-value" style="color:var(--cat-c);">' + docStage + '</div><div class="sum-sub">at least 1 FI</div></div>';
 
   _taifFilteredList = filtered;
+  var taifCountEl = document.getElementById('taifFilterCount');
+  if (taifCountEl) {
+    var taifTotal = state.taifData.length;
+    taifCountEl.textContent = filtered.length < taifTotal ? '(' + filtered.length + ' of ' + taifTotal + ' filtered)' : '(' + taifTotal + ')';
+  }
 
   if (!filtered.length) {
     document.getElementById("taifTable").innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div>No records match your filters.</div></div>';
