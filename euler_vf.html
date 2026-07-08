@@ -152,13 +152,9 @@
   .fin-list { padding: 0; }
   .fin-row { border-bottom: 1px solid var(--border); }
   .fin-row:last-child { border-bottom: none; }
-  .fin-row-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; user-select: none; flex-wrap: wrap; }
+  .fin-row-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; flex-wrap: wrap; }
   .fin-row-header:hover { background: var(--surface2); }
-  .fin-row-name { font-weight: 600; font-size: 13px; flex: 1; }
-  .fin-chevron { color: var(--text-hint); font-size: 13px; transition: transform 0.2s; flex-shrink: 0; }
-  .fin-row.open .fin-chevron { transform: rotate(180deg); }
-  .fin-row-body { display: none; padding: 4px 12px 10px; }
-  .fin-row.open .fin-row-body { display: block; }
+  .fin-row-name { font-weight: 600; font-size: 13px; min-width: 140px; }
   .product-cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
   .product-cat-item { border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; background: var(--surface2); }
   .product-cat-item.enabled { background: var(--surface); }
@@ -750,7 +746,7 @@
   </div>
 
   <!-- Summary -->
-  <div class="summary-bar" id="finMasterSummary"></div>
+  <div class="summary-bar" id="finMasterSummary" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
 
   <!-- Toolbar -->
   <div class="toolbar" style="margin-bottom:8px;">
@@ -1903,7 +1899,8 @@ async function loadState() {
     fipM.forEach(row => {
       if (!row.financier || !row.productKey) return;
       if (!state.fiPolicy[row.financier]) state.fiPolicy[row.financier] = {};
-      const pol = { ind_applicable: row.ind_applicable === 'true', co_applicable: row.co_applicable === 'true', ind: {}, co: {} };
+      const isTruthy = v => v===true||v==='true'||v==='TRUE'||v==='Yes'||v==='yes'||v==='1'||v===1;
+      const pol = { ind_applicable: isTruthy(row.ind_applicable), co_applicable: isTruthy(row.co_applicable), ind: {}, co: {} };
       ['minCibil','maxTenure','loanOn','loanAmtType','maxLoan','maxLoanPct','minIrr','residence','guarantor','bankStatement','licenseType','ntc','ftu','ftb','existingCvRequired','existingCvCount','existingCvType','flexibility','remarks'].forEach(k => { pol.ind[k] = row['ind_'+k]||''; });
       ['maxTenure','loanOn','loanAmtType','maxLoan','maxLoanPct','minIrr','vintage','itr','flexibility','remarks'].forEach(k => { pol.co[k] = row['co_'+k]||''; });
         // Load tiered criteria
@@ -2318,18 +2315,26 @@ function renderFinancierList(dealerName, fins, dealerLocation) {
       if (!cat) return '';
       return `<span class="badge" style="font-family:'DM Mono',monospace;font-size:10px;background:var(--cat-${cat.toLowerCase()}-bg);color:var(--cat-${cat.toLowerCase()});border:1px solid var(--cat-${cat.toLowerCase()}-border)">${p.label}·${cat}</span>`;
     }).join('');
+    const productBadges = PRODUCTS.map(p => {
+      const pd = fdata.products[p.key];
+      const enabled = pd && pd.enabled;
+      const cat = (pd && pd.category) || '';
+      const bg     = enabled ? 'rgba(22,163,74,0.15)' : 'rgba(100,116,139,0.12)';
+      const color  = enabled ? '#4ade80'               : '#64748b';
+      const border = enabled ? 'rgba(22,163,74,0.35)' : 'rgba(100,116,139,0.25)';
+      const catStr = enabled && cat ? `<span style="font-weight:400;opacity:0.75;margin-left:3px;">${escHtml(cat)}</span>` : '';
+      return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;border:1px solid ${border};background:${bg};color:${color};letter-spacing:0.3px;">${p.label}${catStr}</span>`;
+    }).join('');
     return `
-      <div class="fin-row" id="finrow_${escHtml(dealerName)}_${escHtml(finName)}">
-        <div class="fin-row-header" onclick="toggleFinRow('${escJs(dealerName)}','${escJs(finName)}')">
+      <div class="fin-row" id="finrow_${CSS.escape(dealerName)}_${CSS.escape(finName)}">
+        <div class="fin-row-header" style="cursor:default;">
           <div class="fin-row-name">${escHtml(finName)}</div>
-          <div style="display:flex;gap:5px;flex-wrap:wrap;flex:1;">${summaryChips}</div>
-          <div style="display:flex;gap:6px;">
-            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditModal('${escJs(dealerName)}','${escJs(finName)}','${escJs(dealerLocation||'')}')">Edit</button>
-            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();removeFinancier('${escJs(dealerName)}','${escJs(finName)}','${escJs(dealerLocation||'')}')">Remove</button>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">${productBadges}</div>
+          <div style="display:flex;gap:6px;margin-left:auto;">
+            <button class="btn btn-secondary btn-sm" onclick="openEditModal('${escJs(dealerName)}','${escJs(finName)}','${escJs(dealerLocation||'')}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="removeFinancier('${escJs(dealerName)}','${escJs(finName)}','${escJs(dealerLocation||'')}')">Remove</button>
           </div>
-          <span class="fin-chevron">▾</span>
         </div>
-        <div class="fin-row-body"><div class="product-cat-grid">${productCards}</div></div>
       </div>`;
   }).join('')}</div>`;
 }
@@ -2343,7 +2348,7 @@ function toggleDealerCard(dealerName, dealerLocation) {
 }
 
 function toggleFinRow(dealerName, finName) {
-  const row = document.getElementById(`finrow_${dealerName}_${finName}`);
+  const row = document.getElementById(`finrow_${CSS.escape(dealerName)}_${CSS.escape(finName)}`);
   if (row) row.classList.toggle("open");
 }
 
@@ -2990,9 +2995,15 @@ function renderFinancierMaster(skipDropdowns) {
   var types = [];
   state.financiersMeta.forEach(function(m) { if (m.category && types.indexOf(m.category) === -1) types.push(m.category); });
 
+  var p1Count = state.financiersMeta.filter(function(m){ return m.priority==='P1'; }).length;
+  var p2Count = state.financiersMeta.filter(function(m){ return m.priority==='P2'; }).length;
   document.getElementById("finMasterSummary").innerHTML =
-    '<div class="sum-card"><div class="sum-label">Total Financiers</div><div class="sum-value">' + state.financiers.length + '</div><div class="sum-sub">' + activeCount + ' active</div></div>' +
-    '<div class="sum-card"><div class="sum-label">Active / Onboarded FIs</div><div class="sum-value sum-ok">' + activeCount + '</div><div class="sum-sub">status: Active or Onboarded</div></div>';
+    '<div class="sum-card" style="min-width:120px;max-width:160px;flex:0 0 auto;"><div class="sum-label">Total Financiers</div><div class="sum-value">' + state.financiers.length + '</div><div class="sum-sub">' + activeCount + ' active</div></div>' +
+    '<div class="sum-card" style="flex:0 0 auto;"><div class="sum-label">Active / Onboarded FIs</div><div class="sum-value sum-ok">' + activeCount + '</div><div class="sum-sub" style="display:flex;gap:8px;flex-wrap:wrap;">' +
+      (p1Count ? '<span style="color:#a78bfa;font-weight:600;">P1: ' + p1Count + '</span>' : '') +
+      (p2Count ? '<span style="color:#94a3b8;font-weight:600;">P2: ' + p2Count + '</span>' : '') +
+      (!p1Count && !p2Count ? 'no priority set' : '') +
+    '</div></div>';
 
   if (!state.financiers.length) {
     document.getElementById("finMasterTable").innerHTML = '<div class="empty-state"><div class="empty-icon">🏦</div><div style="font-size:14px;font-weight:500;margin-bottom:6px;">No financiers yet</div><div style="font-size:13px;">Click <strong>+ Add Financier</strong> to get started.</div></div>';
@@ -3788,8 +3799,33 @@ function renderFIPolicy() {
   document.getElementById("fiPolicySummary").innerHTML =
     '<div class="sum-card"><div class="sum-label">Showing</div><div class="sum-value">'+filtered.length+'</div><div class="sum-sub">FIs (excl. suspended)</div></div>' +
     '<div class="sum-card"><div class="sum-label">Total in Master</div><div class="sum-value">'+state.financiers.length+'</div><div class="sum-sub">'+(suspendedCount?'<span style="color:#f87171;">'+suspendedCount+' suspended</span>':'all active')+'</div></div>' +
-    '<div class="sum-card"><div class="sum-label">Products</div><div class="sum-value">'+PRODUCTS.length+'</div><div class="sum-sub">'+PRODUCTS.map(function(p){return p.label;}).join(", ")+'</div></div>' +
-    (suspendedCount ? '' : '');
+    (function() {
+      var policyCards = PRODUCTS.map(function(p) {
+        var indCount = 0, coCount = 0;
+        filtered.forEach(function(f) {
+          var pol = (state.fiPolicy[f.name]||{})[p.key];
+          if (!pol) return;
+          var truthy = function(v){ return v===true||v==='true'||v==='TRUE'||v==='Yes'||v==='1'||v===1; };
+          if (truthy(pol.ind_applicable)) indCount++;
+          if (truthy(pol.co_applicable))  coCount++;
+        });
+        return '<div class="sum-card" style="min-width:140px;">' +
+          '<div class="sum-label">' + p.label + ' Policy</div>' +
+          '<div style="display:flex;gap:12px;margin-top:4px;">' +
+            '<div style="text-align:center;">' +
+              '<div style="font-size:18px;font-weight:700;color:var(--text);">' + indCount + '</div>' +
+              '<div style="font-size:10px;color:var(--text-muted);margin-top:1px;">Individual</div>' +
+            '</div>' +
+            '<div style="width:1px;background:var(--border);"></div>' +
+            '<div style="text-align:center;">' +
+              '<div style="font-size:18px;font-weight:700;color:var(--text);">' + coCount + '</div>' +
+              '<div style="font-size:10px;color:var(--text-muted);margin-top:1px;">Co. Owned</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+      return policyCards;
+    })();
 
   if (!filtered.length) {
     document.getElementById("fiPolicyTable").innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div>No financiers match your filters.</div></div>';
