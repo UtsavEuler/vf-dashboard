@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Euler Motors — VF Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Euler Motors — Loan Eligibility Matcher</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
   :root {
     /* ── Elegant Dark Theme ── */
     --bg: #0d0f18;
@@ -574,1167 +574,246 @@
   .multi-filter-clear:hover { text-decoration:underline; }
 
 </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    /* Standalone overrides */
+    body { margin: 0; padding: 0; }
+    .page { display: block !important; padding-top: 16px; }
+    .page-header { display: none; }
+  </style>
 </head>
 <body>
 
-<!-- ── HEADER ── -->
+<!-- Toast -->
+<div id="toast" class="toast"><span id="toastMsg"></span></div>
 
-
-<div id="loginScreen">
-  <div class="login-card">
-    <div class="login-logo">
-      <div class="login-logo-text">Euler Motors <span>VF</span></div>
-      <div class="login-subtitle">Vehicle Financing Dashboard</div>
-    </div>
-    <div class="login-error" id="loginError">Incorrect login ID or password.</div>
-    <div class="form-group">
-      <label class="form-label">Login ID</label>
-      <input type="text" class="form-select" id="loginId" placeholder="Enter login ID" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Password</label>
-      <div style="position:relative;">
-        <input type="password" class="form-select" id="loginPass" placeholder="Enter password" autocomplete="current-password" style="padding-right:40px;" onkeydown="if(event.key==='Enter')attemptLogin()">
-        <button onclick="toggleLoginPassVisibility()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;" id="loginPassToggle">👁</button>
-      </div>
-    </div>
-    <button class="btn btn-primary" style="width:100%;margin-top:8px;padding:11px;" onclick="attemptLogin()">Sign In</button>
+<!-- Header -->
+<div style="background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;">
+  <span style="font-size:20px;">⚡</span>
+  <div>
+    <div style="font-size:16px;font-weight:700;color:var(--text);">Euler Motors — Loan Eligibility Matcher</div>
+    <div style="font-size:12px;color:var(--text-muted);">Enter customer profile to find matching financiers at a dealer for a selected product.</div>
   </div>
 </div>
 
-<div id="appLoader">
-  <div class="loader-logo">Euler Motors <span>VF</span></div>
-  <div class="loader-spinner"></div>
-  <div class="loader-text" id="loaderText">Loading data…</div>
-</div>
+<div style="max-width:1200px;margin:0 auto;padding:20px 24px;">
 
-<div class="header">
-  <div class="header-left">
-    <span style="font-weight:600;font-size:15px;">Euler Motors</span>
-    <span class="logo-badge">VF</span>
-    <span style="color:var(--border-light);margin:0 4px;">|</span>
-    <nav class="header-nav">
-      <button class="nav-btn active" id="navDealer" onclick="switchPage('dealer')">Dealer Dashboard</button>
-      <button class="nav-btn" id="navFinancier" onclick="switchPage('financier')">FI Master List</button>
-      <button class="nav-btn" id="navDealerMaster" onclick="switchPage('dealermaster')">Dealer Master List</button>
-      <button class="nav-btn" id="navFIPolicy" onclick="switchPage('fipolicy')">FI Policy</button>
-      <button class="nav-btn" id="navCoverage" style="opacity:0.4;cursor:not-allowed;" title="Coming soon" onclick="event.preventDefault();">Coverage Gaps</button>
-      <button class="nav-btn" id="navTAIF" onclick="switchPage('taif')">TA/IF Status (Dealer Level)</button>
-    </nav>
-  </div>
-  <div class="save-indicator">
-    <div class="save-dot" id="saveDot"></div>
-    <span id="saveLabel">Saved</span>
-  </div>
-  <button class="btn btn-secondary btn-sm" onclick="logout()" style="font-size:11px;padding:4px 10px;margin-left:8px;">Sign Out</button>
-</div>
-
-<!-- ════════════════════════════════════════════════════════════
-     PAGE 1 — DEALER DASHBOARD
-════════════════════════════════════════════════════════════ -->
-<div class="page active" id="pageDealer">
-<div class="container">
-  <div class="stats-bar" id="statsBar"></div>
-  <div class="toolbar">
-    <div class="toolbar-title">Dealers Added <span id="addedCount" style="font-size:13px;font-weight:400;color:var(--text-muted);">(0)</span> <span id="dealerFilterCount" style="display:none;font-size:12px;color:var(--accent);font-weight:500;margin-left:6px;"></span></div>
-    <!-- Dealer picker -->
-    <div class="dealer-picker-wrap" id="dealerPickerWrap">
-      <button class="dealer-picker-btn" onclick="toggleDealerPicker()">+ Add Dealer ▾</button>
-      <div class="dealer-picker-dropdown" id="dealerPickerDropdown">
-        <div class="dealer-picker-search">
-          <input type="text" id="dealerPickerSearch" placeholder="Search dealer or location..." oninput="renderPickerList()" autocomplete="off">
-        </div>
-        <div class="dealer-picker-list" id="dealerPickerList"></div>
-      </div>
-    </div>
-    <!-- Filter added dealers -->
-    <input type="text" class="search-box" placeholder="Filter added dealers..." id="searchBox" oninput="renderDealers()">
-    <select class="filter-select" id="filterFinancier" onchange="renderDealers()"><option value="">All Financiers</option></select>
-    <select class="filter-select" id="filterHealth" onchange="renderDealers()">
-      <option value="">All Health</option>
-      <option value="star">⭐ Star</option>
-      <option value="green">🟢 Green</option>
-      <option value="amber">🟡 Amber</option>
-      <option value="red">🔴 Red</option>
-      <option value="none">⚪ Not Set</option>
-    </select>
-    <select class="filter-select" id="filterProductHealth" onchange="renderDealers()" style="max-width:200px;">
-      <option value="">Product Health Filter</option>
-      <option value="3wc|star">3WC — ⭐ Star</option>
-      <option value="3wc|green">3WC — 🟢 Green</option>
-      <option value="3wc|amber">3WC — 🟡 Amber</option>
-      <option value="3wc|red">3WC — 🔴 Red</option>
-      <option value="3wc|na">3WC — N/A</option>
-      <option value="3wp|star">3WP — ⭐ Star</option>
-      <option value="3wp|green">3WP — 🟢 Green</option>
-      <option value="3wp|amber">3WP — 🟡 Amber</option>
-      <option value="3wp|red">3WP — 🔴 Red</option>
-      <option value="3wp|na">3WP — N/A</option>
-      <option value="4wc_storm|star">4WCS — ⭐ Star</option>
-      <option value="4wc_storm|green">4WCS — 🟢 Green</option>
-      <option value="4wc_storm|amber">4WCS — 🟡 Amber</option>
-      <option value="4wc_storm|red">4WCS — 🔴 Red</option>
-      <option value="4wc_storm|na">4WCS — N/A</option>
-      <option value="4wc_turbo|star">4WCT — ⭐ Star</option>
-      <option value="4wc_turbo|green">4WCT — 🟢 Green</option>
-      <option value="4wc_turbo|amber">4WCT — 🟡 Amber</option>
-      <option value="4wc_turbo|red">4WCT — 🔴 Red</option>
-      <option value="4wc_turbo|na">4WCT — N/A</option>
-    </select>
-    <div class="multi-filter-wrap" id="pocFilterWrap">
-      <div class="multi-filter-btn" id="pocFilterBtn" onclick="toggleMultiFilter('poc')">
-        <span id="pocFilterLabel">All VF SPOCs</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
-      </div>
-      <div class="multi-filter-dropdown" id="pocFilterDropdown">
-        <div id="pocFilterItems"></div>
-        <div class="multi-filter-clear" onclick="clearMultiFilter('poc')">✕ Clear</div>
-      </div>
-    </div>
-    <div class="multi-filter-wrap" id="locFilterWrap">
-      <div class="multi-filter-btn" id="locFilterBtn" onclick="toggleMultiFilter('loc')">
-        <span id="locFilterLabel">All Locations</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
-      </div>
-      <div class="multi-filter-dropdown" id="locFilterDropdown">
-        <div id="locFilterItems"></div>
-        <div class="multi-filter-clear" onclick="clearMultiFilter('loc')">✕ Clear</div>
-      </div>
-    </div>
-    <button class="btn btn-secondary btn-sm" onclick="clearDealerFilters()">✕ Clear</button>
-    <button class="btn btn-secondary btn-sm" onclick="exportDealerDashboard()">⬇ Export Excel</button>
-    <button class="btn btn-primary btn-sm" onclick="openStatsModal()">📊 Stats</button>
-  </div>
-  <div class="dealer-grid" id="dealerGrid"></div>
-</div>
-</div>
-
-<!-- ════════════════════════════════════════════════════════════
-     PAGE 2 — COVERAGE GAPS
-════════════════════════════════════════════════════════════ -->
-<div class="page" id="pageCoverage">
+<div class="page" id="pageMatcher">
 <div class="container">
   <div class="page-header">
-    <div class="page-title">Coverage Gap Analysis</div>
-    <div class="page-sub">Dealers flagged where no Cat A or Cat B financier is present for a given product — indicating weak financing coverage.</div>
-  </div>
-  <div class="summary-bar" id="summaryBar"></div>
-  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
-    <div class="view-toggle">
-      <button class="toggle-btn active" id="btnProduct" onclick="setGapView('product')">Product-wise</button>
-      <button class="toggle-btn" id="btnDealer" onclick="setGapView('dealer')">Dealer-wise</button>
-    </div>
-    <label class="show-flagged-toggle">
-      <input type="checkbox" id="flaggedOnly" onchange="renderGap()"> Show flagged only
-    </label>
-  </div>
-  <div class="filter-bar" id="productFilterBar">
-    <span class="filter-label">Product:</span>
-    <span class="filter-chip active" data-val="" onclick="setProductFilter(this,'')">All</span>
-    <span class="filter-chip" data-val="3wc" onclick="setProductFilter(this,'3wc')">3WC</span>
-    <span class="filter-chip" data-val="3wp" onclick="setProductFilter(this,'3wp')">3WP</span>
-    <span class="filter-chip" data-val="4wc_storm" onclick="setProductFilter(this,'4wc_storm')">4WCS</span>
-    <span class="filter-chip" data-val="4wc_turbo" onclick="setProductFilter(this,'4wc_turbo')">4WCT</span>
-  </div>
-  <div id="gapContent"></div>
-</div>
-</div>
-
-<!-- ════════════════════════════════════════════════════════════
-     PAGE 3 — FINANCIER LIST MASTER
-════════════════════════════════════════════════════════════ -->
-<div class="page" id="pageFinancier">
-<div class="container">
-  <div class="page-header">
-    <div class="page-title">FI Master List</div>
-    <div class="page-sub">Master list of all financiers — their type, product eligibility, and onboarding status.</div>
+    <div class="page-title">⚡ Loan Eligibility Matcher</div>
+    <div class="page-sub">Enter customer profile to find matching financiers available at a dealer for a selected product.</div>
   </div>
 
-  <!-- Summary -->
-  <div class="summary-bar" id="finMasterSummary"></div>
-
-  <!-- Toolbar -->
-  <div class="toolbar" style="margin-bottom:8px;">
-    <div class="toolbar-title" style="font-size:15px;font-weight:600;flex:1;">Financiers <span id="finMasterCount" style="font-size:13px;font-weight:400;color:var(--text-muted);"></span></div>
-    <button class="btn btn-primary btn-sm" onclick="openAddFinancierMasterModal()">+ Add Financier</button>
-  </div>
-  <!-- Filter bar -->
-  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);">
-    <input type="text" class="search-box" id="finMasterSearch" placeholder="Search by FI name..." oninput="renderFinancierMaster()" style="width:180px;">
-    <div class="multi-filter-wrap" id="finStatusFilterWrap">
-      <div class="multi-filter-btn" id="finStatusFilterBtn" onclick="toggleFinMultiFilter('finStatus')">
-        <span id="finStatusFilterLabel">All Statuses</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
-      </div>
-      <div class="multi-filter-dropdown" id="finStatusFilterDropdown">
-        <div id="finStatusFilterItems"></div>
-        <div class="multi-filter-clear" onclick="clearFinMultiFilter('finStatus')">✕ Clear</div>
-      </div>
-    </div>
-    <div class="multi-filter-wrap" id="finCatFilterWrap">
-      <div class="multi-filter-btn" id="finCatFilterBtn" onclick="toggleFinMultiFilter('finCat')">
-        <span id="finCatFilterLabel">All Categories</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
-      </div>
-      <div class="multi-filter-dropdown" id="finCatFilterDropdown">
-        <div id="finCatFilterItems"></div>
-        <div class="multi-filter-clear" onclick="clearFinMultiFilter('finCat')">✕ Clear</div>
-      </div>
-    </div>
-    <select class="filter-select" id="finFilterInstrument" onchange="renderFinancierMaster()">
-      <option value="">All Instruments</option>
-      <option value="OL">OL</option>
-      <option value="TL">TL</option>
-      <option value="Both">Both</option>
-    </select>
-    <select class="filter-select" id="finFilterLinked" onchange="renderFinancierMaster()">
-      <option value="">All (Linked &amp; Unlinked)</option>
-      <option value="linked">Linked with Dealer</option>
-      <option value="unlinked">Not Linked</option>
-    </select>
-    <div class="multi-filter-wrap" id="finMouFilterWrap">
-      <div class="multi-filter-btn" id="finMouFilterBtn" onclick="toggleFinMouFilter()">
-        <span id="finMouFilterLabel">All MoU Status</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
-      </div>
-      <div class="multi-filter-dropdown" id="finMouFilterDropdown">
-        <div id="finMouFilterItems"></div>
-        <div class="multi-filter-clear" onclick="clearFinMouFilter()">✕ Clear</div>
-      </div>
-    </div>
-    <button class="btn btn-secondary btn-sm" onclick="clearFIMasterFilters()">✕ Clear Filters</button>
-    <button class="btn btn-secondary btn-sm" onclick="exportFIMaster()">⬇ Export Excel</button>
-  </div>
-
-  <!-- Financier table -->
-  <div id="finMasterTable"></div>
-</div>
-</div>
-
-<!-- ── ADD/EDIT FINANCIER MASTER MODAL ── -->
-<div class="modal-overlay" id="finMasterModalOverlay">
-  <div class="modal" style="max-width:600px;">
-    <div class="modal-header">
-      <div><div class="modal-title" id="finMasterModalTitle">Add Financier</div><div class="modal-sub" id="finMasterModalSub"></div></div>
-      <button class="modal-close" onclick="closeFinancierMasterModal()">×</button>
-    </div>
-    <div class="modal-body" style="padding-top:16px;">
-
-      <!-- Section: Basic Info -->
-      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Basic Info</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">FI Name <span style="color:var(--flag);">*</span></label>
-          <input type="text" class="form-select" id="fm_name" placeholder="e.g. Bajaj Finance">
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">Category <span style="color:var(--flag);">*</span></label>
-          <select class="form-select" id="fm_category"><option value="">— Select —</option></select>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">Instruments <span style="color:var(--flag);">*</span></label>
-</div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Priority <span id="fm_priority_star" style="color:var(--flag);">*</span></label>
-          <select class="form-select" id="fm_priority">
-            <option value="">— Select —</option>
-            <option value="P1">P1</option>
-            <option value="P2">P2</option>
-          </select>
-        </div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Instruments</label>
-          <select class="form-select" id="fm_instruments">
-            <option value="">— Select —</option>
-            <option value="OL">OL</option>
-            <option value="TL">TL</option>
-            <option value="Both">Both</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Section: Products -->
-      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Product Eligibility</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">
-        <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface2);">
-          <input type="checkbox" id="fm_3wc" style="width:16px;height:16px;accent-color:var(--accent);"> <span style="font-family:'DM Mono',monospace;font-weight:600;font-size:13px;">3WC</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface2);">
-          <input type="checkbox" id="fm_3wp" style="width:16px;height:16px;accent-color:var(--accent);"> <span style="font-family:'DM Mono',monospace;font-weight:600;font-size:13px;">3WP</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface2);">
-          <input type="checkbox" id="fm_4wc" style="width:16px;height:16px;accent-color:var(--accent);"> <span style="font-family:'DM Mono',monospace;font-weight:600;font-size:13px;">4WCS</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface2);">
-          <input type="checkbox" id="fm_4wct" style="width:16px;height:16px;accent-color:var(--accent);"> <span style="font-family:'DM Mono',monospace;font-weight:600;font-size:13px;">4WCT</span>
-        </label>
-      </div>
-
-      <!-- Section: Status & MoU -->
-      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Status & MoU</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">Status <span style="color:var(--flag);">*</span></label>
-          <select class="form-select" id="fm_status" onchange="updateFmPriorityStar()"><option value="">— Select —</option></select>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">MoU Status <span style="color:var(--flag);">*</span></label>
-          <select class="form-select" id="fm_mouStatus">
-            <option value="">— Select —</option>
-            <option value="Signed">Signed</option>
-            <option value="WIP">WIP</option>
-            <option value="NA">NA</option>
-          </select>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">MOU Signed Month</label>
-          <div style="display:flex;gap:8px;">
-          <select class="form-select" id="fm_mouSignedMonth_month" style="flex:1;"><option value="">— Month —</option><option value="Jan">Jan</option><option value="Feb">Feb</option><option value="Mar">Mar</option><option value="Apr">Apr</option><option value="May">May</option><option value="Jun">Jun</option><option value="Jul">Jul</option><option value="Aug">Aug</option><option value="Sep">Sep</option><option value="Oct">Oct</option><option value="Nov">Nov</option><option value="Dec">Dec</option></select>
-          <select class="form-select" id="fm_mouSignedMonth_year" style="flex:1;"><option value="">— Year —</option><option value="2023">2023</option><option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option><option value="2027">2027</option></select>
-        </div>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">FI Onboarding Month</label>
-          <div style="display:flex;gap:8px;">
-          <select class="form-select" id="fm_onboardingDate_month" style="flex:1;"><option value="">— Month —</option><option value="Jan">Jan</option><option value="Feb">Feb</option><option value="Mar">Mar</option><option value="Apr">Apr</option><option value="May">May</option><option value="Jun">Jun</option><option value="Jul">Jul</option><option value="Aug">Aug</option><option value="Sep">Sep</option><option value="Oct">Oct</option><option value="Nov">Nov</option><option value="Dec">Dec</option></select>
-          <select class="form-select" id="fm_onboardingDate_year" style="flex:1;"><option value="">— Year —</option><option value="2023">2023</option><option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option><option value="2027">2027</option></select>
-        </div>
-        </div>
-      </div>
-
-      <!-- Section: Details -->
-      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Details</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">TTL (Time to Live)</label>
-          <input type="text" class="form-select" id="fm_ttl" placeholder="">
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">Help Required</label>
-          <input type="text" class="form-select" id="fm_helpRequired" placeholder="">
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">Sourced By</label>
-          <input type="text" class="form-select" id="fm_sourcedBy" placeholder="">
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">Contact Details</label>
-          <input type="text" class="form-select" id="fm_contactDetails" placeholder="">
-        </div>
-      </div>
-
-      <!-- Section: POC & Comments -->
-      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">POC & Comments</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">SPOC</label>
-          <input type="text" class="form-select" id="fm_spoc" placeholder="">
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">Secondary POC</label>
-          <input type="text" class="form-select" id="fm_secondaryPoc" placeholder="">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Comments</label>
-        <textarea class="form-select" id="fm_comments" rows="3" placeholder="Any additional notes..." style="resize:vertical;"></textarea>
-      </div>
-
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeFinancierMasterModal()">Cancel</button>
-      <button class="btn btn-primary" id="finMasterSaveBtn" onclick="saveFinancierMaster()">Add Financier</button>
+  <!-- Step 1: Select Dealer -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);">
+    <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px;">Step 1 — Select Dealer</div>
+    <div class="form-group" style="margin:0;max-width:340px;">
+      <label class="form-label">Dealer <span style="color:var(--flag);">*</span></label>
+      <select class="form-select" id="matcherDealer" onchange="onMatcherDealerChange()"><option value="">— Select Dealer —</option></select>
     </div>
   </div>
-</div>
 
-<!-- ── CONFIRM DELETE FINANCIER MODAL ── -->
-<div class="confirm-modal-overlay" id="confirmFinModalOverlay">
-  <div class="confirm-modal">
-    <div class="confirm-modal-body">
-      <div class="confirm-modal-icon">⚠️</div>
-      <div class="confirm-modal-title">Remove Financier?</div>
-      <div class="confirm-modal-sub">You are about to remove <span class="confirm-modal-dealer" id="confirmFinName"></span> from the master list. This will also remove it from all dealer onboarding records. This cannot be undone.</div>
-    </div>
-    <div class="confirm-modal-footer">
-      <button class="btn btn-secondary" onclick="closeConfirmFinModal()">Cancel</button>
-      <button class="btn btn-danger" id="confirmFinDeleteBtn">Yes, Remove</button>
+  <!-- Step 2: Customer Type -->
+  <div id="matcherTypeSection" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);">
+    <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px;">Step 2 — Customer Profile Type</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+      <div class="form-group" style="margin:0;flex:0 0 280px;">
+        <label class="form-label">Customer Type <span style="color:var(--flag);">*</span></label>
+        <select class="form-select" id="matcherType" onchange="onMatcherTypeChange()">
+          <option value="">— Select Type —</option>
+          <option value="ind">Individual</option>
+          <option value="co">Company Owned</option>
+        </select>
+      </div>
+      <div class="form-group" id="coTypeInline" style="margin:0;flex:0 0 280px;display:none;">
+        <label class="form-label">Company Type <span style="color:var(--flag);">*</span></label>
+        <select class="form-select" id="co_companyType" onchange="onCoCompanyTypeChange()">
+          <option value="">— Select —</option>
+          <option value="Pvt. Ltd.">Pvt. Ltd.</option>
+          <option value="Proprietorship">Proprietorship</option>
+          <option value="LLP">LLP</option>
+        </select>
+      </div>
     </div>
   </div>
-</div>
 
+  <!-- Step 3: Individual Profile -->
+  <div id="matcherIndSection" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);">
+    <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:16px;">Step 3 — Individual Customer Profile</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
 
-<!-- ════════════════════════════════════════════════════════════
-     PAGE 4 — DEALER MASTER LIST
-════════════════════════════════════════════════════════════ -->
-<div class="page" id="pageDealerMaster">
-<div class="container">
-  <div class="page-header">
-    <div class="page-title">Dealer Master List</div>
-    <div class="page-sub">Master list of all Euler Motors dealers across PAN India.</div>
-  </div>
-  <div class="summary-bar" id="dealerMasterSummary"></div>
-  <!-- Toolbar -->
-  <div class="toolbar" style="margin-bottom:8px;">
-    <div class="toolbar-title" style="font-size:15px;font-weight:600;flex:1;">Dealers <span id="dealerMasterCount" style="font-size:13px;font-weight:400;color:var(--text-muted);"></span></div>
-    <button class="btn btn-primary btn-sm" onclick="openAddDealerMasterModal()">+ Add Dealer</button>
-  </div>
-  <!-- Filter bar -->
-  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);">
-    <input type="text" class="search-box" id="dealerMasterSearch" placeholder="Search dealer..." oninput="renderDealerMaster()" style="width:180px;">
-    <div class="multi-filter-wrap">
-      <div class="multi-filter-btn" id="dmZoneFilterBtn" onclick="toggleDmMultiFilter('dmZone')">
-        <span id="dmZoneFilterLabel">All Zones</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
-      </div>
-      <div class="multi-filter-dropdown" id="dmZoneFilterDropdown">
-        <div id="dmZoneFilterItems"></div>
-        <div class="multi-filter-clear" onclick="clearDmMultiFilter('dmZone')">✕ Clear</div>
-      </div>
-    </div>
-    <div class="multi-filter-wrap">
-      <div class="multi-filter-btn" id="dmStateFilterBtn" onclick="toggleDmMultiFilter('dmState')">
-        <span id="dmStateFilterLabel">All States</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
-      </div>
-      <div class="multi-filter-dropdown" id="dmStateFilterDropdown">
-        <div id="dmStateFilterItems"></div>
-        <div class="multi-filter-clear" onclick="clearDmMultiFilter('dmState')">✕ Clear</div>
-      </div>
-    </div>
-    <div class="multi-filter-wrap">
-      <div class="multi-filter-btn" id="dmStatusFilterBtn" onclick="toggleDmMultiFilter('dmStatus')">
-        <span id="dmStatusFilterLabel">All Statuses</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
-      </div>
-      <div class="multi-filter-dropdown" id="dmStatusFilterDropdown">
-        <div id="dmStatusFilterItems"></div>
-        <div class="multi-filter-clear" onclick="clearDmMultiFilter('dmStatus')">✕ Clear</div>
-      </div>
-    </div>
-    <select class="filter-select" id="dmFilterType" onchange="renderDealerMaster()"><option value="">DODO / COCO</option></select>
-    <div class="multi-filter-wrap" id="dmPocFilterWrap">
-      <div class="multi-filter-btn" id="dmPocFilterBtn" onclick="toggleDmPocFilter()">
-        <span id="dmPocFilterLabel">All VF SPOCs</span> <span style="font-size:10px;color:var(--text-muted);">▾</span>
-      </div>
-      <div class="multi-filter-dropdown" id="dmPocFilterDropdown">
-        <div id="dmPocFilterItems"></div>
-        <div class="multi-filter-clear" onclick="clearDmPocFilter()">✕ Clear</div>
-      </div>
-    </div>
-    <button class="btn btn-secondary btn-sm" onclick="clearDealerMasterFilters()">✕ Clear</button>
-    <button class="btn btn-secondary btn-sm" onclick="exportDealerMaster()">⬇ Export Excel</button>
-  </div>
-  <div id="dealerMasterTable"></div>
-</div>
-</div>
-
-<!-- ── ADD/EDIT DEALER MASTER MODAL ── -->
-<div class="modal-overlay" id="dealerMasterModalOverlay">
-  <div class="modal" style="max-width:640px;">
-    <div class="modal-header">
-      <div><div class="modal-title" id="dealerMasterModalTitle">Add Dealer</div><div class="modal-sub" id="dealerMasterModalSub">Fields marked * are mandatory</div></div>
-      <button class="modal-close" onclick="closeDealerMasterModal()">×</button>
-    </div>
-    <div class="modal-body" style="padding-top:16px;">
-
-      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Location</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
-        <div class="form-group" style="margin:0;"><label class="form-label">Zone <span style="color:var(--flag);">*</span></label><select class="form-select" id="dm_zone"><option value="">— Select —</option><option>North</option><option>South</option><option>East</option><option>West</option></select></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">State <span style="color:var(--flag);">*</span></label><input type="text" class="form-select" id="dm_state" placeholder="e.g. Karnataka"></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Location <span style="color:var(--flag);">*</span></label><input type="text" class="form-select" id="dm_location" placeholder="e.g. Bengaluru"></div>
-      </div>
-
-      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Dealer Info</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Name <span style="color:var(--flag);">*</span></label><input type="text" class="form-select" id="dm_dealerName" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Principle Name</label><input type="text" class="form-select" id="dm_dealerPrinciple" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Email ID</label><input type="text" class="form-select" id="dm_dealerEmail" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Phone No</label><input type="text" class="form-select" id="dm_dealerPhone" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">DODO / COCO</label><select class="form-select" id="dm_dodoCocoType"><option value="">— Select —</option><option>DODO</option><option>COCO</option></select></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Status</label><select class="form-select" id="dm_dealerStatus"><option value="">— Select —</option><option>Retailing</option><option>Onboarded</option><option>Active</option><option>Inactive</option><option>Closed</option></select></div>
-      </div>
-
-      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">VF POC</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
-        <div class="form-group" style="margin:0;"><label class="form-label">VF POC Name</label><input type="text" class="form-select" id="dm_vfPoc" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">VF POC Email</label><input type="text" class="form-select" id="dm_vfPocEmail" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">VF POC Mobile</label><input type="text" class="form-select" id="dm_vfPocMobile" placeholder=""></div>
-      </div>
-
-      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Sales Team</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
-        <div class="form-group" style="margin:0;"><label class="form-label">ZM (Sales)</label><input type="text" class="form-select" id="dm_zmSales" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">ZM Email</label><input type="text" class="form-select" id="dm_zmEmail" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">ZM Mobile</label><input type="text" class="form-select" id="dm_zmMobile" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">RM (Sales)</label><input type="text" class="form-select" id="dm_rmSales" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">RM Email</label><input type="text" class="form-select" id="dm_rmEmail" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">RM Mobile</label><input type="text" class="form-select" id="dm_rmMobile" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">ASM (Sales)</label><input type="text" class="form-select" id="dm_asmSales" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">ASM Email</label><input type="text" class="form-select" id="dm_asmEmail" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">ASM Mobile</label><input type="text" class="form-select" id="dm_asmMobile" placeholder=""></div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeDealerMasterModal()">Cancel</button>
-      <button class="btn btn-primary" id="dealerMasterSaveBtn" onclick="saveDealerMaster()">Add Dealer</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── CONFIRM DELETE DEALER MASTER MODAL ── -->
-<div class="confirm-modal-overlay" id="confirmDealerMasterOverlay">
-  <div class="confirm-modal">
-    <div class="confirm-modal-body">
-      <div class="confirm-modal-icon">⚠️</div>
-      <div class="confirm-modal-title">Remove Dealer?</div>
-      <div class="confirm-modal-sub">You are about to remove <span class="confirm-modal-dealer" id="confirmDealerMasterName"></span> from the master list. This cannot be undone.</div>
-    </div>
-    <div class="confirm-modal-footer">
-      <button class="btn btn-secondary" onclick="closeConfirmDealerMasterModal()">Cancel</button>
-      <button class="btn btn-danger" id="confirmDealerMasterBtn">Yes, Remove</button>
-    </div>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════════════════════════════
-     PAGE 5 — FI POLICY
-════════════════════════════════════════════════════════════ -->
-<div class="page" id="pageFIPolicy">
-<div class="container">
-  <div class="page-header">
-    <div class="page-title">FI Policy</div>
-    <div class="page-sub">Define and manage product-level financing policies for each financier.</div>
-  </div>
-
-  <!-- Summary -->
-  <div class="summary-bar" id="fiPolicySummary"></div>
-
-  <!-- Filter bar -->
-  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);">
-    <input type="text" class="search-box" id="fiPolicySearch" placeholder="Search financier..." oninput="renderFIPolicy()" style="width:200px;">
-    <select class="filter-select" id="fiPolicyFilterCategory" onchange="renderFIPolicy()"><option value="">All Categories</option></select>
-    <select class="filter-select" id="fiPolicyFilterStatus" onchange="renderFIPolicy()"><option value="">All Statuses</option></select>
-    <select class="filter-select" id="fiPolicyFilterLinked" onchange="renderFIPolicy()">
-      <option value="">All (Linked &amp; Unlinked)</option>
-      <option value="linked">Linked with Dealer</option>
-      <option value="unlinked">Not Linked</option>
-    </select>
-    <button class="btn btn-secondary btn-sm" onclick="clearFIPolicyFilters()">✕ Clear</button>
-    <button class="btn btn-secondary btn-sm" onclick="exportFIPolicy()">⬇ Export Excel</button>
-  </div>
-
-  <div id="fiPolicyTable"></div>
-</div>
-</div>
-
-<!-- ── FI POLICY MODAL ── -->
-<div class="modal-overlay" id="fiPolicyModalOverlay" style="z-index:250;">
-  <div class="modal" style="max-width:560px;position:relative;">
-
-    <!-- Close button -->
-    <button onclick="closeFIPolicyModal()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-hint);line-height:1;z-index:1;">×</button>
-
-    <!-- Modal Header -->
-    <div class="modal-header" style="padding-right:44px;">
-      <div>
-        <div class="modal-title" id="fiPolicyModalTitle">Policy</div>
-        <div class="modal-sub" id="fiPolicyModalSub"></div>
-      </div>
-    </div>
-
-    <!-- Segment tab switcher -->
-    <div style="display:flex;border-bottom:2px solid var(--border);background:var(--surface2);">
-      <button id="fip_tab_ind" onclick="switchFIPTab('ind')" style="flex:1;padding:12px 16px;border:none;background:var(--surface);border-bottom:2px solid var(--accent);font-size:13px;font-weight:600;color:var(--accent);cursor:pointer;margin-bottom:-2px;transition:all 0.15s;">🧑 Individual</button>
-      <button id="fip_tab_co"  onclick="switchFIPTab('co')"  style="flex:1;padding:12px 16px;border:none;background:none;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--text-muted);cursor:pointer;margin-bottom:-2px;transition:all 0.15s;">🏢 Company Owned</button>
-    </div>
-
-    <div class="modal-body" style="padding:0;max-height:65vh;overflow-y:auto;">
-
-      <!-- ── INDIVIDUAL PANEL ── -->
-      <div id="fip_panel_ind">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--surface2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:12px;color:var(--text-muted);">Applicable for Individual customers?</span>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
-            <div id="fip_ind_toggleLabel" style="font-size:11px;font-weight:600;color:var(--cat-d);">Not Applicable</div>
-            <div id="fip_ind_toggleTrack" onclick="toggleFIPolicySegment('ind')" style="width:40px;height:22px;border-radius:11px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
-              <div id="fip_ind_toggleThumb" style="width:18px;height:18px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
-            </div>
-          </label>
-          </div>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-secondary btn-sm" id="fip_ind_editBtn_top" onclick="enterFIPSegmentEditMode('ind')" style="display:none;">✏ Edit</button>
-            <button class="btn btn-primary btn-sm" id="fip_ind_saveBtn_top" onclick="saveFIPSegment('ind')" style="display:none;">💾 Save Changes</button>
+      <!-- NTC toggle + CIBIL -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">New to Credit (NTC)?</label>
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
+          <div id="ind_ntc_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
+          <div id="ind_ntc_track" onclick="toggleMatcherNTC()" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
+            <div id="ind_ntc_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
           </div>
         </div>
-        <div id="fip_ind_body" style="padding:16px 20px;opacity:0.4;pointer-events:none;">
-          <div id="fip_ind_hint" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface2);border:1px dashed var(--border);border-radius:8px;margin-bottom:14px;font-size:12px;color:var(--text-muted);">
-            ↑ Enable the toggle above to define policy for Individual customers
-          </div>
+      </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Minimum CIBIL <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_minCibil_view" class="fip-view-field">—</div>
-      <input type="number" class="form-select" id="fip_ind_minCibil" placeholder="300" style="display:none;" min="0">
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Max Loan Tenure (months) <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_maxTenure_view" class="fip-view-field">—</div>
-      <input type="number" class="form-select" id="fip_ind_maxTenure" placeholder="e.g. 48" style="display:none;" min="0">
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Provides Loan on <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_loanOn_view" class="fip-view-field">—</div>
-      <select class="form-select" id="fip_ind_loanOn" style="display:none;">
-        <option value="">— Select —</option>
-        <option value="ESP">ESP</option>
-        <option value="ORP">ORP</option>
-      </select>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Max Loan Amount Type <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_loanAmtType_view" class="fip-view-field">—</div>
-      <select class="form-select" id="fip_ind_loanAmtType" style="display:none;" onchange="updateLoanAmtFields('ind')">
-        <option value="">— Select —</option>
-        <option value="Percentage">% of Vehicle Cost</option>
-        <option value="Absolute">Absolute Value (₹)</option>
-        <option value="Both">Both</option>
-      </select>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Max Loan Amount <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_maxLoan_view" class="fip-view-field">—</div>
-      <!-- Shown based on loanAmtType selection -->
-      <div id="fip_ind_maxLoan_edit_wrap" style="display:none;">
-        <div id="fip_ind_maxLoanPct_row" style="display:none;margin-bottom:6px;">
+      <!-- CIBIL Score (hidden when NTC = Yes) -->
+      <div class="form-group" style="margin:0;" id="ind_cibil_wrap">
+        <label class="form-label">CIBIL Score</label>
+        <input type="number" class="form-select" id="ind_cibil" placeholder="e.g. 720" min="300" max="900" oninput="setTimeout(validateMatcherInd,0)">
+      </div>
+
+      <!-- Residence -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Residence <span style="color:var(--flag);">*</span></label>
+        <select class="form-select" id="ind_residence" onchange="setTimeout(validateMatcherInd,0)">
+          <option value="">— Select —</option>
+          <option value="Own">Own</option>
+          <option value="Rented">Rented</option>
+        </select>
+      </div>
+
+      <!-- License Type -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">License Type <span style="color:var(--flag);">*</span></label>
+        <select class="form-select" id="ind_license" onchange="setTimeout(validateMatcherInd,0)">
+          <option value="">— Select —</option>
+          <option value="DL">DL (Driving License)</option>
+          <option value="LLR">LLR (Learner's License)</option>
+        </select>
+      </div>
+
+      <!-- FTU + FTB Toggles side by side -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">FTU / FTB</label>
+        <div style="display:flex;gap:20px;padding:6px 0;flex-wrap:wrap;">
           <div style="display:flex;align-items:center;gap:8px;">
-            <input type="number" class="form-select" id="fip_ind_maxLoanPct" placeholder="e.g. 85" style="flex:1;" min="0" max="100" step="0.1">
-            <span style="font-size:13px;color:var(--text-muted);white-space:nowrap;">% of vehicle cost</span>
-          </div>
-        </div>
-        <div id="fip_ind_maxLoanAbs_row" style="display:none;position:relative;">
-          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-muted);">₹</span>
-          <input type="number" class="form-select" id="fip_ind_maxLoan" placeholder="0" style="padding-left:22px;" min="0">
-        </div>
-      </div>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Minimum IRR Offered <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_minIrr_view" class="fip-view-field">—</div>
-      <div id="fip_ind_minIrr_edit_wrap" style="display:none;position:relative;">
-        <input type="number" class="form-select" id="fip_ind_minIrr" placeholder="0.00" min="0" max="100" step="0.01" style="padding-right:28px;">
-        <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-muted);">%</span>
-      </div>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Residence Address Criteria <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_residence_view" class="fip-view-field">—</div>
-      <select class="form-select" id="fip_ind_residence" style="display:none;"><option value="">— Select —</option><option value="Rented" >Rented</option><option value="Own" >Own</option><option value="Either Scenario" >Either Scenario</option></select>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Guarantor Required <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_guarantor_view" class="fip-view-field">—</div>
-      <select class="form-select" id="fip_ind_guarantor" style="display:none;"><option value="">— Select —</option><option value="Yes" >Yes</option><option value="No" >No</option><option value="Either Scenario" >Either Scenario</option></select>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">L6M Bank Statement Required <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_bankStatement_view" class="fip-view-field">—</div>
-      <select class="form-select" id="fip_ind_bankStatement" style="display:none;"><option value="">— Select —</option><option value="Yes" >Yes</option><option value="No" selected>No</option><option value="Either Scenario">Either Scenario</option></select>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">License Type <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_licenseType_view" class="fip-view-field">—</div>
-      <select class="form-select" id="fip_ind_licenseType" style="display:none;"><option value="">— Select —</option><option value="DL" >DL</option><option value="LLR" >LLR</option><option value="Either Scenario" >Either Scenario</option></select>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Provides Loan to NTC <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_ntc_view" class="fip-view-field" style="display:none;">No</div>
-      <div id="fip_ind_ntc_wrap" style="display:flex;align-items:center;gap:10px;padding:6px 0;">
-        <div id="fip_ind_ntc_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
-        <div id="fip_ind_ntc_track" onclick="toggleFIPYN('fip_ind_ntc')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
-          <div id="fip_ind_ntc_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
-        </div>
-      </div>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Provides Loan to FTU <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_ftu_view" class="fip-view-field" style="display:none;">No</div>
-      <div id="fip_ind_ftu_wrap" style="display:flex;align-items:center;gap:10px;padding:6px 0;">
-        <div id="fip_ind_ftu_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
-        <div id="fip_ind_ftu_track" onclick="toggleFIPYN('fip_ind_ftu')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
-          <div id="fip_ind_ftu_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
-        </div>
-      </div>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Provides Loan to FTB <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_ftb_view" class="fip-view-field" style="display:none;">No</div>
-      <div id="fip_ind_ftb_wrap" style="display:flex;align-items:center;gap:10px;padding:6px 0;">
-        <div id="fip_ind_ftb_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
-        <div id="fip_ind_ftb_track" onclick="toggleFIPYN('fip_ind_ftb')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
-          <div id="fip_ind_ftb_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
-        </div>
-      </div>
-    </div>
-          </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Existing CV Required <span style="color:var(--flag);">*</span></label>
-      <div id="fip_ind_existingCvRequired_view" class="fip-view-field" style="display:none;">No</div>
-      <div id="fip_ind_existingCvRequired_wrap" style="display:flex;align-items:center;gap:10px;padding:6px 0;">
-        <div id="fip_ind_existingCvRequired_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
-        <div id="fip_ind_existingCvRequired_track" onclick="toggleFIPYN('fip_ind_existingCvRequired')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
-          <div id="fip_ind_existingCvRequired_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
-        </div>
-      </div>
-    </div>
-          <!-- Existing CV Details (shown when existingCvRequired = Yes) -->
-          <div id="fip_ind_existingCvDetails" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px;">
-            <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Existing CV Criteria</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-              <div class="form-group" style="margin:0;">
-                <label class="form-label">Min. CVs Owned <span style="color:var(--flag);">*</span></label>
-                <div id="fip_ind_existingCvCount_view" class="fip-view-field">—</div>
-                <input type="number" class="form-select" id="fip_ind_existingCvCount" placeholder="e.g. 2" style="display:none;" min="1">
-              </div>
-              <div class="form-group" style="margin:0;">
-                <label class="form-label">Min. EV CVs (out of above) <span style="color:var(--flag);">*</span></label>
-                <div id="fip_ind_existingCvType_view" class="fip-view-field">—</div>
-                <input type="number" class="form-select" id="fip_ind_existingCvType" placeholder="e.g. 1 (0 = no EV req.)" style="display:none;" min="0" oninput="validateExistingCvEv(this)">
-              </div>
+            <span style="font-size:12px;color:var(--text-muted);">FTU</span>
+            <div id="ind_ftu_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
+            <div id="ind_ftu_track" onclick="toggleMatcherToggle('ftu')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
+              <div id="ind_ftu_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
             </div>
           </div>
-          <div class="form-group" style="margin-bottom:12px;">
-            <label class="form-label">Flexibility <span style="color:var(--flag);">*</span></label>
-            <div id="fip_ind_flexibility_view" class="fip-view-field">—</div>
-            <div id="fip_ind_flexibility_wrap" style="display:none;">
-              <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-                <span style="font-size:10px;color:var(--text-muted);">NA</span> <span style="font-size:10px;color:var(--text-muted);">Low</span> <span style="font-size:10px;color:var(--text-muted);">Medium</span> <span style="font-size:10px;color:var(--text-muted);">High</span>
-              </div>
-              <input type="range" id="fip_ind_flexibility" min="0" max="3" step="1" value="0"
-                style="width:100%;accent-color:var(--accent);cursor:pointer;"
-                oninput="updateFlexLabel('ind',this.value)">
-              <div style="text-align:center;margin-top:6px;">
-                <span id="fip_ind_flexibility_label" style="font-size:12px;font-weight:600;color:var(--accent);">NA</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- ── GEO OVERRIDES IND ── -->
-          <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-              <div>
-                <div class="form-label" style="margin:0;">State/City Specific Parameters</div>
-                <div style="font-size:11px;color:var(--text-hint);margin-top:2px;">Define Individual policy overrides for specific locations</div>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
-                <span id="fip_geo_ind_toggle_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</span>
-                <div id="fip_geo_ind_toggle_track" onclick="toggleGeoOverride('ind')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
-                  <div id="fip_geo_ind_toggle_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
-                </div>
-              </div>
-            </div>
-            <div id="fip_geo_ind_section" style="display:none;">
-              <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap;">
-                <div style="flex:1;min-width:140px;">
-                  <label class="form-label" style="margin-bottom:4px;">State</label>
-                  <select class="form-select" id="fip_geo_ind_state" onchange="updateGeoCityDropdown('ind')">
-                    <option value="">— Select State —</option>
-                  </select>
-                </div>
-                <div style="flex:1;min-width:140px;">
-                  <label class="form-label" style="margin-bottom:4px;">City</label>
-                  <select class="form-select" id="fip_geo_ind_city">
-                    <option value="">— Select City —</option>
-                  </select>
-                </div>
-                <button class="btn btn-secondary btn-sm" onclick="addGeoOverrideRow('ind')">+ Add Override</button>
-              </div>
-              <div id="fip_geo_ind_rows_container">
-                <div style="font-size:12px;color:var(--text-hint);padding:8px 0;">No overrides defined yet. Select a state and city above.</div>
-              </div>
-            </div>
-          </div>
-          <div class="form-group" style="margin-bottom:8px;">
-            <label class="form-label">Remarks</label>
-            <div id="fip_ind_remarks_view" class="fip-view-field" style="min-height:40px;">—</div>
-            <textarea class="form-select" id="fip_ind_remarks" rows="2" style="display:none;resize:vertical;" placeholder="Optional notes..."></textarea>
-          </div>
-          <!-- Edit/Save buttons moved to top -->
-        </div>
-      </div>
-
-      <!-- ── COMPANY OWNED PANEL ── -->
-      <div id="fip_panel_co" style="display:none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--surface2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:12px;color:var(--text-muted);">Applicable for Company Owned customers?</span>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
-            <div id="fip_co_toggleLabel" style="font-size:11px;font-weight:600;color:var(--cat-d);">Not Applicable</div>
-            <div id="fip_co_toggleTrack" onclick="toggleFIPolicySegment('co')" style="width:40px;height:22px;border-radius:11px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
-              <div id="fip_co_toggleThumb" style="width:18px;height:18px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
-            </div>
-          </label>
-          </div>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-secondary btn-sm" id="fip_co_editBtn_top" onclick="enterFIPSegmentEditMode('co')" style="display:none;">✏ Edit</button>
-            <button class="btn btn-primary btn-sm" id="fip_co_saveBtn_top" onclick="saveFIPSegment('co')" style="display:none;">💾 Save Changes</button>
-          </div>
-        </div>
-        <div id="fip_co_body" style="padding:16px 20px;opacity:0.4;pointer-events:none;">
-          <div id="fip_co_hint" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface2);border:1px dashed var(--border);border-radius:8px;margin-bottom:14px;font-size:12px;color:var(--text-muted);">
-            ↑ Enable the toggle above to define policy for Company Owned customers
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Max Loan Tenure (months) <span style="color:var(--flag);">*</span></label>
-      <div id="fip_co_maxTenure_view" class="fip-view-field">—</div>
-      <input type="number" class="form-select" id="fip_co_maxTenure" placeholder="e.g. 48" style="display:none;" min="0">
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Provides Loan on <span style="color:var(--flag);">*</span></label>
-      <div id="fip_co_loanOn_view" class="fip-view-field">—</div>
-      <select class="form-select" id="fip_co_loanOn" style="display:none;">
-        <option value="">— Select —</option>
-        <option value="ESP">ESP</option>
-        <option value="ORP">ORP</option>
-      </select>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Max Loan Amount Type <span style="color:var(--flag);">*</span></label>
-      <div id="fip_co_loanAmtType_view" class="fip-view-field">—</div>
-      <select class="form-select" id="fip_co_loanAmtType" style="display:none;" onchange="updateLoanAmtFields('co')">
-        <option value="">— Select —</option>
-        <option value="Percentage">% of Vehicle Cost</option>
-        <option value="Absolute">Absolute Value (₹)</option>
-        <option value="Both">Both</option>
-      </select>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Max Loan Amount <span style="color:var(--flag);">*</span></label>
-      <div id="fip_co_maxLoan_view" class="fip-view-field">—</div>
-      <!-- Shown based on loanAmtType selection -->
-      <div id="fip_co_maxLoan_edit_wrap" style="display:none;">
-        <div id="fip_co_maxLoanPct_row" style="display:none;margin-bottom:6px;">
           <div style="display:flex;align-items:center;gap:8px;">
-            <input type="number" class="form-select" id="fip_co_maxLoanPct" placeholder="e.g. 85" style="flex:1;" min="0" max="100" step="0.1">
-            <span style="font-size:13px;color:var(--text-muted);white-space:nowrap;">% of vehicle cost</span>
-          </div>
-        </div>
-        <div id="fip_co_maxLoanAbs_row" style="display:none;position:relative;">
-          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-muted);">₹</span>
-          <input type="number" class="form-select" id="fip_co_maxLoan" placeholder="0" style="padding-left:22px;" min="0">
-        </div>
-      </div>
-    </div>
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Minimum IRR Offered <span style="color:var(--flag);">*</span></label>
-      <div id="fip_co_minIrr_view" class="fip-view-field">—</div>
-      <div id="fip_co_minIrr_edit_wrap" style="display:none;position:relative;">
-        <input type="number" class="form-select" id="fip_co_minIrr" placeholder="0.00" min="0" max="100" step="0.01" style="padding-right:28px;">
-        <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-muted);">%</span>
-      </div>
-    </div>
-
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">Vintage (years) <span style="color:var(--flag);">*</span></label>
-      <div id="fip_co_vintage_view" class="fip-view-field">—</div>
-      <input type="number" class="form-select" id="fip_co_vintage" placeholder="e.g. 2" style="display:none;" min="0">
-    </div>
-          </div>
-
-          <!-- Tiered Criteria: Turnover + Fleet -->
-          <div style="margin-bottom:12px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <label class="form-label" style="margin:0;">Turnover & Fleet Criteria <span style="color:var(--flag);">*</span>
-                <span style="font-weight:400;font-size:10px;color:var(--text-hint);margin-left:4px;">(Avg L2 years · Turnover in ₹ Lacs · NA = no requirement)</span>
-              </label>
-              <button class="btn btn-secondary btn-sm" id="fip_co_addTierBtn" onclick="addFIPTier()" style="display:none;font-size:11px;">+ Add Tier</button>
-            </div>
-            <!-- View mode: tier table -->
-            <div id="fip_co_tiersView" class="fip-view-field" style="min-height:40px;padding:6px 10px;">—</div>
-            <!-- Edit mode: tier editor -->
-            <div id="fip_co_tiersEdit" style="display:none;">
-              <table style="width:100%;border-collapse:collapse;font-size:12px;" id="fip_co_tierTable">
-                <thead>
-                  <tr style="background:var(--surface3);">
-                    <th style="padding:6px 8px;text-align:left;border:1px solid var(--border);color:var(--text-muted);">Min Turnover (₹)</th>
-                    <th style="padding:6px 8px;text-align:left;border:1px solid var(--border);color:var(--text-muted);">Max Turnover (₹)</th>
-                    <th style="padding:6px 8px;text-align:left;border:1px solid var(--border);color:var(--text-muted);">Min Fleet Size</th>
-                    <th style="width:32px;border:1px solid var(--border);"></th>
-                  </tr>
-                </thead>
-                <tbody id="fip_co_tierBody"></tbody>
-              </table>
+            <span style="font-size:12px;color:var(--text-muted);">FTB</span>
+            <div id="ind_ftb_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
+            <div id="ind_ftb_track" onclick="toggleMatcherToggle('ftb')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
+              <div id="ind_ftb_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-
-            <div class="form-group" style="margin:0;">
-      <label class="form-label">ITR / Company Financial <span style="color:var(--flag);">*</span></label>
-      <div id="fip_co_itr_view" class="fip-view-field" style="display:none;">No</div>
-      <div id="fip_co_itr_wrap" style="display:flex;align-items:center;gap:10px;padding:6px 0;">
-        <div id="fip_co_itr_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
-        <div id="fip_co_itr_track" onclick="toggleFIPYN('fip_co_itr')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
-          <div id="fip_co_itr_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
         </div>
       </div>
+
+      <!-- Vehicle Requirement (last) -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Vehicle Requirement <span style="color:var(--flag);">*</span></label>
+<span id="matcherVehicleCount" style="display:none;font-size:11px;color:var(--cat-b);background:var(--cat-b-bg);border:1px solid var(--cat-b-border);border-radius:4px;padding:2px 8px;"></span>
+        <select class="form-select" id="ind_vehicle" onchange="setTimeout(validateMatcherInd,0);">
+          <option value="">— Select Vehicle —</option>
+          <option value="3wc">3WC</option>
+          <option value="3wp">3W Paxx</option>
+          <option value="4wc_turbo">Turbo</option>
+          <option value="4wc_storm">Storm</option>
+        </select>
+      </div>
+
     </div>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;">
+      <button class="btn btn-primary" id="matcherFindBtn" onclick="runMatcher()">🔍 Find Eligible Financiers</button>
+      <span id="matcherIndHint" style="font-size:12px;color:var(--text-hint);">Fill all mandatory fields to enable</span>
+    </div>
+  </div>
+
+  <!-- Step 3: Company Owned Profile -->
+  <div id="matcherCoSection" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);">
+    <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:16px;">Step 3 — Company Owned Customer Profile</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+
+      <!-- Vintage -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Vintage <span style="color:var(--flag);">*</span> <span style="font-size:10px;color:var(--text-hint);">(years)</span></label>
+        <input type="number" class="form-select" id="co_vintage" placeholder="e.g. 3" min="0" oninput="validateMatcherCo()">
+      </div>
+
+      <!-- ITR / Company Financial Toggle -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">ITR / Company Financial Available?</label>
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
+          <div id="co_itr_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</div>
+          <div id="co_itr_track" onclick="toggleMatcherCoToggle('itr')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
+            <div id="co_itr_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
           </div>
-          <div class="form-group" style="margin-bottom:12px;">
-            <label class="form-label">Flexibility <span style="color:var(--flag);">*</span></label>
-            <div id="fip_co_flexibility_view" class="fip-view-field">—</div>
-            <div id="fip_co_flexibility_wrap" style="display:none;">
-              <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-                <span style="font-size:10px;color:var(--text-muted);">NA</span> <span style="font-size:10px;color:var(--text-muted);">Low</span> <span style="font-size:10px;color:var(--text-muted);">Medium</span> <span style="font-size:10px;color:var(--text-muted);">High</span>
-              </div>
-              <input type="range" id="fip_co_flexibility" min="0" max="3" step="1" value="0"
-                style="width:100%;accent-color:var(--accent);cursor:pointer;"
-                oninput="updateFlexLabel('co',this.value)">
-              <div style="text-align:center;margin-top:6px;">
-                <span id="fip_co_flexibility_label" style="font-size:12px;font-weight:600;color:var(--accent);">NA</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- ── GEO OVERRIDES CO ── -->
-          <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-              <div>
-                <div class="form-label" style="margin:0;">State/City Specific Parameters</div>
-                <div style="font-size:11px;color:var(--text-hint);margin-top:2px;">Define Company Owned policy overrides for specific locations</div>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
-                <span id="fip_geo_co_toggle_label" style="font-size:12px;font-weight:600;color:var(--cat-d);">No</span>
-                <div id="fip_geo_co_toggle_track" onclick="toggleGeoOverride('co')" style="width:36px;height:20px;border-radius:10px;background:#ddd;position:relative;cursor:pointer;transition:background 0.2s;">
-                  <div id="fip_geo_co_toggle_thumb" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
-                </div>
-              </div>
-            </div>
-            <div id="fip_geo_co_section" style="display:none;">
-              <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap;">
-                <div style="flex:1;min-width:140px;">
-                  <label class="form-label" style="margin-bottom:4px;">State</label>
-                  <select class="form-select" id="fip_geo_co_state" onchange="updateGeoCityDropdown('co')">
-                    <option value="">— Select State —</option>
-                  </select>
-                </div>
-                <div style="flex:1;min-width:140px;">
-                  <label class="form-label" style="margin-bottom:4px;">City</label>
-                  <select class="form-select" id="fip_geo_co_city">
-                    <option value="">— Select City —</option>
-                  </select>
-                </div>
-                <button class="btn btn-secondary btn-sm" onclick="addGeoOverrideRow('co')">+ Add Override</button>
-              </div>
-              <div id="fip_geo_co_rows_container">
-                <div style="font-size:12px;color:var(--text-hint);padding:8px 0;">No overrides defined yet. Select a state and city above.</div>
-              </div>
-            </div>
-          </div>
-          <div class="form-group" style="margin-bottom:8px;">
-            <label class="form-label">Remarks</label>
-            <div id="fip_co_remarks_view" class="fip-view-field" style="min-height:40px;">—</div>
-            <textarea class="form-select" id="fip_co_remarks" rows="2" style="display:none;resize:vertical;" placeholder="Optional notes..."></textarea>
-          </div>
-          <!-- Edit/Save buttons moved to top -->
         </div>
       </div>
 
-    </div>
-
-    <!-- Footer -->
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeFIPolicyModal()">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════════════════════════════
-     PAGE 6 — TA/IF STATUS (DEALER LEVEL)
-════════════════════════════════════════════════════════════ -->
-<div class="page" id="pageTAIF">
-<div class="container">
-  <div class="page-header">
-    <div class="page-title">TA/IF Status (Dealer Level)</div>
-    <div class="page-sub">Track TA and IF status per dealer per financier — HFCL, Ecofy, Sriram.</div>
-  </div>
-  <div class="summary-bar" id="taifSummary"></div>
-  <!-- Filter bar -->
-  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);">
-    <input type="text" class="search-box" id="taifSearch" placeholder="Search dealer / state / city..." oninput="renderTAIF()" style="width:200px;">
-    <select class="filter-select" id="taifFilterState" onchange="renderTAIF()"><option value="">All States</option></select>
-    <select class="filter-select" id="taifFilterStatus" onchange="renderTAIF()"><option value="">All Statuses</option></select>
-    <select class="filter-select" id="taifFilterFI" onchange="renderTAIF()">
-      <option value="">All Financiers</option>
-      <option value="hfcl">HFCL</option>
-      <option value="ecofy">Ecofy</option>
-      <option value="sriram">Sriram</option>
-    </select>
-    <select class="filter-select" id="taifFilterDealerStatus" onchange="renderTAIF()">
-      <option value="">All Dealer Statuses</option>
-      <option value="Active">Active</option>
-      <option value="Inactive">Inactive</option>
-    </select>
-    <button class="btn btn-secondary btn-sm" onclick="clearTAIFFilters()">✕ Clear</button>
-    <button class="btn btn-secondary btn-sm" onclick="exportTAIF()">⬇ Export Excel</button>
-  </div>
-  <div id="taifTable"></div>
-</div>
-</div>
-
-<!-- ── ADD/EDIT FINANCIER MODAL ── -->
-<div class="modal-overlay" id="modalOverlay">
-  <div class="modal">
-    <div class="modal-header">
-      <div><div class="modal-title" id="modalTitle">Add Financier</div><div class="modal-sub" id="modalSub"></div></div>
-      <button class="modal-close" onclick="closeModal()">×</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group" id="finSelectGroup">
-        <label class="form-label">Financier</label>
-        <select class="form-select" id="finSelect"></select>
+      <!-- Turnover -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Turnover <span style="color:var(--flag);">*</span> <span style="font-size:10px;color:var(--text-hint);">(Avg. Last 2 yrs, in ₹ Lacs)</span></label>
+        <input type="number" class="form-select" id="co_turnover" placeholder="e.g. 50" min="0" oninput="validateMatcherCo()">
       </div>
-      <div class="form-group">
-        <label class="form-label">Products & Categories</label>
-        <div class="product-config-list" id="productConfigList"></div>
+
+      <!-- Existing Fleet -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Existing Fleet <span style="color:var(--flag);">*</span></label>
+        <select class="form-select" id="co_existingFleet" onchange="onCoExistingFleetChange(); validateMatcherCo();">
+          <option value="">— Select —</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
       </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" id="modalSaveBtn" onclick="saveFinancier()">Add Financier</button>
-    </div>
-  </div>
-</div>
 
-<!-- ── DEALER LIST MODAL ── -->
-<div class="modal-overlay" id="infoModalOverlay">
-  <div class="modal" style="max-width:400px;">
-    <div class="modal-header">
-      <div><div class="modal-title" id="infoModalTitle"></div></div>
-      <button class="modal-close" onclick="document.getElementById('infoModalOverlay').classList.remove('show')">×</button>
-    </div>
-    <div class="modal-body" id="infoModalBody" style="padding-top:12px;"></div>
-  </div>
-</div>
-
-<!-- ── STATS MODAL ── -->
-<div class="stats-modal-overlay" id="statsModalOverlay">
-  <div class="stats-modal">
-    <div class="stats-modal-header">
-      <div><div class="stats-modal-title">Dealer Health Statistics</div><div class="stats-modal-sub">Health breakdown by dealer and by product</div></div>
-      <button class="modal-close" onclick="closeStatsModal()">×</button>
-    </div>
-    <div class="stats-modal-body">
-      <div id="healthStatsContent"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ── CONFIRM DELETE DEALER MODAL ── -->
-<div class="confirm-modal-overlay" id="confirmModalOverlay">
-  <div class="confirm-modal">
-    <div class="confirm-modal-body">
-      <div class="confirm-modal-icon">⚠️</div>
-      <div class="confirm-modal-title">Remove Dealer?</div>
-      <div class="confirm-modal-sub">
-        You are about to remove<br>
-        <span class="confirm-modal-dealer" id="confirmDealerName"></span><br>
-        from your list. All financier data for this dealer will also be deleted. This cannot be undone.
+      <!-- Fleet Size (shown only when Existing Fleet = Yes) -->
+      <div class="form-group" style="margin:0;" id="co_fleetSize_wrap" style="display:none;">
+        <label class="form-label">Fleet Size <span style="color:var(--flag);">*</span> <span style="font-size:10px;color:var(--text-hint);">(no. of vehicles)</span></label>
+        <input type="number" class="form-select" id="co_fleetSize" placeholder="e.g. 5" min="1" oninput="validateMatcherCo()">
       </div>
+
+      <!-- Number of Vehicles Required -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Number of Vehicles Required <span style="color:var(--flag);">*</span></label>
+        <input type="number" class="form-select" id="co_vehicleCount" placeholder="e.g. 3" min="1" oninput="setTimeout(validateMatcherCo,0)">
+      </div>
+
+      <!-- Vehicle Requirement (last) -->
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Vehicle Requirement <span style="color:var(--flag);">*</span></label>
+        <span id="matcherCoVehicleCount" style="display:none;font-size:11px;color:var(--cat-b);background:var(--cat-b-bg);border:1px solid var(--cat-b-border);border-radius:4px;padding:2px 8px;"></span>
+        <select class="form-select" id="co_vehicle" onchange="updateCoVehicleCount(); validateMatcherCo();">
+          <option value="">— Select Vehicle —</option>
+          <option value="3wc">3WC</option>
+          <option value="3wp">3W Paxx</option>
+          <option value="4wc_turbo">Turbo</option>
+          <option value="4wc_storm">Storm</option>
+        </select>
+      </div>
+
     </div>
-    <div class="confirm-modal-footer">
-      <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
-      <button class="btn btn-danger" id="confirmDeleteBtn">Yes, Remove</button>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;">
+      <button class="btn btn-primary" id="matcherCoFindBtn" onclick="runMatcherCo()" disabled style="opacity:0.4;cursor:not-allowed;">🔍 Find Eligible Financiers</button>
+      <span id="matcherCoHint" style="font-size:12px;color:var(--text-hint);">Fill all mandatory fields to enable</span>
     </div>
   </div>
-</div>
 
-<!-- ── HEALTH STATUS MODAL ── -->
-<div class="modal-overlay" id="healthModalOverlay">
-  <div class="modal" style="max-width:380px;">
-    <div class="modal-header">
-      <div>
-        <div class="modal-title" id="healthModalTitle">Set Health Status</div>
-        <div class="modal-sub" id="healthModalSub"></div>
-      </div>
-      <button class="modal-close" onclick="closeHealthModal()">×</button>
-    </div>
-    <div class="modal-body">
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Select the current financing health for this product at this dealer:</div>
-      <div class="health-picker">
-        <div class="health-picker-opt" id="hopt_star" onclick="selectHealth('star')">
-          <span class="health-dot health-star"></span> ⭐ Star
-        </div>
-        <div class="health-picker-opt" id="hopt_green" onclick="selectHealth('green')">
-          <span class="health-dot health-green"></span> Green
-        </div>
-        <div class="health-picker-opt" id="hopt_amber" onclick="selectHealth('amber')">
-          <span class="health-dot health-amber"></span> Amber
-        </div>
-        <div class="health-picker-opt" id="hopt_red" onclick="selectHealth('red')">
-          <span class="health-dot health-red"></span> Red
-        </div>
-        <div class="health-picker-opt" id="hopt_na" onclick="selectHealth('na')">
-          <span class="health-dot health-none"></span> N/A
+  <!-- Old hidden elements for compatibility -->
+  <select id="matcherProduct" style="display:none;"><option value="">— Select Product —</option></select>
+  <div id="matcherProfileSection" style="display:none;"><div id="matcherProfileFields"></div></div>
+
+  <!-- Results -->
+  <div id="matcherResults" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Results</div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div id="matcherSummaryBar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
+        <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px;">
+          <span style="font-size:11px;color:var(--text-muted);padding:0 6px;">Sort:</span>
+          <button id="sortBtnDefault" class="btn btn-primary btn-sm" onclick="setMatcherSort('default')" style="padding:3px 10px;font-size:11px;">Default</button>
+          <button id="sortBtnIrr" class="btn btn-secondary btn-sm" onclick="setMatcherSort('irr')" style="padding:3px 10px;font-size:11px;">Low IRR</button>
+          <button id="sortBtnFunding" class="btn btn-secondary btn-sm" onclick="setMatcherSort('funding')" style="padding:3px 10px;font-size:11px;">Max Funding</button>
         </div>
       </div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeHealthModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveHealthStatus()">Save</button>
-    </div>
+    <div id="matcherResultsContent" style="padding-bottom:64px;"></div>
   </div>
 </div>
-
-<!-- ── TAIF EDIT MODAL ── -->
-<div class="modal-overlay" id="taifEditModalOverlay">
-  <div class="modal" style="max-width:640px;">
-    <div class="modal-header">
-      <div>
-        <div class="modal-title" id="taifEditModalTitle">Edit Record</div>
-        <div class="modal-sub">Update TA/IF status for this dealer</div>
-      </div>
-      <button class="modal-close" onclick="closeTAIFEditModal()">×</button>
-    </div>
-    <div class="modal-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Name</label><input type="text" class="form-select" id="taif_dealerName" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">State</label><input type="text" class="form-select" id="taif_state" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">City</label><input type="text" class="form-select" id="taif_city" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Principal Name</label><input type="text" class="form-select" id="taif_principalName" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Code</label><input type="text" class="form-select" id="taif_dealerCode" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Status</label><select class="form-select" id="taif_dealerStatus"><option>Active</option><option>Inactive</option></select></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">LOI Issue Date</label><input type="text" class="form-select" id="taif_loiIssueDate" placeholder="e.g. 01-Jan-2024"></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Code Creation Date</label><input type="text" class="form-select" id="taif_codeCreationDate" placeholder="e.g. 15-Jan-2024"></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Last 3M Avg TO</label><input type="text" class="form-select" id="taif_lastAvgTO" placeholder=""></div>
-      </div>
-      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Financier Status</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-        <div class="form-group" style="margin:0;"><label class="form-label">HFCL</label>
-          <select class="form-select" id="taif_hfcl"><option value="">—</option></select></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Ecofy</label>
-          <select class="form-select" id="taif_ecofy"><option value="">—</option></select></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Sriram</label>
-          <select class="form-select" id="taif_sriram"><option value="">—</option></select></div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeTAIFEditModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveTAIFEdit()">Save Changes</button>
-    </div>
-  </div>
 </div>
 
-<!-- ── TAIF CONFIRM DELETE MODAL ── -->
-<div class="confirm-modal-overlay" id="confirmTAIFOverlay">
-  <div class="confirm-modal">
-    <div class="confirm-modal-body">
-      <div class="confirm-modal-icon">⚠️</div>
-      <div class="confirm-modal-title">Delete Record?</div>
-      <div class="confirm-modal-sub">You are about to permanently delete the record for <span class="confirm-modal-dealer" id="confirmTAIFName"></span>. This cannot be undone.</div>
-    </div>
-    <div class="confirm-modal-footer">
-      <button class="btn btn-secondary" onclick="closeConfirmTAIF()">Cancel</button>
-      <button class="btn btn-danger" id="confirmTAIFBtn">Yes, Delete</button>
-    </div>
-  </div>
 </div>
-
-<div class="toast" id="toast"><div class="toast-dot"></div><span id="toastMsg"></span></div>
 
 <script>
 // ══════════════════════════════════════════════════════════════
@@ -1838,6 +917,14 @@ async function loadState() {
     const dhM   = toArr(dealerHealth);
 
     // Debug log — remove after confirming data loads
+    console.log('[loadState] Counts:', {
+      fiMaster: fiM.length, dealerMaster: dmM.length,
+      addedDealers: adM.length, onboarding: onbM.length,
+      fiPolicy: fipM.length, dealerHealth: dhM.length,
+      taif: state.taifData.length, fiPolicyGeo: state.fiPolicyGeo.length
+    });
+    console.log('[loadState] Raw addedDealers:', adM.slice(0,3));
+    console.log('[loadState] Raw fiMaster sample:', fiM.slice(0,2));
 
     // FI Master
     state.financiers = fiM.map(f => f.name).filter(Boolean);
@@ -4659,20 +3746,183 @@ function initMatcher() {
   document.getElementById("matcherResults").style.display = 'none';
 }
 
+// onMatcherDealerChange — moved above
+function onMatcherDealerChange() {
+  var dealer = document.getElementById("matcherDealer").value;
+  var typeSection = document.getElementById("matcherTypeSection");
+  if (typeSection) typeSection.style.display = dealer ? '' : 'none';
+  var typeEl = document.getElementById("matcherType");
+  if (typeEl) typeEl.value = '';
+  var indSec = document.getElementById("matcherIndSection");
+  var coSec  = document.getElementById("matcherCoSection");
+  if (indSec) indSec.style.display = 'none';
+  if (coSec)  coSec.style.display  = 'none';
+  var res = document.getElementById("matcherResults");
+  if (res) res.style.display = 'none';
+}
+
+// onMatcherTypeChange — moved above
+function onMatcherTypeChange() {
+  var type = document.getElementById("matcherType").value;
+  var indSec = document.getElementById("matcherIndSection");
+  var coSec  = document.getElementById("matcherCoSection");
+  var coTypeInline = document.getElementById("coTypeInline");
+  if (indSec) indSec.style.display = (type === 'ind') ? '' : 'none';
+  if (coSec)  coSec.style.display  = 'none';
+  if (coTypeInline) {
+    coTypeInline.style.display = (type === 'co') ? '' : 'none';
+    if (type !== 'co') { var ctEl = document.getElementById('co_companyType'); if (ctEl) ctEl.value = ''; }
+  }
+  var res = document.getElementById("matcherResults");
+  if (res) res.style.display = 'none';
+  if (type === 'ind') setTimeout(validateMatcherInd, 0);
+  if (type === 'co')  validateMatcherCo();
+}
 
 
+function onCoCompanyTypeChange() {
+  var val = document.getElementById('co_companyType') ? document.getElementById('co_companyType').value : '';
+  var coSec = document.getElementById('matcherCoSection');
+  if (coSec) coSec.style.display = val ? '' : 'none';
+  var res = document.getElementById('matcherResults');
+  if (res) res.style.display = 'none';
+  validateMatcherCo();
+}
 
 
+function buildSpocFooter(dealerName, dealerLocation) {
+  var master = getDealerMasterList().find(function(m){
+    return m.dealerName === dealerName && m.location === dealerLocation;
+  }) || getDealerMasterList().find(function(m){ return m.dealerName === dealerName; }) || {};
+  var poc    = master.vfPoc       || '';
+  var mobile = master.vfPocMobile || '';
+  if (!poc && !mobile) return '';
+  // Inject as fixed bottom bar via DOM (not inside scrollable html string)
+  var existing = document.getElementById('matcherSpocFooter');
+  if (existing) existing.remove();
+  var bar = document.createElement('div');
+  bar.id = 'matcherSpocFooter';
+  bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:999;display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--surface3);border-top:1px solid var(--border);padding:10px 24px;box-shadow:0 -4px 16px rgba(0,0,0,0.3);';
+  bar.innerHTML =
+    '<div style="font-size:12px;color:var(--text-muted);flex:1;min-width:200px;">For any further requirement clarification / assistance reach out to our POC —</div>' +
+    '<div style="display:flex;align-items:center;gap:12px;">' +
+      (poc    ? '<span style="font-size:13px;font-weight:600;">👤 ' + escHtml(poc) + '</span>' : '') +
+      (mobile ? '<a href="tel:' + escHtml(mobile) + '" style="font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;">📞 ' + escHtml(mobile) + '</a>' : '') +
+    '</div>' +
+    '<button onclick="document.getElementById(\'matcherSpocFooter\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:16px;cursor:pointer;padding:0 4px;line-height:1;" title="Dismiss">×</button>';
+  document.body.appendChild(bar);
+  return ''; // no inline HTML needed anymore
+}
+
+function getSpocContactCard(dealerName, dealerLocation) {
+  var master = getDealerMasterList().find(function(m){
+    return m.dealerName === dealerName && m.location === dealerLocation;
+  }) || getDealerMasterList().find(function(m){ return m.dealerName === dealerName; }) || {};
+  var poc     = master.vfPoc      || '';
+  var mobile  = master.vfPocMobile|| '';
+  var email   = master.vfPocEmail || '';
+  if (!poc && !mobile) return '';
+  return '<div style="margin-top:16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;text-align:left;max-width:340px;margin-left:auto;margin-right:auto;">' +
+    '<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Your VF Team Contact</div>' +
+    (poc    ? '<div style="font-size:13px;font-weight:600;margin-bottom:4px;">👤 ' + escHtml(poc) + '</div>' : '') +
+    (mobile ? '<div style="font-size:12px;color:var(--text-muted);">📞 <a href="tel:' + escHtml(mobile) + '" style="color:var(--accent);text-decoration:none;">' + escHtml(mobile) + '</a></div>' : '') +
+    (email  ? '<div style="font-size:12px;color:var(--text-muted);">✉ <a href="mailto:' + escHtml(email) + '" style="color:var(--accent);text-decoration:none;">' + escHtml(email) + '</a></div>' : '') +
+  '</div>';
+}
 
 
+var _matcherSort = 'default'; // 'default' | 'irr' | 'funding'
 
+function setMatcherSort(mode) {
+  _matcherSort = mode;
+  ['default','irr','funding'].forEach(function(m) {
+    var btn = document.getElementById('sortBtn' + m.charAt(0).toUpperCase() + m.slice(1));
+    if (btn) { btn.className = (mode===m ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'); btn.style.cssText = 'padding:3px 10px;font-size:11px;'; }
+  });
+  var activeType = document.getElementById('matcherType') ? document.getElementById('matcherType').value : '';
+  if (activeType === 'ind') runMatcher();
+  else if (activeType === 'co') runMatcherCo();
+}
 
+function getPriorityRank(name) {
+  var meta = state.financiersMeta.find(function(m){ return m.name === name; }) || {};
+  var p = meta.priority || '';
+  if (p === 'P1') return 1;
+  if (p === 'P2') return 2;
+  return 3; // no priority
+}
 
+function getLoanOnRank(pol) {
+  // ORP > ESP in absolute value for same %, so prefer ORP first
+  var loanOn = (pol.loanOn || '').trim().toUpperCase();
+  if (loanOn === 'ORP') return 1;
+  if (loanOn === 'ESP') return 2;
+  return 3; // not defined
+}
 
+function getFlexibilityRank(pol) {
+  var f = (pol.flexibility || '').trim();
+  if (f === 'High')   return 1;
+  if (f === 'Medium') return 2;
+  if (f === 'Low')    return 3;
+  if (f === 'NA')     return 4;
+  return 5; // not defined
+}
 
+function rankBySort(list, getPolFn, bucket) {
+  return list.slice().sort(function(a, b) {
+    var pa = getPolFn(a.name)||{}, pb = getPolFn(b.name)||{};
+    var iaIrr     = parseFloat(pa.minIrr||'999')||999;
+    var ibIrr     = parseFloat(pb.minIrr||'999')||999;
+    var iaLoan    = parseFloat(pa.maxLoan||'0')||0;
+    var ibLoan    = parseFloat(pb.maxLoan||'0')||0;
+    var iaLoanPct = parseFloat(pa.maxLoanPct||'0')||0;
+    var ibLoanPct = parseFloat(pb.maxLoanPct||'0')||0;
+    var iaLoanOn  = getLoanOnRank(pa);
+    var ibLoanOn  = getLoanOnRank(pb);
+    var iaFlex    = getFlexibilityRank(pa);
+    var ibFlex    = getFlexibilityRank(pb);
+    if (_matcherSort === 'funding') {
+      if (ibLoan !== iaLoan) return ibLoan - iaLoan;
+      if (ibLoanPct !== iaLoanPct) return ibLoanPct - iaLoanPct;
+      if (iaLoanOn !== ibLoanOn) return iaLoanOn - ibLoanOn;
+      return iaIrr - ibIrr;
+    } else if (_matcherSort === 'irr') {
+      if (iaIrr !== ibIrr) return iaIrr - ibIrr;
+      if (ibLoan !== iaLoan) return ibLoan - iaLoan;
+      if (ibLoanPct !== iaLoanPct) return ibLoanPct - iaLoanPct;
+      if (iaLoanOn !== ibLoanOn) return iaLoanOn - ibLoanOn;
+      return 0;
+    } else {
+      // Default: Priority → IRR → Max Loan (₹) → Max Loan (%) → ORP > ESP
+      // For partial matches: also factor in Flexibility after IRR
+      var prA = getPriorityRank(a.name), prB = getPriorityRank(b.name);
+      if (prA !== prB) return prA - prB;
+      if (iaIrr !== ibIrr) return iaIrr - ibIrr;
+      if (bucket === 'partial' && iaFlex !== ibFlex) return iaFlex - ibFlex; // High flex preferred
+      if (ibLoan !== iaLoan) return ibLoan - iaLoan;
+      if (ibLoanPct !== iaLoanPct) return ibLoanPct - iaLoanPct;
+      if (iaLoanOn !== ibLoanOn) return iaLoanOn - ibLoanOn;
+      return 0;
+    }
+  });
+}
 
-
-
+function updateCoVehicleCount() {
+  var dealerName = document.getElementById("matcherDealer") ? document.getElementById("matcherDealer").value : '';
+  var vehicle    = document.getElementById("co_vehicle")    ? document.getElementById("co_vehicle").value    : '';
+  var countEl    = document.getElementById('matcherCoVehicleCount');
+  if (!dealerName || !vehicle || !countEl) return;
+  var matcherDealerObj = state.addedDealers.find(function(d){ return d.dealer===dealerName; }) || {};
+  var fins = getDealerFinanciers(dealerName, matcherDealerObj.location||'');
+  var count = Object.entries(fins).filter(function(e){
+    var pd = e[1].products[vehicle];
+    return pd && pd.enabled;
+  }).length;
+  var label = { '3wc':'3WC','3wp':'3W Paxx','4wc_turbo':'Turbo','4wc_storm':'Storm' }[vehicle]||vehicle;
+  countEl.textContent = count + ' FI' + (count!==1?'s':'') + ' mapped for ' + label + ' at this dealer';
+  countEl.style.display = '';
+}
 
 function onCoExistingFleetChange() {
   var val  = document.getElementById('co_existingFleet') ? document.getElementById('co_existingFleet').value : '';
@@ -4700,15 +3950,321 @@ function toggleMatcherCoToggle(key) {
   validateMatcherCo();
 }
 
+function validateMatcherCo() {
+  var btn  = document.getElementById('matcherCoFindBtn');
+  var hint = document.getElementById('matcherCoHint');
+  if (!btn) return;
+  var vintage  = document.getElementById('co_vintage')       ? document.getElementById('co_vintage').value.trim()       : '';
+  var turnover = document.getElementById('co_turnover')      ? document.getElementById('co_turnover').value.trim()      : '';
+  var fleet    = document.getElementById('co_existingFleet') ? document.getElementById('co_existingFleet').value        : '';
+  var fleetSz  = document.getElementById('co_fleetSize')     ? document.getElementById('co_fleetSize').value.trim()     : '';
+  var vehicle  = document.getElementById('co_vehicle')       ? document.getElementById('co_vehicle').value              : '';
+  var missing  = [];
+  if (!vintage)  missing.push('Vintage');
+  if (!turnover) missing.push('Turnover');
+  var vehicleCount = document.getElementById('co_vehicleCount') ? document.getElementById('co_vehicleCount').value.trim() : '';
+  if (!fleet)    missing.push('Existing Fleet');
+  if (fleet === 'Yes' && !fleetSz) missing.push('Fleet Size');
+  if (!vehicleCount || parseInt(vehicleCount) < 1) missing.push('Number of Vehicles Required');
+  if (!vehicle)  missing.push('Vehicle Requirement');
+  if (missing.length) {
+    btn.disabled=true; btn.style.opacity='0.4'; btn.style.cursor='not-allowed';
+    if (hint) hint.textContent = 'Required: ' + missing.join(', ');
+  } else {
+    btn.disabled=false; btn.style.opacity='1'; btn.style.cursor='pointer';
+    if (hint) hint.textContent = 'All fields filled — click to find eligible FIs';
+    var resultsEl = document.getElementById('matcherResults');
+    if (resultsEl && resultsEl.style.display !== 'none') {
+      var activeType = document.getElementById('matcherType') ? document.getElementById('matcherType').value : '';
+      if (activeType === 'co') runMatcherCo();
+    }
+  }
+}
+
+function getMatcherCoProfile() {
+  return {
+    vintage:   document.getElementById('co_vintage')       ? document.getElementById('co_vintage').value.trim()       : '',
+    itr:       document.getElementById('co_itr_label')     ? document.getElementById('co_itr_label').textContent      : 'No',
+    turnover:  document.getElementById('co_turnover')      ? document.getElementById('co_turnover').value.trim()      : '',
+    existingFleet: document.getElementById('co_existingFleet') ? document.getElementById('co_existingFleet').value    : '',
+    fleetSize: document.getElementById('co_fleetSize')     ? document.getElementById('co_fleetSize').value.trim()     : '',
+    vehicle:     document.getElementById('co_vehicle')       ? document.getElementById('co_vehicle').value              : '',
+    companyType:  document.getElementById('co_companyType')   ? document.getElementById('co_companyType').value          : '',
+    vehicleCount: document.getElementById('co_vehicleCount')  ? document.getElementById('co_vehicleCount').value.trim()  : '',
+  };
+}
+
+function runMatcherCo() {
+  var dealerName = document.getElementById("matcherDealer").value;
+  var prof = getMatcherCoProfile();
+  var productKey = prof.vehicle;
+  var type = 'co';
+  console.log('[runMatcherCo] dealer:', dealerName, '| vehicle:', productKey, '| prof:', prof);
+  if (!dealerName || !productKey) { console.log('[runMatcherCo] missing dealer or vehicle'); return; }
+
+  var matcherDealerObj = state.addedDealers.find(function(d){ return d.dealer===dealerName; }) || {};
+  var fins = getDealerFinanciers(dealerName, matcherDealerObj.location||'');
+  console.log('[runMatcherCo] fins:', Object.keys(fins));
+
+  var onboardedFIs = Object.keys(fins).filter(function(finName){
+    var pd = fins[finName].products[productKey];
+    return pd && pd.enabled;
+  }).map(function(finName){ return [finName, fins[finName]]; });
+  console.log('[runMatcherCo] onboarded for', productKey, ':', onboardedFIs.map(function(e){return e[0];}));
+
+  // Sync sort buttons
+  ['default','irr','funding'].forEach(function(m) { var btn = document.getElementById('sortBtn'+m.charAt(0).toUpperCase()+m.slice(1)); if (btn) { btn.className = (_matcherSort===m ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'); btn.style.cssText='padding:3px 10px;font-size:11px;'; } });
+  document.getElementById("matcherResults").style.display = '';
+
+  if (!onboardedFIs.length) {
+    var vLbl = { '3wc':'3WC','3wp':'3W Paxx','4wc_turbo':'Turbo','4wc_storm':'Storm' }[productKey]||productKey;
+    var sb = document.getElementById("matcherSummaryBar");
+    if (sb) sb.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Vehicle: <b>' + escHtml(vLbl) + '</b></span><span style="font-size:12px;background:var(--cat-d-bg);color:var(--cat-d);border:1px solid var(--cat-d-border);border-radius:4px;padding:2px 8px;">0 FIs mapped</span>';
+    document.getElementById("matcherResultsContent").innerHTML =
+      '<div style="padding:24px;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);">' +
+      '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px;">No financiers mapped for this product at this dealer.</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Connect with the respective POC from our team:</div>' +
+      getSpocContactCard(dealerName, matcherDealerObj.location||'') +
+      '</div>';
+    return;
+  }
+
+  var eligible = [], partial = [], ineligible = [], unknown = [];
+
+  onboardedFIs.forEach(function(e) {
+    var finName = e[0];
+    var pol = getEffectivePolicy(finName, productKey, matcherDealerObj.state||'', matcherDealerObj.location||'');
+    console.log('[runMatcherCo]', finName, '| pol.co_applicable:', pol ? pol.co_applicable : 'NO POLICY', '| pol.co:', pol ? pol.co : null);
+    if (!pol) { unknown.push({ name: finName, result: { status: 'unknown', issues: ['Policy not defined'], matches: [] } }); return; }
+    var result = checkEligibilityCo(pol, prof);
+    console.log('[runMatcherCo]', finName, '| result:', result.status, result.issues);
+    if (result.status === 'eligible')        eligible.push({ name: finName, result: result });
+    else if (result.status === 'partial')    partial.push({ name: finName, result: result });
+    else if (result.status === 'ineligible') ineligible.push({ name: finName, result: result });
+    else unknown.push({ name: finName, result: result }); // catches 'unknown' and 'na'
+  });
+
+  function getCoPol(name) {
+    var pol = getEffectivePolicy(name, productKey, matcherDealerObj.state||'', matcherDealerObj.location||'');
+    return (pol && pol.co) || {};
+  }
+  eligible = rankBySort(eligible, getCoPol, 'eligible');
+  partial  = rankBySort(partial,  getCoPol, 'partial');
+
+  var vLabel = { '3wc':'3WC','3wp':'3W Paxx','4wc_turbo':'Turbo','4wc_storm':'Storm' }[productKey]||productKey;
+  var sb2 = document.getElementById("matcherSummaryBar");
+  if (sb2) {
+    sb2.innerHTML =
+      '<span style="font-size:12px;color:var(--text-muted);">Vehicle: <b>'+escHtml(vLabel)+'</b></span>' +
+      '<span style="font-size:12px;background:var(--cat-b-bg);color:var(--cat-b);border:1px solid var(--cat-b-border);border-radius:4px;padding:2px 8px;">'+onboardedFIs.length+' FI'+(onboardedFIs.length!==1?'s':'')+' mapped</span>' +
+      '<span style="font-size:12px;background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border);border-radius:4px;padding:2px 8px;">✅ '+eligible.length+' eligible</span>' +
+      (partial.length ? '<span style="font-size:12px;background:#451a03;color:#fef08a;border:1px solid #78350f;border-radius:4px;padding:2px 8px;">⚠ '+partial.length+' partial</span>' : '') +
+      (ineligible.length ? '<span style="font-size:12px;background:var(--cat-d-bg);color:var(--cat-d);border:1px solid var(--cat-d-border);border-radius:4px;padding:2px 8px;">❌ '+ineligible.length+' ineligible</span>' : '');
+  }
+
+  var html = '';
+  if (eligible.length) {
+    html += '<div style="font-size:12px;font-weight:700;color:var(--ok);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">✅ Eligible ('+eligible.length+')</div>';
+    eligible.forEach(function(i, idx){ html += renderFICard(i, '#16a34a', '✅', 'Eligible', idx+1, productKey, 'co', matcherDealerObj); });
+    html += '<div style="margin-bottom:16px;"></div>';
+  }
+  if (partial.length) {
+    html += '<div style="font-size:12px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">⚠ Partial Match ('+partial.length+')</div>';
+    partial.forEach(function(i, idx){ html += renderFICard(i, '#d97706', '⚠️', 'Partial Match', idx+1, productKey, 'co', matcherDealerObj); });
+    html += '<div style="margin-bottom:16px;"></div>';
+  }
+  if (unknown.length) {
+    html += '<div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">❓ Policy Not Defined ('+unknown.length+')</div>';
+    unknown.forEach(function(i){ html += renderFICard(i, '#9ca3af', '❓', 'No Policy', null, productKey, 'co', matcherDealerObj); });
+    html += '<div style="margin-bottom:16px;"></div>';
+  }
+  if (ineligible.length) {
+    html += '<div style="font-size:12px;font-weight:700;color:var(--cat-d);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">❌ Not Eligible ('+ineligible.length+')</div>';
+    ineligible.forEach(function(i){ html += renderFICard(i, '#dc2626', '❌', 'Not Eligible', null, productKey, 'co', matcherDealerObj); });
+  }
+  if (!html) html = '<div style="padding:24px;text-align:center;color:var(--text-hint);">No results found.</div>';
+  // Bulk order banner (≥5 vehicles)
+  var vcEl = document.getElementById('co_vehicleCount');
+  var vc = vcEl ? parseInt(vcEl.value||0) : 0;
+  if (vc >= 5) {
+    var master = getDealerMasterList().find(function(m){ return m.dealerName===dealerName && m.location===matcherDealerObj.location; }) ||
+                 getDealerMasterList().find(function(m){ return m.dealerName===dealerName; }) || {};
+    var poc    = master.vfPoc       || '';
+    var mobile = master.vfPocMobile || '';
+    var banner = '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#1a0a00;border:1px solid #c2410c;border-left:4px solid #f97316;border-radius:8px;padding:14px 16px;margin-bottom:16px;">' +
+      '<span style="font-size:18px;">⚡</span>' +
+      '<div style="flex:1;">' +
+        '<div style="font-size:13px;font-weight:700;color:#fb923c;margin-bottom:4px;">Immediately connect with our POC to discuss this case</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);">Order of ' + vc + ' vehicles — requires direct POC coordination.</div>' +
+      '</div>' +
+      (poc || mobile ? '<div style="display:flex;align-items:center;gap:12px;">' +
+        (poc    ? '<span style="font-size:13px;font-weight:600;color:var(--text);">👤 ' + escHtml(poc)    + '</span>' : '') +
+        (mobile ? '<a href="tel:' + escHtml(mobile) + '" style="font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;">📞 ' + escHtml(mobile) + '</a>' : '') +
+      '</div>' : '') +
+    '</div>';
+    html = banner + html;
+  }
+  html += buildSpocFooter(dealerName, matcherDealerObj.location||'');
+  document.getElementById("matcherResultsContent").innerHTML = html;
+}
+
+function checkEligibilityCo(policy, prof) {
+  var issues = [], matches = [];
+  var seg = policy.co || {};
+  if (!policy.co_applicable) return { status: 'na', issues: ['Not applicable for Company Owned'], matches: [] };
+
+  // Vintage
+  if (seg.vintage && prof.vintage) {
+    if (Number(prof.vintage) >= Number(seg.vintage)) matches.push('Vintage: ✓ (' + prof.vintage + ' yrs ≥ ' + seg.vintage + ' yrs)');
+    else issues.push('Vintage: ' + prof.vintage + ' yrs < required ' + seg.vintage + ' yrs');
+  }
+
+  // ITR
+  if (seg.itr) {
+    if (seg.itr === 'Yes' && prof.itr !== 'Yes') issues.push('ITR / Company Financial: FI requires ITR, not available');
+    else matches.push('ITR / Company Financial: ✓');
+  }
+
+  // Turnover — match against tier table if defined
+  if (seg.tiers && prof.turnover) {
+    try {
+      var tiers = typeof seg.tiers === 'string' ? JSON.parse(seg.tiers) : seg.tiers;
+      if (Array.isArray(tiers) && tiers.length) {
+        var custTurnover = Number(prof.turnover);
+        var matchedTier = tiers.find(function(t){
+          var min = Number(t.minTurnover||0), max = Number(t.maxTurnover||999999);
+          return custTurnover >= min && custTurnover <= max;
+        });
+        if (matchedTier) {
+          if (prof.fleetSize && Number(prof.fleetSize) >= Number(matchedTier.minFleet||0)) {
+            matches.push('Turnover & Fleet: ✓ (₹' + prof.turnover + 'L, fleet ' + prof.fleetSize + ')');
+          } else if (prof.fleetSize) {
+            issues.push('Fleet Size: ' + prof.fleetSize + ' < required ' + matchedTier.minFleet + ' for this turnover');
+          } else {
+            matches.push('Turnover: ✓ (₹' + prof.turnover + 'L in eligible range)');
+          }
+        } else {
+          issues.push('Turnover: ₹' + prof.turnover + 'L not in any eligible tier');
+        }
+      }
+    } catch(e) {}
+  }
+
+  var status = issues.length === 0 && matches.length > 0 ? 'eligible'
+             : issues.length === 0 && matches.length === 0 ? 'unknown'
+             : matches.length > 0 ? 'partial' : 'ineligible';
+  return { status: status, issues: issues, matches: matches };
+}
 
 
+function resetMatcherIndToggles() {
+  ['ntc','ftu','ftb'].forEach(function(key) {
+    var label = document.getElementById('ind_'+key+'_label');
+    var track = document.getElementById('ind_'+key+'_track');
+    var thumb = document.getElementById('ind_'+key+'_thumb');
+    if (label) { label.textContent='No'; label.style.color='var(--cat-d)'; }
+    if (track) track.style.background = '#ddd';
+    if (thumb) thumb.style.left = '2px';
+  });
+  var cibilWrap = document.getElementById('ind_cibil_wrap');
+  if (cibilWrap) cibilWrap.style.display = '';
+  var cibilEl = document.getElementById('ind_cibil');
+  if (cibilEl) cibilEl.value = '';
+  var resEl = document.getElementById('ind_residence');
+  if (resEl) resEl.value = '';
+  var licEl = document.getElementById('ind_license');
+  if (licEl) licEl.value = '';
+  var vehEl = document.getElementById('ind_vehicle');
+  if (vehEl) vehEl.value = '';
+  // Reset find button
+  var btn = document.getElementById('matcherFindBtn');
+  var hint = document.getElementById('matcherIndHint');
+  if (btn) { btn.disabled=true; btn.style.opacity='0.4'; btn.style.cursor='not-allowed'; }
+  if (hint) hint.textContent = 'Fill all mandatory fields to enable';
+}
 
+function toggleMatcherNTC() {
+  var label = document.getElementById('ind_ntc_label');
+  var track = document.getElementById('ind_ntc_track');
+  var thumb = document.getElementById('ind_ntc_thumb');
+  var cibilWrap = document.getElementById('ind_cibil_wrap');
+  var isNtc = label.textContent === 'No';
+  if (isNtc) {
+    label.textContent='Yes'; label.style.color='var(--ok)';
+    track.style.background='var(--ok)'; thumb.style.left='18px';
+    if (cibilWrap) cibilWrap.style.display = 'none';
+  } else {
+    label.textContent='No'; label.style.color='var(--cat-d)';
+    track.style.background='#ddd'; thumb.style.left='2px';
+    if (cibilWrap) cibilWrap.style.display = '';
+  }
+  setTimeout(validateMatcherInd, 0);
+}
 
+function toggleMatcherToggle(key) {
+  var label = document.getElementById('ind_'+key+'_label');
+  var track = document.getElementById('ind_'+key+'_track');
+  var thumb = document.getElementById('ind_'+key+'_thumb');
+  var isOff = label.textContent === 'No';
+  if (isOff) {
+    label.textContent='Yes'; label.style.color='var(--ok)';
+    track.style.background='var(--ok)'; thumb.style.left='18px';
+  } else {
+    label.textContent='No'; label.style.color='var(--cat-d)';
+    track.style.background='#ddd'; thumb.style.left='2px';
+  }
+  setTimeout(validateMatcherInd, 0);
+}
 
+function validateMatcherInd() {
+  var btn  = document.getElementById('matcherFindBtn');
+  var hint = document.getElementById('matcherIndHint');
+  if (!btn) return;
 
+  var ntc      = document.getElementById('ind_ntc_label')  ? document.getElementById('ind_ntc_label').textContent === 'Yes' : false;
+  var cibil    = document.getElementById('ind_cibil')      ? document.getElementById('ind_cibil').value.trim()              : '';
+  var residence= document.getElementById('ind_residence')  ? document.getElementById('ind_residence').value                 : '';
+  var license  = document.getElementById('ind_license')    ? document.getElementById('ind_license').value                   : '';
+  var vehicleEl = document.getElementById('ind_vehicle');
+  var vehicle  = vehicleEl ? vehicleEl.value : '';
+  if (typeof updateVehicleCount === 'function') updateVehicleCount();
 
+  var missing = [];
+  if (!ntc && !cibil)    missing.push('CIBIL Score');
+  if (!residence)        missing.push('Residence');
+  if (!license)          missing.push('License Type');
+  if (!vehicle)          missing.push('Vehicle Requirement');
 
+  if (missing.length) {
+    btn.disabled = true;
+    btn.style.opacity = '0.4';
+    btn.style.cursor = 'not-allowed';
+    if (hint) hint.textContent = 'Required: ' + missing.join(', ');
+  } else {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+    if (hint) hint.textContent = 'All fields filled — click to find eligible FIs';
+    // Auto-refresh ONLY if results already visible
+    var resultsEl = document.getElementById('matcherResults');
+    if (resultsEl && resultsEl.style.display !== 'none') {
+      var activeType = document.getElementById('matcherType') ? document.getElementById('matcherType').value : '';
+      if (activeType === 'ind') runMatcher();
+    }
+  }
+}
 
+function getMatcherIndProfile() {
+  return {
+    ntc:       document.getElementById('ind_ntc_label')  ? document.getElementById('ind_ntc_label').textContent  : 'No',
+    ftu:       document.getElementById('ind_ftu_label')  ? document.getElementById('ind_ftu_label').textContent  : 'No',
+    ftb:       document.getElementById('ind_ftb_label')  ? document.getElementById('ind_ftb_label').textContent  : 'No',
+    cibil:     document.getElementById('ind_cibil')      ? (document.getElementById('ind_cibil').value||'')      : '',
+    residence: document.getElementById('ind_residence')  ? document.getElementById('ind_residence').value        : '',
+    license:   document.getElementById('ind_license')    ? document.getElementById('ind_license').value          : '',
+    vehicle:   document.getElementById('ind_vehicle')    ? document.getElementById('ind_vehicle').value          : '',
+  };
+}
 
 function getCustomerProfile(type) {
   var fields = type === 'ind' ? MATCHER_IND_FIELDS : MATCHER_CO_FIELDS;
@@ -4959,6 +4515,41 @@ function runMatcher() {
   document.getElementById("matcherResultsContent").innerHTML = html;
 }
 
+function renderFICard(item, color, icon, label, rank, _pk, _type, _dObj) {
+  var meta = state.financiersMeta.find(function(m){ return m.name === item.name; }) || {};
+  var pol  = (_pk && _dObj) ? getEffectivePolicy(item.name, _pk, _dObj.state||'', _dObj.location||'') : null;
+  var seg  = (pol && _type && pol[_type]) || {};
+  var irr        = seg.minIrr     ? seg.minIrr + '%'                                  : '—';
+  var loanOn     = seg.loanOn     ? seg.loanOn                                         : '';
+  var maxLoan    = seg.maxLoan    ? '₹' + Number(seg.maxLoan).toLocaleString('en-IN') : '';
+  var maxLoanPct = seg.maxLoanPct ? seg.maxLoanPct + '% of cost'                      : '';
+  var loanStr    = [maxLoan, maxLoanPct].filter(Boolean).join(' / ') || '—';
+  if (loanOn) loanStr += ' <span style="font-size:10px;background:var(--cat-b-bg);color:var(--cat-b);border:1px solid var(--cat-b-border);border-radius:4px;padding:1px 5px;margin-left:4px;">' + loanOn + '</span>';
+  var flexibility = seg.flexibility || '';
+  var flexColor = { 'High': '#4ade80', 'Medium': '#fef08a', 'Low': '#f87171', 'NA': 'var(--text-hint)' }[flexibility] || '';
+  var flexBadge = flexibility ? '<span style="font-size:10px;color:' + flexColor + ';margin-left:4px;">● ' + flexibility + ' Flexibility</span>' : '';
+  var rankBadge = rank ? '<span style="font-size:11px;font-weight:700;background:' + color + ';color:white;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">' + rank + '</span>' : '';
+  var matchChips = item.result.matches.map(function(m){
+    return '<span style="font-size:10px;background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border);border-radius:4px;padding:1px 6px;">' + escHtml(m) + '</span>';
+  }).join('');
+  var issueChips = item.result.issues.map(function(m){
+    return '<span style="font-size:10px;background:var(--cat-d-bg);color:var(--cat-d);border:1px solid var(--cat-d-border);border-radius:4px;padding:1px 6px;">' + escHtml(m) + '</span>';
+  }).join('');
+  return '<div style="background:var(--surface);border:1px solid ' + color + ';border-left:4px solid ' + color + ';border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+      rankBadge +
+      '<span style="font-weight:600;font-size:13px;">' + escHtml(item.name) + '</span>' +
+      '<span class="badge badge-count">' + escHtml(meta.category||'—') + '</span>' +
+      flexBadge +
+      '<span class="badge" style="margin-left:auto;background:' + color + '1a;color:' + color + ';border:1px solid ' + color + ';">' + label + '</span>' +
+    '</div>' +
+    '<div style="display:flex;gap:16px;margin-bottom:' + (matchChips||issueChips?'8':'0') + 'px;flex-wrap:wrap;">' +
+      '<div style="font-size:12px;"><span style="color:var(--text-muted);">Min IRR:</span> <span style="font-weight:600;color:var(--accent);">' + irr + '</span></div>' +
+      '<div style="font-size:12px;"><span style="color:var(--text-muted);">Max Loan:</span> <span style="font-weight:600;">' + loanStr + '</span></div>' +
+    '</div>' +
+    (matchChips || issueChips ? '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + matchChips + issueChips + '</div>' : '') +
+  '</div>';
+}
 
 // ══════════════════════════════════════════════════════════════
 // EXPORT TO EXCEL (SheetJS)
@@ -5352,6 +4943,7 @@ function attemptLogin() {
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) {
       if (data.token) sessionStorage.setItem('vf_token', data.token);
+      console.log('[login] token received:', data.token ? 'yes' : 'NO TOKEN IN RESPONSE');
       document.getElementById('loginScreen').classList.add('hide');
       document.getElementById('loginError').classList.remove('show');
       startInactivityTimer();
@@ -5838,5 +5430,84 @@ document.addEventListener("click", e => {
   document.addEventListener(evt, resetInactivityTimer, { passive: true });
 });
 </script>
+
+<script>
+// Standalone init — load state from Railway backend
+var RAILWAY_URL = 'https://web-production-43ecd.up.railway.app';
+
+// Override API to point to Railway
+window.API = {
+  _handle: async function(p) { try { const r = await p; return r.ok ? r.json() : null; } catch(e) { return null; } },
+  get: function(ep) { return this._handle(fetch(RAILWAY_URL+'/api/'+ep, {headers:{'X-Session-Token': sessionStorage.getItem('sToken')||''}})); },
+  post: function(ep, data) { return this._handle(fetch(RAILWAY_URL+'/api/'+ep, {method:'POST',headers:{'Content-Type':'application/json','X-Session-Token':sessionStorage.getItem('sToken')||''},body:JSON.stringify(data)})); }
+};
+
+async function standaloneInit() {
+  try {
+    // Load all needed state
+    const [fiM, addedD, masterD, mapping, policy, health] = await Promise.all([
+      API.get('fi_master'), API.get('added_dealers'), API.get('dealer_master'),
+      API.get('onboarding'), API.get('fi_policy'), API.get('dealer_health')
+    ]);
+
+    if (fiM)     { state.financiers = fiM.map(f=>f.name).filter(Boolean); state.financiersMeta = fiM; }
+    if (addedD)  state.addedDealers = addedD;
+    if (masterD) state.dealersMaster = masterD;
+    if (mapping) {
+      mapping.forEach(function(row) {
+        var dk = dealerKey(row.dealer, row.location||'');
+        if (!state.mapping[dk]) state.mapping[dk] = {};
+        state.mapping[dk][row.financier] = {
+          products: {
+            '3wc': {enabled: row['3wc_enabled']==='Yes'},
+            '3wp': {enabled: row['3wp_enabled']==='Yes'},
+            '4wc_storm': {enabled: row['4wcs_enabled']==='Yes'},
+            '4wc_turbo': {enabled: row['4wct_enabled']==='Yes'}
+          }
+        };
+      });
+    }
+    if (policy) {
+      policy.forEach(function(row) {
+        if (!state.fiPolicy[row.financier]) state.fiPolicy[row.financier] = {};
+        var pol = {ind: {}, co: {}};
+        ['minCibil','maxTenure','loanOn','loanAmtType','maxLoan','maxLoanPct','minIrr','residence','guarantor','bankStatement','licenseType','ntc','ftu','ftb','existingCvRequired','existingCvCount','existingCvType','flexibility','remarks'].forEach(k=>{ pol.ind[k]=row['ind_'+k]||''; });
+        ['maxTenure','loanOn','loanAmtType','maxLoan','maxLoanPct','minIrr','vintage','itr','flexibility','remarks'].forEach(k=>{ pol.co[k]=row['co_'+k]||''; });
+        pol.ind_applicable = row.ind_applicable === 'Yes';
+        pol.co_applicable  = row.co_applicable  === 'Yes';
+        state.fiPolicy[row.financier][row.productKey] = pol;
+      });
+    }
+    if (health) {
+      health.forEach(function(row) {
+        var hk = dealerKey(row.dealer, row.location||'');
+        state.dealerHealth[hk] = {
+          '3wc': row['3wc']||'', '3wp': row['3wp']||'',
+          '4wc_storm': row['4wc_storm']||'', '4wc_turbo': row['4wc_turbo']||''
+        };
+      });
+    }
+
+    // Migrate MoU statuses
+    var mouMig = {'Pending with FI':'WIP','Initial draft to be shared with FI':'WIP','Under Review by FI':'WIP','Under Review by Euler':'WIP'};
+    state.financiersMeta.forEach(function(m){ if(m.mouStatus && mouMig[m.mouStatus]) m.mouStatus = mouMig[m.mouStatus]; });
+
+    // Populate dealer dropdown
+    populateMatcherDealer();
+    document.getElementById('matcherResults').style.display = 'none';
+
+    console.log('[Loan Eligibility] Loaded:', state.financiers.length, 'FIs,', state.addedDealers.length, 'dealers');
+  } catch(e) {
+    console.error('[Loan Eligibility] Init error:', e);
+  }
+}
+
+// Suppress switchTab errors — not needed in standalone
+function switchTab() {}
+function switchPage() {}
+
+standaloneInit();
+</script>
+
 </body>
 </html>
