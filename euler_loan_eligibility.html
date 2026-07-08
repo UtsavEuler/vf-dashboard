@@ -1405,7 +1405,7 @@ function runMatcherCo() {
     if (!pol) { unknown.push({ name: finName, result: { status: 'unknown', issues: ['Policy not defined'], matches: [] } }); return; }
     var result = checkEligibilityCo(pol, prof);
     console.log('[CO]', finName, '| co_applicable:', pol.co_applicable, '| status:', result.status, '| issues:', result.issues);
-    if (result.status === 'na') return; // Not applicable for Company Owned — skip entirely
+    if (result.status === 'na') { unknown.push({ name: finName, result: { status: 'na', issues: ['Not applicable for Company Owned'], matches: [] } }); return; }
     if (result.status === 'eligible')        eligible.push({ name: finName, result: result });
     else if (result.status === 'partial')    partial.push({ name: finName, result: result });
     else if (result.status === 'ineligible') ineligible.push({ name: finName, result: result });
