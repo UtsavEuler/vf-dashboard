@@ -2042,15 +2042,15 @@ function switchPage(page) {
   document.getElementById("pageDealerMaster").classList.toggle("active", page === 'dealermaster');
   document.getElementById("pageFIPolicy").classList.toggle("active", page === 'fipolicy');
   document.getElementById("pageTAIF").classList.toggle("active", page === 'taif');
-  document.getElementById("pageMatcher").classList.toggle("active", page === 'matcher');
+  var pmEl = document.getElementById("pageMatcher"); if (pmEl) pmEl.classList.toggle("active", page === 'matcher');
   document.getElementById("navDealer").classList.toggle("active", page === 'dealer');
   document.getElementById("navCoverage").classList.toggle("active", page === 'coverage');
   document.getElementById("navFinancier").classList.toggle("active", page === 'financier');
   document.getElementById("navDealerMaster").classList.toggle("active", page === 'dealermaster');
   document.getElementById("navFIPolicy").classList.toggle("active", page === 'fipolicy');
   document.getElementById("navTAIF").classList.toggle("active", page === 'taif');
-  document.getElementById("navMatcher").classList.toggle("active", page === 'matcher');
-  if (page === 'matcher') { initMatcher(); }
+  var nmEl = document.getElementById("navMatcher"); if (nmEl) nmEl.classList.toggle("active", page === 'matcher');
+  if (page === 'matcher') { if (typeof initMatcher === 'function') initMatcher(); }
   if (page === 'coverage') { renderSummary(); renderGap(); }
   if (page === 'financier') { renderFinancierMaster(); }
   if (page === 'dealermaster') { renderDealerMaster(); }

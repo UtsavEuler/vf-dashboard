@@ -96,8 +96,11 @@ def ws(title):
 
 def rows_to_dicts(worksheet):
     try:
-        headers = with_retry(lambda: worksheet.row_values(1))
-        return with_retry(lambda: worksheet.get_all_records(expected_headers=headers, default_blank="")) or []
+        raw_headers = with_retry(lambda: worksheet.row_values(1))
+        # Check for duplicates — if found, use manual parse instead
+        if len(raw_headers) != len(set(raw_headers)):
+            raise Exception(f"duplicate headers detected: {[h for h in raw_headers if raw_headers.count(h) > 1]}")
+        return with_retry(lambda: worksheet.get_all_records(expected_headers=raw_headers, default_blank="")) or []
     except Exception as e:
         print(f"  ⚠ rows_to_dicts error ({worksheet.title}): {e} — falling back to manual parse")
         try:
@@ -215,7 +218,11 @@ class Handler(SimpleHTTPRequestHandler):
         # ── API routes ──────────────────────────────────────
         if path.startswith("/api/"):
             try:
-                if path not in ("/api/login", "/api/ping"):
+                # Public read-only endpoints (no auth required) for Loan Eligibility standalone
+                PUBLIC_GET = {"/api/fi_master", "/api/dealer_master", "/api/added_dealers",
+                              "/api/onboarding", "/api/fi_policy", "/api/fi_policy_geo",
+                              "/api/dealer_health", "/api/ping", "/api/login"}
+                if path not in PUBLIC_GET:
                     token = self.headers.get("X-Session-Token","")
                     if not validate_session(token):
                         self.send_json(401, {"error": "Unauthorized"}); return

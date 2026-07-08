@@ -5388,11 +5388,11 @@ function initGeoSection(fiName, productKey) {
 // ══════════════════════════════════════════════════════════════
 function renderAll() { renderStats(); renderFilters(); renderDealers(); }
 
-document.getElementById("modalOverlay").addEventListener("click", e => { if (e.target===e.currentTarget) closeModal(); });
-document.getElementById("infoModalOverlay").addEventListener("click", e => { if (e.target===e.currentTarget) e.currentTarget.classList.remove("show"); });
-document.getElementById("statsModalOverlay").addEventListener("click", e => { if (e.target===e.currentTarget) closeStatsModal(); });
-document.getElementById("confirmModalOverlay").addEventListener("click", e => { if (e.target===e.currentTarget) closeConfirmModal(); });
-document.getElementById("confirmFinModalOverlay").addEventListener("click", e => { if (e.target===e.currentTarget) closeConfirmFinModal(); });
+(function(){ var _el=document.getElementById("modalOverlay"); if(_el) _el.addEventListener("click", function(e){ if(e.target===e.currentTarget) closeModal(); }); })();
+(function(){ var _el=document.getElementById("infoModalOverlay"); if(_el) _el.addEventListener("click", function(e){ if(e.target===e.currentTarget) e.currentTarget.classList.remove("show"); }); })();
+(function(){ var _el=document.getElementById("statsModalOverlay"); if(_el) _el.addEventListener("click", function(e){ if(e.target===e.currentTarget) closeStatsModal(); }); })();
+(function(){ var _el=document.getElementById("confirmModalOverlay"); if(_el) _el.addEventListener("click", function(e){ if(e.target===e.currentTarget) closeConfirmModal(); }); })();
+(function(){ var _el=document.getElementById("confirmFinModalOverlay"); if(_el) _el.addEventListener("click", function(e){ if(e.target===e.currentTarget) closeConfirmFinModal(); }); })();
 document.getElementById("finMasterModalOverlay").addEventListener("click", e => { if (e.target===e.currentTarget) closeFinancierMasterModal(); });
 document.getElementById("dealerMasterModalOverlay").addEventListener("click", e => { if (e.target===e.currentTarget) closeDealerMasterModal(); });
 document.getElementById("confirmDealerMasterOverlay").addEventListener("click", e => { if (e.target===e.currentTarget) closeConfirmDealerMasterModal(); });
@@ -5432,8 +5432,53 @@ document.addEventListener("click", e => {
 </script>
 
 <script>
+
+function populateMatcherDealer() {
+  var sel = document.getElementById("matcherDealer");
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Select Dealer —</option>';
+  var dealers = state.addedDealers.slice().sort(function(a,b){ return (a.dealer||'').localeCompare(b.dealer||''); });
+  dealers.forEach(function(d) {
+    var opt = document.createElement("option");
+    var loc = d.location ? ' (' + d.location + ')' : '';
+    opt.value = d.dealer;
+    opt.textContent = d.dealer + loc;
+    opt.setAttribute('data-location', d.location||'');
+    sel.appendChild(opt);
+  });
+}
+
+function updateVehicleCount() {
+  var dealerName = document.getElementById("matcherDealer") ? document.getElementById("matcherDealer").value : '';
+  var vehicle    = document.getElementById("ind_vehicle")   ? document.getElementById("ind_vehicle").value   : '';
+  var countEl    = document.getElementById('matcherVehicleCount');
+  if (!dealerName || !vehicle || !countEl) return;
+  var matcherDealerObj = state.addedDealers.find(function(d){ return d.dealer===dealerName; }) || {};
+  var fins = getDealerFinanciers(dealerName, matcherDealerObj.location||'');
+  var count = Object.keys(fins).filter(function(finName){
+    var pd = fins[finName].products[vehicle];
+    return pd && pd.enabled;
+  }).length;
+  var label = { '3wc':'3WC','3wp':'3W Paxx','4wc_turbo':'Turbo','4wc_storm':'Storm' }[vehicle]||vehicle;
+  countEl.textContent = count + ' FI' + (count!==1?'s':'') + ' mapped for ' + label + ' at this dealer';
+  countEl.style.display = '';
+}
+
+// Stub out functions that reference non-existent elements in standalone
+function populateDmMultiFilters() {}
+function populateFinMultiFilters() {}
+function renderDealerMaster() {}
+function renderFinancierMaster() {}
+function getDealerMasterList() { return state.dealersMaster || []; }
+
 // Standalone init — load state from Railway backend
 var RAILWAY_URL = 'https://web-production-43ecd.up.railway.app';
+// Override API base immediately
+if (typeof API !== 'undefined') {
+  API._base = RAILWAY_URL;
+  var _origGet = API.get.bind(API);
+  API.get = function(ep) { return fetch(RAILWAY_URL+'/api/'+ep).then(function(r){ return r.json(); }).catch(function(){ return null; }); };
+}
 
 // Override API to point to Railway
 window.API = {
@@ -5444,11 +5489,18 @@ window.API = {
 
 async function standaloneInit() {
   try {
-    // Load all needed state
+    async function apiFetch(ep) {
+      try {
+        var r = await fetch(RAILWAY_URL + '/api/' + ep);
+        if (!r.ok) return null;
+        return await r.json();
+      } catch(e) { return null; }
+    }
     const [fiM, addedD, masterD, mapping, policy, health] = await Promise.all([
-      API.get('fi_master'), API.get('added_dealers'), API.get('dealer_master'),
-      API.get('onboarding'), API.get('fi_policy'), API.get('dealer_health')
+      apiFetch('fi_master'), apiFetch('added_dealers'), apiFetch('dealer_master'),
+      apiFetch('onboarding'), apiFetch('fi_policy'), apiFetch('dealer_health')
     ]);
+
 
     if (fiM)     { state.financiers = fiM.map(f=>f.name).filter(Boolean); state.financiersMeta = fiM; }
     if (addedD)  state.addedDealers = addedD;
