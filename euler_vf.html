@@ -2606,32 +2606,44 @@ function renderHealthStats() {
   var HEALTH_LABELS = { star:'⭐ Star', green:'🟢 Green', amber:'🟡 Amber', red:'🔴 Red', na:'N/A', 'null':'Not Set' };
   var HEALTH_COLORS = { star:'#a5b4fc', green:'#4ade80', amber:'#fef08a', red:'#f87171', na:'var(--text-hint)', 'null':'var(--text-muted)' };
 
-  var retailingDealers = state.addedDealers.filter(function(d) {
-    var master = getDealerMasterList().find(function(m){ return (m.dealerName===d.dealer||m.dealer===d.dealer) && (m.location||'')===(d.location||''); }) ||
-                 getDealerMasterList().find(function(m){ return m.dealerName===d.dealer||m.dealer===d.dealer; }) || {};
-    return (master.dealerStatus||'').toLowerCase() === 'retailing';
+  // Build retailing key set from master list
+  var _retailKeySet = new Set(
+    getDealerMasterList()
+      .filter(function(m){ return (m.dealerStatus||'').toLowerCase() === 'retailing'; })
+      .map(function(m){ return dealerKey(m.dealerName||m.dealer||'', m.location||''); })
+  );
+  // Use addedDealers that are retailing (health data exists for these)
+  var retailingOnboarded = state.addedDealers.filter(function(d){
+    return _retailKeySet.has(dealerKey(d.dealer, d.location||''));
   });
-  var totalDealers = retailingDealers.length;
+  // For total count use master list retailing count (124)
+  var totalDealers = _retailKeySet.size;
 
-  // ── Section 1: Overall Dealer Health — one row ──
+  // ── Section 1: Overall Dealer Health ──
   var dealerHealthCount = { star:0, green:0, amber:0, red:0, na:0, 'null':0 };
-  retailingDealers.forEach(function(d) {
+  retailingOnboarded.forEach(function(d) {
     var oh = computeOverallHealth(d.dealer, d.location||'');
     dealerHealthCount[oh||'null']++;
   });
+  // Count dealers in master but not in addedDealers as 'null'
+  dealerHealthCount['null'] += (totalDealers - retailingOnboarded.length);
 
   // ── Section 2: Per-product health ──
   var prodHealth = {};
   PRODUCTS.forEach(function(p) { prodHealth[p.key] = { star:0, green:0, amber:0, red:0, na:0, 'null':0 }; });
-  retailingDealers.forEach(function(d) {
+  retailingOnboarded.forEach(function(d) {
     var hk = dealerKey(d.dealer, d.location||'');
-    var h = state.dealerHealth[hk] || state.dealerHealth[d.dealer] || {};
+    var h = state.dealerHealth[hk] || {};
     PRODUCTS.forEach(function(p) {
       var val = h[p.key]||'null';
       if (prodHealth[p.key][val] === undefined) prodHealth[p.key][val] = 0;
       prodHealth[p.key][val]++;
     });
   });
+  // Add untracked dealers as 'null' for each product
+  var untracked = totalDealers - retailingOnboarded.length;
+  PRODUCTS.forEach(function(p) { prodHealth[p.key]['null'] = (prodHealth[p.key]['null']||0) + untracked; });
+
 
   function fmt(cnt, total) {
     var pct = total ? Math.round(cnt/total*100) : 0;
@@ -2713,57 +2725,83 @@ function renderHealthStats() {
 function exportHealthStats() {
   var HEALTH_KEYS   = ['star','green','amber','red','na','null'];
   var HEALTH_LABELS = { star:'⭐ Star', green:'🟢 Green', amber:'🟡 Amber', red:'🔴 Red', na:'N/A', 'null':'Not Set' };
+  var HEALTH_SORT   = { star:0, green:1, amber:2, red:3, na:4, 'null':5 };
 
-  // Table 1
-  var t1 = [['Overall Health (Retailing Dealers)','Dealers','%']];
-  var retailExport = state.addedDealers.filter(function(d) {
-    var master = getDealerMasterList().find(function(m){ return (m.dealerName===d.dealer||m.dealer===d.dealer) && (m.location||'')===(d.location||''); }) ||
-                 getDealerMasterList().find(function(m){ return m.dealerName===d.dealer||m.dealer===d.dealer; }) || {};
-    return (master.dealerStatus||'').toLowerCase() === 'retailing';
-  });
-  var dealerHealthCount = { star:0, green:0, amber:0, red:0, na:0, 'null':0 };
-  retailExport.forEach(function(d) {
-    var oh = computeOverallHealth(d.dealer, d.location||'');
-    dealerHealthCount[oh||'null']++;
+  var retailExport = getDealerMasterList().filter(function(m){
+    return (m.dealerStatus||'').toLowerCase() === 'retailing';
   });
   var total = retailExport.length;
+
+  // ── Table 1: Summary ──
+  var dealerHealthCount = { star:0, green:0, amber:0, red:0, na:0, 'null':0 };
+  retailExport.forEach(function(d) {
+    var oh = computeOverallHealth(d.dealerName||d.dealer||'', d.location||'');
+    dealerHealthCount[oh||'null']++;
+  });
+  var t1 = [['Overall Health (Retailing Dealers)','Dealers','%']];
   HEALTH_KEYS.forEach(function(h) {
     var cnt = dealerHealthCount[h]||0;
     t1.push([HEALTH_LABELS[h], cnt, total ? Math.round(cnt/total*100)+'%' : '0%']);
   });
   t1.push(['Total', total, '100%']);
 
-  // Table 2
+  // ── Table 2: Product Health Summary ──
   var prodHealth = {};
   PRODUCTS.forEach(function(p) { prodHealth[p.key] = {star:0,green:0,amber:0,red:0,na:0,'null':0}; });
   retailExport.forEach(function(d) {
-    var hk = dealerKey(d.dealer, d.location||'');
-    var h = state.dealerHealth[hk] || state.dealerHealth[d.dealer] || {};
+    var hk = dealerKey(d.dealerName||d.dealer||'', d.location||'');
+    var h = state.dealerHealth[hk] || {};
     PRODUCTS.forEach(function(p) {
       var val = h[p.key]||'null';
       if (!prodHealth[p.key][val]) prodHealth[p.key][val]=0;
       prodHealth[p.key][val]++;
     });
   });
-  var t2Header = ['Product'].concat(HEALTH_KEYS.map(function(h){ return HEALTH_LABELS[h]; })).concat(['Total']);
-  var t2 = [t2Header];
+  var t2 = [['Product','⭐ Star','🟢 Green','🟡 Amber','🔴 Red','N/A','Not Set','Total']];
   PRODUCTS.forEach(function(p) {
-    var ph = prodHealth[p.key]||{};
-    var row = [p.label].concat(HEALTH_KEYS.map(function(h){ return ph[h]||0; }));
-    row.push(HEALTH_KEYS.reduce(function(s,h){ return s+(ph[h]||0); }, 0));
-    t2.push(row);
+    var ph = prodHealth[p.key];
+    t2.push([p.label, ph.star||0, ph.green||0, ph.amber||0, ph.red||0, ph.na||0, ph['null']||0, total]);
   });
-  var colTotals = ['Total'].concat(HEALTH_KEYS.map(function(h){
-    return PRODUCTS.reduce(function(s,p){ return s+(prodHealth[p.key][h]||0); }, 0);
-  })).concat([PRODUCTS.length * total]);
-  t2.push(colTotals);
 
-  if (typeof XLSX !== 'undefined') {
-    var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(t1), 'Overall Health');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(t2), 'Product Health');
-    XLSX.writeFile(wb, 'Dealer_Health_Stats.xlsx');
-  }
+  // ── Table 3: Dealer-wise details sorted by health ──
+  var dealerRows = retailExport.map(function(d) {
+    var dn  = d.dealerName||d.dealer||'';
+    var loc = d.location||'';
+    var st  = d.state||'';
+    var zone= d.zone||'';
+    var poc = d.vfPoc||'';
+    var oh  = computeOverallHealth(dn, loc) || 'null';
+    var hk  = dealerKey(dn, loc);
+    var h   = state.dealerHealth[hk] || {};
+    return {
+      name: dn, location: loc, state: st, zone: zone, poc: poc,
+      overall: oh,
+      h3wc:  h['3wc']||'—', h3wp: h['3wp']||'—',
+      h4wcs: h['4wc_storm']||'—', h4wct: h['4wc_turbo']||'—'
+    };
+  });
+  // Sort by overall health
+  dealerRows.sort(function(a,b){
+    var sa = HEALTH_SORT[a.overall]||5, sb = HEALTH_SORT[b.overall]||5;
+    if (sa !== sb) return sa - sb;
+    return (a.name||'').localeCompare(b.name||'');
+  });
+
+  var t3 = [['#','Dealer Name','Location','State','Zone','VF POC','Overall Health','3WC Health','3WP Health','4WCS Health','4WCT Health']];
+  dealerRows.forEach(function(r, i) {
+    t3.push([
+      i+1, r.name, r.location, r.state, r.zone, r.poc,
+      HEALTH_LABELS[r.overall]||r.overall,
+      r.h3wc, r.h3wp, r.h4wcs, r.h4wct
+    ]);
+  });
+
+  // ── Build workbook ──
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(t1), 'Overall Summary');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(t2), 'Product Summary');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(t3), 'Dealer-wise Health');
+  XLSX.writeFile(wb, 'Euler_Dealer_Health_' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
 
 
