@@ -617,6 +617,7 @@
       <button class="nav-btn" id="navFIPolicy" onclick="switchPage('fipolicy')">FI Policy</button>
       <button class="nav-btn" id="navCoverage" style="opacity:0.4;cursor:not-allowed;" title="Coming soon" onclick="event.preventDefault();">Coverage Gaps</button>
       <button class="nav-btn" id="navTAIF" onclick="switchPage('taif')">TA/IF Status (Dealer Level)</button>
+      <button class="nav-btn" id="navSnapshots" onclick="switchPage('snapshots')">📸 Snapshots</button>
     </nav>
   </div>
   <div class="save-indicator">
@@ -888,6 +889,15 @@
           <div style="display:flex;gap:8px;">
           <select class="form-select" id="fm_onboardingDate_month" style="flex:1;"><option value="">— Month —</option><option value="Jan">Jan</option><option value="Feb">Feb</option><option value="Mar">Mar</option><option value="Apr">Apr</option><option value="May">May</option><option value="Jun">Jun</option><option value="Jul">Jul</option><option value="Aug">Aug</option><option value="Sep">Sep</option><option value="Oct">Oct</option><option value="Nov">Nov</option><option value="Dec">Dec</option></select>
           <select class="form-select" id="fm_onboardingDate_year" style="flex:1;"><option value="">— Year —</option><option value="2023">2023</option><option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option><option value="2027">2027</option></select>
+        </div>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Ever Financed Euler Vehicle <span style="color:var(--flag);">*</span></label>
+          <select class="form-select" id="fm_everFinancedEuler">
+            <option value="">— Select —</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
         </div>
         </div>
       </div>
@@ -1572,6 +1582,67 @@
 </div>
 </div>
 
+
+<!-- ════════════════════════════════════════════════════════════
+     PAGE — MONTHLY SNAPSHOTS
+════════════════════════════════════════════════════════════ -->
+<div class="page" id="pageSnapshots">
+<div class="container">
+  <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    <div>
+      <div class="page-title">📸 Monthly Snapshots</div>
+      <div class="page-sub">Month-on-month progress tracking</div>
+    </div>
+    <button class="btn btn-primary" onclick="openSnapshotModal()">📸 Take Snapshot</button>
+  </div>
+
+  <!-- Filter bar -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
+    <span style="font-size:12px;color:var(--text-muted);font-weight:600;">View:</span>
+    <button class="btn btn-secondary btn-sm" id="snapFilter1M"  onclick="setSnapFilter(1)">Last Month</button>
+    <button class="btn btn-secondary btn-sm" id="snapFilter3M"  onclick="setSnapFilter(3)">Last 3M</button>
+    <button class="btn btn-secondary btn-sm" id="snapFilter6M"  onclick="setSnapFilter(6)">Last 6M</button>
+    <button class="btn btn-secondary btn-sm" id="snapFilter12M" onclick="setSnapFilter(12)">Last 12M</button>
+    <button class="btn btn-primary  btn-sm" id="snapFilterAll" onclick="setSnapFilter(0)">All</button>
+  </div>
+
+  <!-- Drill-down filters -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;flex-wrap:wrap;" id="snapDrillBar">
+    <span style="font-size:12px;color:var(--text-muted);font-weight:600;">Drill-down:</span>
+    <select class="filter-select" id="snapDrillType" onchange="onSnapDrillTypeChange()" style="width:130px;">
+      <option value="">— All Dealers —</option>
+      <option value="poc">By VF POC</option>
+      <option value="zone">By Zone</option>
+      <option value="state">By State</option>
+      <option value="dealer">By Dealer</option>
+    </select>
+    <select class="filter-select" id="snapDrillValue" onchange="onSnapDrillValueChange()" style="width:200px;display:none;">
+      <option value="">— Select —</option>
+    </select>
+  </div>
+
+  <div id="snapshotContent"><div class="empty-state"><div class="empty-icon">📸</div><div>No snapshots yet. Take your first snapshot!</div></div></div>
+</div>
+</div>
+
+<!-- Snapshot password modal -->
+<div class="modal-overlay" id="snapshotModalOverlay" style="display:none;">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header"><div class="modal-title">🔒 Take Snapshot</div><button class="modal-close" onclick="closeSnapshotModal()">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Enter the snapshot password to save a snapshot of current data.</p>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Password <span style="color:var(--flag);">*</span></label>
+        <input type="password" class="form-select" id="snapshotPassword" placeholder="Enter password" onkeydown="if(event.key==='Enter') confirmSnapshot()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeSnapshotModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmSnapshot()">📸 Save Snapshot</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── ADD/EDIT FINANCIER MODAL ── -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
@@ -1756,7 +1827,7 @@ const PRODUCTS = [
 const CATS = ["A","B","C","D"];
 const CAT_COLORS = { A:'var(--cat-a)', B:'var(--cat-b)', C:'var(--cat-c)', D:'var(--cat-d)' };
 
-let state = { dealers: [], financiers: [], financiersMeta: [], mapping: {}, addedDealers: [], dealersMaster: [], fiPolicy: {}, fiPolicyGeo: [], dealerHealth: {}, taifData: [] };
+let state = { dealers: [], financiers: [], financiersMeta: [], mapping: {}, addedDealers: [], dealersMaster: [], fiPolicy: {}, fiPolicyGeo: [], dealerHealth: {}, taifData: [], snapshots: [] };
 let modalContext = null;
 let openDealerCards = new Set();
 let openGapCards = new Set();
@@ -1811,7 +1882,7 @@ async function loadState() {
   if (loader) loader.style.display = 'flex';
   setSaveStatus('saving');
   try {
-    const [fiMaster, dealerMaster, addedDealers, onboarding, fiPolicy, dealerHealth, taif, fiPolicyGeo] = await Promise.all([
+    const [fiMaster, dealerMaster, addedDealers, onboarding, fiPolicy, dealerHealth, taif, fiPolicyGeo, snapshots] = await Promise.all([
       API.get('/api/fi_master'),
       API.get('/api/dealer_master'),
       API.get('/api/added_dealers'),
@@ -1819,7 +1890,8 @@ async function loadState() {
       API.get('/api/fi_policy'),
       API.get('/api/dealer_health'),
       API.get('/api/taif'),
-      API.get('/api/fi_policy_geo')
+      API.get('/api/fi_policy_geo'),
+      API.get('/api/snapshots')
     ]);
 
     // Ensure all responses are arrays
@@ -1907,6 +1979,9 @@ async function loadState() {
         try { pol.co.tiers = row['co_tiers'] ? JSON.parse(row['co_tiers']) : []; } catch(e) { pol.co.tiers = []; }
       state.fiPolicy[row.financier][row.productKey] = pol;
     });
+
+    // Snapshots
+    if (snapshots) state.snapshots = snapshots;
 
     // Dealer Health
     state.dealerHealth = {};
@@ -2040,6 +2115,7 @@ function switchPage(page) {
   document.getElementById("pageFIPolicy").classList.toggle("active", page === 'fipolicy');
   document.getElementById("pageTAIF").classList.toggle("active", page === 'taif');
   var pmEl = document.getElementById("pageMatcher"); if (pmEl) pmEl.classList.toggle("active", page === 'matcher');
+  var psEl = document.getElementById("pageSnapshots"); if (psEl) psEl.classList.toggle("active", page === 'snapshots');
   document.getElementById("navDealer").classList.toggle("active", page === 'dealer');
   document.getElementById("navCoverage").classList.toggle("active", page === 'coverage');
   document.getElementById("navFinancier").classList.toggle("active", page === 'financier');
@@ -2047,7 +2123,9 @@ function switchPage(page) {
   document.getElementById("navFIPolicy").classList.toggle("active", page === 'fipolicy');
   document.getElementById("navTAIF").classList.toggle("active", page === 'taif');
   var nmEl = document.getElementById("navMatcher"); if (nmEl) nmEl.classList.toggle("active", page === 'matcher');
+  var nsEl = document.getElementById("navSnapshots"); if (nsEl) nsEl.classList.toggle("active", page === 'snapshots');
   if (page === 'matcher') { if (typeof initMatcher === 'function') initMatcher(); }
+  if (page === 'snapshots') { renderSnapshots(); }
   if (page === 'coverage') { renderSummary(); renderGap(); }
   if (page === 'financier') { renderFinancierMaster(); }
   if (page === 'dealermaster') { renderDealerMaster(); }
@@ -2528,11 +2606,16 @@ function renderHealthStats() {
   var HEALTH_LABELS = { star:'⭐ Star', green:'🟢 Green', amber:'🟡 Amber', red:'🔴 Red', na:'N/A', 'null':'Not Set' };
   var HEALTH_COLORS = { star:'#a5b4fc', green:'#4ade80', amber:'#fef08a', red:'#f87171', na:'var(--text-hint)', 'null':'var(--text-muted)' };
 
-  var totalDealers = state.addedDealers.length;
+  var retailingDealers = state.addedDealers.filter(function(d) {
+    var master = getDealerMasterList().find(function(m){ return (m.dealerName===d.dealer||m.dealer===d.dealer) && (m.location||'')===(d.location||''); }) ||
+                 getDealerMasterList().find(function(m){ return m.dealerName===d.dealer||m.dealer===d.dealer; }) || {};
+    return (master.dealerStatus||'').toLowerCase() === 'retailing';
+  });
+  var totalDealers = retailingDealers.length;
 
   // ── Section 1: Overall Dealer Health — one row ──
   var dealerHealthCount = { star:0, green:0, amber:0, red:0, na:0, 'null':0 };
-  state.addedDealers.forEach(function(d) {
+  retailingDealers.forEach(function(d) {
     var oh = computeOverallHealth(d.dealer, d.location||'');
     dealerHealthCount[oh||'null']++;
   });
@@ -2540,7 +2623,7 @@ function renderHealthStats() {
   // ── Section 2: Per-product health ──
   var prodHealth = {};
   PRODUCTS.forEach(function(p) { prodHealth[p.key] = { star:0, green:0, amber:0, red:0, na:0, 'null':0 }; });
-  state.addedDealers.forEach(function(d) {
+  retailingDealers.forEach(function(d) {
     var hk = dealerKey(d.dealer, d.location||'');
     var h = state.dealerHealth[hk] || state.dealerHealth[d.dealer] || {};
     PRODUCTS.forEach(function(p) {
@@ -2632,13 +2715,18 @@ function exportHealthStats() {
   var HEALTH_LABELS = { star:'⭐ Star', green:'🟢 Green', amber:'🟡 Amber', red:'🔴 Red', na:'N/A', 'null':'Not Set' };
 
   // Table 1
-  var t1 = [['Overall Health','Dealers','%']];
+  var t1 = [['Overall Health (Retailing Dealers)','Dealers','%']];
+  var retailExport = state.addedDealers.filter(function(d) {
+    var master = getDealerMasterList().find(function(m){ return (m.dealerName===d.dealer||m.dealer===d.dealer) && (m.location||'')===(d.location||''); }) ||
+                 getDealerMasterList().find(function(m){ return m.dealerName===d.dealer||m.dealer===d.dealer; }) || {};
+    return (master.dealerStatus||'').toLowerCase() === 'retailing';
+  });
   var dealerHealthCount = { star:0, green:0, amber:0, red:0, na:0, 'null':0 };
-  state.addedDealers.forEach(function(d) {
+  retailExport.forEach(function(d) {
     var oh = computeOverallHealth(d.dealer, d.location||'');
     dealerHealthCount[oh||'null']++;
   });
-  var total = state.addedDealers.length;
+  var total = retailExport.length;
   HEALTH_KEYS.forEach(function(h) {
     var cnt = dealerHealthCount[h]||0;
     t1.push([HEALTH_LABELS[h], cnt, total ? Math.round(cnt/total*100)+'%' : '0%']);
@@ -2648,7 +2736,7 @@ function exportHealthStats() {
   // Table 2
   var prodHealth = {};
   PRODUCTS.forEach(function(p) { prodHealth[p.key] = {star:0,green:0,amber:0,red:0,na:0,'null':0}; });
-  state.addedDealers.forEach(function(d) {
+  retailExport.forEach(function(d) {
     var hk = dealerKey(d.dealer, d.location||'');
     var h = state.dealerHealth[hk] || state.dealerHealth[d.dealer] || {};
     PRODUCTS.forEach(function(p) {
@@ -2997,13 +3085,25 @@ function renderFinancierMaster(skipDropdowns) {
 
   var p1Count = state.financiersMeta.filter(function(m){ return m.priority==='P1'; }).length;
   var p2Count = state.financiersMeta.filter(function(m){ return m.priority==='P2'; }).length;
+  var everFinancedMetas = state.financiersMeta.filter(function(m){ return (m.everFinancedEuler||'').trim() === 'Yes'; });
+  var everFinancedCount = everFinancedMetas.length;
+  var efByStatus = {};
+  everFinancedMetas.forEach(function(m) {
+    var s = (m.status||'Unknown').trim();
+    efByStatus[s] = (efByStatus[s]||0) + 1;
+  });
+  var efBreakup = Object.keys(efByStatus).sort().map(function(s) {
+    return '<span style="font-weight:600;color:var(--text);">' + efByStatus[s] + '</span><span style="color:var(--text-muted);margin-left:2px;">' + s + '</span>';
+  }).join('<span style="color:var(--border);margin:0 4px;">·</span>');
+
   document.getElementById("finMasterSummary").innerHTML =
     '<div class="sum-card" style="min-width:120px;max-width:160px;flex:0 0 auto;"><div class="sum-label">Total Financiers</div><div class="sum-value">' + state.financiers.length + '</div><div class="sum-sub">' + activeCount + ' active</div></div>' +
     '<div class="sum-card" style="flex:0 0 auto;"><div class="sum-label">Active / Onboarded FIs</div><div class="sum-value sum-ok">' + activeCount + '</div><div class="sum-sub" style="display:flex;gap:8px;flex-wrap:wrap;">' +
       (p1Count ? '<span style="color:#a78bfa;font-weight:600;">P1: ' + p1Count + '</span>' : '') +
       (p2Count ? '<span style="color:#94a3b8;font-weight:600;">P2: ' + p2Count + '</span>' : '') +
       (!p1Count && !p2Count ? 'no priority set' : '') +
-    '</div></div>';
+    '</div></div>' +
+    '<div class="sum-card" style="flex:0 0 auto;"><div class="sum-label">Ever Financed Euler</div><div class="sum-value" style="color:var(--accent);">' + everFinancedCount + '</div><div class="sum-sub" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' + (efBreakup || '—') + '</div></div>';
 
   if (!state.financiers.length) {
     document.getElementById("finMasterTable").innerHTML = '<div class="empty-state"><div class="empty-icon">🏦</div><div style="font-size:14px;font-weight:500;margin-bottom:6px;">No financiers yet</div><div style="font-size:13px;">Click <strong>+ Add Financier</strong> to get started.</div></div>';
@@ -3047,7 +3147,7 @@ function renderFinancierMaster(skipDropdowns) {
       '<td style="text-align:center;">' + yN(m["4wc"]) + '</td>' +
       '<td style="text-align:center;">' + yN(m["4wct"]) + '</td>' +
       '<td>' + stBadge(m.status) + '</td>' +
-      cell(m.mouStatus) + cell(m.mouSignedMonth) + cell(m.onboardingDate) +
+      cell(m.mouStatus) + cell(m.mouSignedMonth) + cell(m.onboardingDate) + cell(m.everFinancedEuler||'') +
       cell(m.ttl) + cell(m.helpRequired) +
       cell(m.sourcedBy) + cell(m.spoc) + cell(m.secondaryPoc) + cell(m.contactDetails) +
       '<td style="font-size:12px;color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + commentSafe + '">' + (commentSafe || "—") + '</td>' +
@@ -3064,7 +3164,7 @@ function renderFinancierMaster(skipDropdowns) {
     '<thead><tr>' +
     '<th style="width:50px;text-align:center;">S.No</th><th style="min-width:160px;cursor:pointer;user-select:none;" onclick="sortFinMaster(\'name\')">FI Name'+finSortIcon('name')+'</th><th style="cursor:pointer;user-select:none;" onclick="sortFinMaster(\'category\')">Category'+finSortIcon('category')+'</th><th style="cursor:pointer;user-select:none;" onclick="sortFinMaster(\'priority\')">Priority'+finSortIcon('priority')+'</th><th>Instruments</th>' +
     '<th style="text-align:center;">3WC</th><th style="text-align:center;">3WP</th><th style="text-align:center;">4WCS</th><th style="text-align:center;">4WCT</th>' +
-    '<th style="min-width:130px;cursor:pointer;user-select:none;" onclick="sortFinMaster(\'status\')">Status'+finSortIcon('status')+'</th><th style="cursor:pointer;user-select:none;" onclick="sortFinMaster(\'mouStatus\')">MoU Status'+finSortIcon('mouStatus')+'</th><th>MOU Signed Month</th><th>FI Onboarding Month</th>' +
+    '<th style="min-width:130px;cursor:pointer;user-select:none;" onclick="sortFinMaster(\'status\')">Status'+finSortIcon('status')+'</th><th style="cursor:pointer;user-select:none;" onclick="sortFinMaster(\'mouStatus\')">MoU Status'+finSortIcon('mouStatus')+'</th><th>MOU Signed Month</th><th>FI Onboarding Month</th><th>Ever Financed Euler</th>' +
     '<th>TTL</th><th>Help Required</th>' +
     '<th>Sourced By</th><th>SPOC</th><th>Secondary POC</th><th>Contact</th><th>Comments</th>' +
     '<th>Dealer Links</th><th style="width:130px;">Actions</th>' +
@@ -3076,7 +3176,7 @@ let editingFinancierName = null;
 const FM_FIELDS = [
   { id:'fm_name', key:'name' }, { id:'fm_category', key:'category' }, { id:'fm_priority', key:'priority' }, { id:'fm_instruments', key:'instruments' },
   { id:'fm_3wc', key:'3wc', type:'check' }, { id:'fm_3wp', key:'3wp', type:'check' }, { id:'fm_4wc', key:'4wc', type:'check' }, { id:'fm_4wct', key:'4wct', type:'check' },
-  { id:'fm_status', key:'status' }, { id:'fm_mouStatus', key:'mouStatus' },
+  { id:'fm_status', key:'status' }, { id:'fm_mouStatus', key:'mouStatus' }, { id:'fm_everFinancedEuler', key:'everFinancedEuler' },
   { id:'fm_mouSignedMonth', key:'mouSignedMonth', type:'monthyear' }, { id:'fm_onboardingDate', key:'onboardingDate', type:'monthyear' },
   { id:'fm_priority', key:'priority' },
   { id:'fm_ttl', key:'ttl' }, { id:'fm_helpRequired', key:'helpRequired' },
@@ -3177,6 +3277,8 @@ function closeFinancierMasterModal() {
     if (!anyProduct) { toast("⚠ Please select at least one product."); return; }
     if (!instruments) { toast("⚠ Instruments is required.");     document.getElementById("fm_instruments").focus(); return; }
     if (!mouStatus)   { toast("⚠ MoU Status is required.");      document.getElementById("fm_mouStatus").focus();   return; }
+    const everFinancedEulerVal = document.getElementById('fm_everFinancedEuler') ? document.getElementById('fm_everFinancedEuler').value.trim() : '';
+    if (!everFinancedEulerVal) { toast("⚠ Ever Financed Euler Vehicle is required."); document.getElementById('fm_everFinancedEuler').focus(); return; }
   }
   if (isPriorityRequired && !priority) {
     toast("⚠ Priority (P1/P2) is required for this status.");
@@ -5036,13 +5138,13 @@ function exportDealerDashboard() {
 
 function exportFIMaster() {
   const headers = ["FI Name","Category","Instruments","3WC","3WP","4WCS","4WCT",
-    "Status","MoU Status","MOU Signed Month","FI Onboarding Month",
+    "Status","MoU Status","MOU Signed Month","FI Onboarding Month","Ever Financed Euler",
     "Priority","TTL","Help Required","Sourced By","SPOC","Secondary POC","Contact","Comments"];
   const rows = [headers, ...state.financiers.map(name => {
     const m = state.financiersMeta.find(x => x.name === name) || {};
     return [name, m.category||"", m.instruments||"",
       m["3wc"]||"", m["3wp"]||"", m["4wc"]||"", m["4wct"]||"",
-      m.status||"", m.mouStatus||"", m.mouSignedMonth||"", m.onboardingDate||"",
+      m.status||"", m.mouStatus||"", m.mouSignedMonth||"", m.onboardingDate||"", m.everFinancedEuler||"",
       m.priority||"", m.ttl||"", m.helpRequired||"",
       m.sourcedBy||"", m.spoc||"", m.secondaryPoc||"", m.contactDetails||"", m.comments||""
     ];
@@ -5873,6 +5975,619 @@ document.addEventListener("click", e => {
 ['mousemove','keydown','click','scroll','touchstart'].forEach(function(evt) {
   document.addEventListener(evt, resetInactivityTimer, { passive: true });
 });
+
+// ══════════════════════════════════════════════════════════════
+// MONTHLY SNAPSHOTS
+// ══════════════════════════════════════════════════════════════
+var _snapFilter = 0; // 0=all, 1=1M, 3=3M, 6=6M, 12=12M
+var _snapDrillType = ''; // 'poc'|'zone'|'state'|'dealer'
+var _snapDrillValue = '';
+var SNAP_PASS = 'snapshot@1234$';
+
+
+function onSnapDrillTypeChange() {
+  var type = document.getElementById('snapDrillType').value;
+  _snapDrillType  = type;
+  _snapDrillValue = '';
+  var valSel = document.getElementById('snapDrillValue');
+  if (!type) { valSel.style.display='none'; renderSnapshots(); return; }
+  // Build options from current state
+  var opts = [];
+  if (type === 'poc')    opts = Array.from(new Set(getDealerMasterList().map(function(d){ return d.vfPoc||''; }).filter(Boolean))).sort();
+  if (type === 'zone')   opts = Array.from(new Set(getDealerMasterList().map(function(d){ return d.zone||''; }).filter(Boolean))).sort();
+  if (type === 'state')  opts = Array.from(new Set(getDealerMasterList().map(function(d){ return d.state||''; }).filter(Boolean))).sort();
+  if (type === 'dealer') opts = state.addedDealers.map(function(d){ return d.dealer + (d.location?' ('+d.location+')':''); }).sort();
+  valSel.innerHTML = '<option value="">— Select —</option>' + opts.map(function(o){ return '<option value="'+escHtml(o)+'">'+escHtml(o)+'</option>'; }).join('');
+  valSel.style.display = '';
+  renderSnapshots();
+}
+
+function onSnapDrillValueChange() {
+  _snapDrillValue = document.getElementById('snapDrillValue').value;
+  renderSnapshots();
+}
+
+function getDrillHealth(snap, type, value) {
+  // Parse drill-down JSON from snapshot and return {star,green,amber,red,total}
+  if (!type || !value) return null;
+  var dataKey = type === 'poc' ? 'poc_data' : type === 'zone' ? 'zone_data' : type === 'state' ? 'state_data' : 'dealer_data';
+  var raw = snap[dataKey];
+  if (!raw) return null;
+  try {
+    var data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (type === 'dealer') {
+      // dealer key format: "name||location" or "name (location)"
+      // Try both dealer name and dealerKey format
+      var dk = null;
+      var nameOnly = value.replace(/\s*\(.*\)$/, '').trim();
+      var locMatch = value.match(/\(([^)]+)\)$/);
+      var loc = locMatch ? locMatch[1].trim() : '';
+      dk = dealerKey(nameOnly, loc);
+      var dh = data[dk] || data[nameOnly] || null;
+      if (!dh) return null;
+      // Convert dealer health to aggregate
+      var s={star:0,green:0,amber:0,red:0,total:1};
+      s[dh.overall] = 1;
+      return s;
+    }
+    return data[value] || null;
+  } catch(e) { return null; }
+}
+
+function setSnapFilter(n) {
+  _snapFilter = n;
+  ['1M','3M','6M','12M','All'].forEach(function(k) {
+    var btn = document.getElementById('snapFilter' + k);
+    if (btn) btn.className = 'btn btn-sm ' + ((n===0&&k==='All')||(n>0&&k===n+'M') ? 'btn-primary' : 'btn-secondary');
+  });
+  renderSnapshots();
+}
+
+function openSnapshotModal() {
+  var el = document.getElementById('snapshotModalOverlay');
+  if (el) { el.style.display = 'flex'; setTimeout(function(){ document.getElementById('snapshotPassword').focus(); },100); }
+}
+
+function closeSnapshotModal() {
+  var el = document.getElementById('snapshotModalOverlay');
+  if (el) el.style.display = 'none';
+  var pw = document.getElementById('snapshotPassword'); if (pw) pw.value = '';
+}
+
+async function confirmSnapshot() {
+  var pw = document.getElementById('snapshotPassword');
+  if (!pw || pw.value !== SNAP_PASS) { toast('⚠ Incorrect password.'); return; }
+  closeSnapshotModal();
+  await saveSnapshot();
+}
+
+async function saveSnapshot() {
+  toast('📸 Saving snapshot...');
+  try {
+    var now   = new Date();
+    var month = now.toLocaleString('default',{month:'short'});
+    var year  = now.getFullYear();
+    var snap  = computeSnapshot(month, year, now.toISOString().slice(0,10));
+    await API.post('/api/snapshots', snap);
+    await loadState();
+    renderSnapshots();
+    toast('✅ Snapshot saved for ' + month + ' ' + year);
+  } catch(e) { toast('❌ Failed to save snapshot: ' + e.message); }
+}
+
+function computeSnapshot(month, year, date) {
+  var metas      = state.financiersMeta || [];
+  var dealers    = getDealerMasterList();
+  var addedD     = state.addedDealers   || [];
+  var health     = state.dealerHealth   || {};
+
+  // FI stats
+  var EXCLUDED_FI_STATUSES = ['on hold','suspended','not started'];
+  var activeMetas  = metas.filter(function(m){ return EXCLUDED_FI_STATUSES.indexOf((m.status||'').toLowerCase()) === -1; });
+  var fi_total     = activeMetas.length;
+  var fi_active    = activeMetas.filter(function(m){ return m.status==='Active'; }).length;
+  var fi_onboarded = activeMetas.filter(function(m){ return m.status==='Onboarded'; }).length;
+  var fi_suspended = activeMetas.filter(function(m){ return m.status==='Suspended'; }).length;
+  var fi_p1        = activeMetas.filter(function(m){ return m.priority==='P1'; }).length;
+  var fi_p2        = activeMetas.filter(function(m){ return m.priority==='P2'; }).length;
+  var fi_mou_signed = activeMetas.filter(function(m){ return (m.mouStatus||'')==='Signed'; }).length;
+  var fi_mou_wip    = activeMetas.filter(function(m){ return (m.mouStatus||'')==='WIP'; }).length;
+  var fi_mou_na     = activeMetas.filter(function(m){ return (m.mouStatus||'')==='NA'; }).length;
+
+  // Dealer stats
+  // Retailing dealers only
+  var retailingDealers = dealers.filter(function(d){ return (d.dealerStatus||'').toLowerCase()==='retailing'; });
+  var dealer_total = retailingDealers.length;
+  var dealer_coco  = retailingDealers.filter(function(d){ return (d.dodoCocoType||'').toUpperCase()==='COCO'; }).length;
+  var dealer_dodo  = retailingDealers.filter(function(d){ return (d.dodoCocoType||'').toUpperCase()==='DODO'; }).length;
+
+  // Product health (across ALL dealers with health data)
+  var HEALTH_KEYS = ['3wc','3wp','4wc_storm','4wc_turbo'];
+  var productHealth = {};
+  HEALTH_KEYS.forEach(function(pk) {
+    var s={star:0,green:0,amber:0,red:0,notSet:0};
+    Object.keys(health).forEach(function(dk){
+      var v=(health[dk][pk]||'').toLowerCase();
+      if(v==='star')s.star++; else if(v==='green')s.green++;
+      else if(v==='amber')s.amber++; else if(v==='red')s.red++;
+      else s.notSet++;
+    });
+    productHealth[pk]=s;
+  });
+
+  // Health stats — retailing dealers only
+  var HEALTH_KEYS = ['3wc','3wp','4wc_storm','4wc_turbo'];
+  var retailingKeys = new Set(retailingDealers.map(function(d){ return dealerKey(d.dealerName||d.dealer||'', d.location||''); }));
+  var healthSnap  = {};
+  HEALTH_KEYS.forEach(function(pk) {
+    var s={star:0,green:0,amber:0,red:0,na:0};
+    Object.keys(health).forEach(function(dk){
+      if (!retailingKeys.has(dk)) return;
+      var v=(health[dk][pk]||'').toLowerCase();
+      if(v==='star')s.star++; else if(v==='green')s.green++;
+      else if(v==='amber')s.amber++; else if(v==='red')s.red++;
+      else s.na++;
+    });
+    healthSnap[pk]=s;
+  });
+
+  var retailingKeys = new Set(retailingDealers.map(function(d){ return dealerKey(d.dealerName||d.dealer||'', d.location||''); }));
+  var overall={star:0,green:0,amber:0,red:0};
+  Object.keys(health).forEach(function(dk){
+    if (!retailingKeys.has(dk)) return; // skip non-retailing
+    var d=health[dk]; var reds=0,greens=0,stars=0,ambers=0;
+    HEALTH_KEYS.forEach(function(pk){
+      var v=(d[pk]||'').toLowerCase();
+      if(v==='star')stars++; else if(v==='green')greens++;
+      else if(v==='amber')ambers++; else if(v==='red')reds++;
+    });
+    if(stars===4||(stars>0&&reds===0&&ambers===0))overall.star++;
+    else if(reds===0&&ambers===0)overall.green++;
+    else if(reds>=3&&greens===0)overall.red++;
+    else overall.amber++;
+  });
+
+  // FI-dealer links per product
+  var links={};
+  HEALTH_KEYS.forEach(function(pk){ links[pk]=0; });
+  addedD.forEach(function(d){
+    var fins=getDealerFinanciers(d.dealer,d.location||'');
+    Object.keys(fins).forEach(function(fn){
+      HEALTH_KEYS.forEach(function(pk){
+        var pd=fins[fn].products[pk];
+        if(pd&&pd.enabled) links[pk]++;
+      });
+    });
+  });
+
+  // ── Drill-down data ──
+  // Dealer-level health
+  var dealer_data = {};
+  Object.keys(health).forEach(function(dk) {
+    var d = health[dk];
+    var reds=0,greens=0,stars=0,ambers=0;
+    HEALTH_KEYS.forEach(function(pk){
+      var v=(d[pk]||'').toLowerCase();
+      if(v==='star')stars++; else if(v==='green')greens++;
+      else if(v==='amber')ambers++; else if(v==='red')reds++;
+    });
+    var ov;
+    if(stars===4||(stars>0&&reds===0&&ambers===0)) ov='star';
+    else if(reds===0&&ambers===0) ov='green';
+    else if(reds>=3&&greens===0) ov='red';
+    else ov='amber';
+    dealer_data[dk] = { '3wc': d['3wc']||'', '3wp': d['3wp']||'', '4wcs': d['4wc_storm']||'', '4wct': d['4wc_turbo']||'', overall: ov };
+  });
+
+  // POC aggregates
+  var poc_data = {};
+  dealers.forEach(function(d) {
+    var poc = (d.vfPoc||'').trim(); if (!poc) return;
+    var dk  = dealerKey(d.dealerName||d.dealer||'', d.location||'');
+    var dh  = dealer_data[dk];
+    if (!dh) return;
+    if (!poc_data[poc]) poc_data[poc] = {total:0,star:0,green:0,amber:0,red:0};
+    poc_data[poc].total++;
+    poc_data[poc][dh.overall] = (poc_data[poc][dh.overall]||0) + 1;
+  });
+
+  // Zone aggregates
+  var zone_data = {};
+  dealers.forEach(function(d) {
+    var zone = (d.zone||'').trim(); if (!zone) return;
+    var dk   = dealerKey(d.dealerName||d.dealer||'', d.location||'');
+    var dh   = dealer_data[dk];
+    if (!dh) return;
+    if (!zone_data[zone]) zone_data[zone] = {total:0,star:0,green:0,amber:0,red:0};
+    zone_data[zone].total++;
+    zone_data[zone][dh.overall] = (zone_data[zone][dh.overall]||0) + 1;
+  });
+
+  // State aggregates
+  var state_data = {};
+  dealers.forEach(function(d) {
+    var st = (d.state||'').trim(); if (!st) return;
+    var dk = dealerKey(d.dealerName||d.dealer||'', d.location||'');
+    var dh = dealer_data[dk];
+    if (!dh) return;
+    if (!state_data[st]) state_data[st] = {total:0,star:0,green:0,amber:0,red:0};
+    state_data[st].total++;
+    state_data[st][dh.overall] = (state_data[st][dh.overall]||0) + 1;
+  });
+
+  return {
+    snapshot_date: date, snapshot_month: month, snapshot_year: String(year),
+    fi_total, fi_active, fi_onboarded, fi_suspended, fi_p1, fi_p2, fi_mou_signed, fi_mou_wip, fi_mou_na,
+    dealer_total, dealer_coco, dealer_dodo,
+    ph_3wc_star: productHealth['3wc'].star, ph_3wc_green: productHealth['3wc'].green, ph_3wc_amber: productHealth['3wc'].amber, ph_3wc_red: productHealth['3wc'].red,
+    ph_3wp_star: productHealth['3wp'].star, ph_3wp_green: productHealth['3wp'].green, ph_3wp_amber: productHealth['3wp'].amber, ph_3wp_red: productHealth['3wp'].red,
+    ph_4wcs_star: productHealth['4wc_storm'].star, ph_4wcs_green: productHealth['4wc_storm'].green, ph_4wcs_amber: productHealth['4wc_storm'].amber, ph_4wcs_red: productHealth['4wc_storm'].red,
+    ph_4wct_star: productHealth['4wc_turbo'].star, ph_4wct_green: productHealth['4wc_turbo'].green, ph_4wct_amber: productHealth['4wc_turbo'].amber, ph_4wct_red: productHealth['4wc_turbo'].red,
+    health_overall_star: overall.star, health_overall_green: overall.green,
+    health_overall_amber: overall.amber, health_overall_red: overall.red,
+    health_3wc_star: healthSnap['3wc'].star, health_3wc_green: healthSnap['3wc'].green,
+    health_3wc_amber: healthSnap['3wc'].amber, health_3wc_red: healthSnap['3wc'].red,
+    health_3wp_star: healthSnap['3wp'].star, health_3wp_green: healthSnap['3wp'].green,
+    health_3wp_amber: healthSnap['3wp'].amber, health_3wp_red: healthSnap['3wp'].red,
+    health_4wcs_star: healthSnap['4wc_storm'].star, health_4wcs_green: healthSnap['4wc_storm'].green,
+    health_4wcs_amber: healthSnap['4wc_storm'].amber, health_4wcs_red: healthSnap['4wc_storm'].red,
+    health_4wct_star: healthSnap['4wc_turbo'].star, health_4wct_green: healthSnap['4wc_turbo'].green,
+    health_4wct_amber: healthSnap['4wc_turbo'].amber, health_4wct_red: healthSnap['4wc_turbo'].red,
+    fi_dealer_links_3wc: links['3wc'], fi_dealer_links_3wp: links['3wp'],
+    fi_dealer_links_4wcs: links['4wc_storm'], fi_dealer_links_4wct: links['4wc_turbo'],
+    poc_data:    JSON.stringify(poc_data),
+    zone_data:   JSON.stringify(zone_data),
+    state_data:  JSON.stringify(state_data),
+    dealer_data: JSON.stringify(dealer_data)
+  };
+}
+
+function renderSnapshots() {
+  var container = document.getElementById('snapshotContent');
+  if (!container) return;
+
+  var now      = new Date();
+  var curMonth = now.toLocaleString('default',{month:'short'});
+  var curYear  = now.getFullYear();
+  var live     = computeSnapshot(curMonth, String(curYear), now.toISOString().slice(0,10));
+  var metas    = state.financiersMeta || [];
+  var dealers  = getDealerMasterList();
+  var health   = state.dealerHealth || {};
+  var HKEYS    = ['3wc','3wp','4wc_storm','4wc_turbo'];
+
+  function statChip(label, val, color) {
+    return '<div style="text-align:center;min-width:60px;">' +
+      '<div style="font-size:20px;font-weight:700;color:' + (color||'var(--text)') + ';">' + val + '</div>' +
+      '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">' + label + '</div>' +
+    '</div>';
+  }
+  function vdiv() { return '<div style="width:1px;background:var(--border);margin:0 4px;"></div>'; }
+  function healthChips(dh) {
+    if (!dh) return '<span style="color:var(--text-muted);">—</span>';
+    return (dh.star  ? '<span style="color:#fbbf24;font-weight:700;">⭐'+dh.star+'</span> ' : '') +
+           (dh.green ? '<span style="color:#4ade80;font-weight:700;">🟢'+dh.green+'</span> ' : '') +
+           (dh.amber ? '<span style="color:#facc15;font-weight:700;">🟡'+dh.amber+'</span> ' : '') +
+           (dh.red   ? '<span style="color:#f87171;font-weight:700;">🔴'+dh.red+'</span>'   : '') || '—';
+  }
+
+  // ── Compute live drill-down health ──
+  var drillLabel  = '';
+  var drillHealth = null;
+  if (_snapDrillType && _snapDrillValue) {
+    drillLabel = ' — ' + _snapDrillType.charAt(0).toUpperCase() + _snapDrillType.slice(1) + ': ' + _snapDrillValue;
+    var liveDD = {};
+    Object.keys(health).forEach(function(dk) {
+      var d=health[dk]; var reds=0,greens=0,stars=0,ambers=0;
+      HKEYS.forEach(function(pk){ var v=(d[pk]||'').toLowerCase(); if(v==='star')stars++; else if(v==='green')greens++; else if(v==='amber')ambers++; else if(v==='red')reds++; });
+      var ov; if(stars===4||(stars>0&&reds===0&&ambers===0)) ov='star'; else if(reds===0&&ambers===0) ov='green'; else if(reds>=3&&greens===0) ov='red'; else ov='amber';
+      liveDD[dk] = {overall:ov};
+    });
+    var livePoc={}, liveZone={}, liveState={};
+    dealers.forEach(function(d) {
+      var dk2 = dealerKey(d.dealerName||d.dealer||'', d.location||'');
+      var dh2 = liveDD[dk2]; if (!dh2) return;
+      function inc(obj, key) { if (!key) return; if (!obj[key]) obj[key]={total:0,star:0,green:0,amber:0,red:0}; obj[key].total++; obj[key][dh2.overall]=(obj[key][dh2.overall]||0)+1; }
+      inc(livePoc,  (d.vfPoc||'').trim());
+      inc(liveZone, (d.zone||'').trim());
+      inc(liveState,(d.state||'').trim());
+    });
+    if (_snapDrillType==='poc')    drillHealth = livePoc[_snapDrillValue]   || null;
+    if (_snapDrillType==='zone')   drillHealth = liveZone[_snapDrillValue]  || null;
+    if (_snapDrillType==='state')  drillHealth = liveState[_snapDrillValue] || null;
+    if (_snapDrillType==='dealer') {
+      var nm = _snapDrillValue.replace(/\s*\(.*\)$/, '').trim();
+      var lm = (_snapDrillValue.match(/\(([^)]+)\)$/) || [])[1]||'';
+      var dhx = liveDD[dealerKey(nm, lm)];
+      if (dhx) { drillHealth = {total:1,star:0,green:0,amber:0,red:0}; drillHealth[dhx.overall]=1; }
+    }
+  }
+
+  // ── Current card ──
+  var EXCLUDED_FI_STATUSES_LIVE = ['on hold','suspended','not started'];
+  var activeMetas  = (state.financiersMeta||[]).filter(function(m){ return EXCLUDED_FI_STATUSES_LIVE.indexOf((m.status||'').toLowerCase()) === -1; });
+  var mouSigned = activeMetas.filter(function(m){ return (m.mouStatus||'')==='Signed'; }).length;
+  var mouWIP    = activeMetas.filter(function(m){ return (m.mouStatus||'')==='WIP'; }).length;
+  var mouNA     = activeMetas.filter(function(m){ return (m.mouStatus||'')==='NA'; }).length;
+  var mouUnset  = activeMetas.filter(function(m){ return !(m.mouStatus||'').trim(); }).length;
+
+  var currentCard = '<div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:18px 20px;margin-bottom:20px;">' +
+    '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:16px;">' +
+      '<div style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;">Current Snapshot</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);">' + curMonth + ' ' + curYear + ' — live</div>' +
+      (drillLabel ? '<div style="font-size:11px;color:var(--accent);background:rgba(99,102,241,0.12);border-radius:4px;padding:2px 8px;">' + escHtml(drillLabel) + '</div>' : '') +
+    '</div>';
+
+  if (_snapDrillType && _snapDrillValue) {
+    // Compute retailing dealers in this drill slice
+    var drillRetailDealers = getDealerMasterList().filter(function(d){
+      if ((d.dealerStatus||'').toLowerCase() !== 'retailing') return false;
+      if (_snapDrillType === 'poc')    return (d.vfPoc||'').trim()  === _snapDrillValue;
+      if (_snapDrillType === 'zone')   return (d.zone||'').trim()   === _snapDrillValue;
+      if (_snapDrillType === 'state')  return (d.state||'').trim()  === _snapDrillValue;
+      if (_snapDrillType === 'dealer') {
+        var nm = _snapDrillValue.replace(/\s*\(.*\)$/, '').trim();
+        var lm = (_snapDrillValue.match(/\(([^)]+)\)$/) || [])[1]||'';
+        return (d.dealerName||d.dealer||'')=== nm && (d.location||'')=== lm;
+      }
+      return false;
+    });
+    var drillKeys = new Set(drillRetailDealers.map(function(d){ return dealerKey(d.dealerName||d.dealer||'', d.location||''); }));
+
+    // Overall health
+    var drillOverall = {star:0,green:0,amber:0,red:0,notSet:0};
+    drillKeys.forEach(function(dk){
+      var d = state.dealerHealth[dk] || {};
+      var reds=0,greens=0,stars=0,ambers=0,hasAny=false;
+      ['3wc','3wp','4wc_storm','4wc_turbo'].forEach(function(pk){
+        var v=(d[pk]||'').toLowerCase();
+        if(v==='star'){stars++;hasAny=true;} else if(v==='green'){greens++;hasAny=true;}
+        else if(v==='amber'){ambers++;hasAny=true;} else if(v==='red'){reds++;hasAny=true;}
+      });
+      if(!hasAny) drillOverall.notSet++;
+      else if(stars===4||(stars>0&&reds===0&&ambers===0)) drillOverall.star++;
+      else if(reds===0&&ambers===0) drillOverall.green++;
+      else if(reds>=3&&greens===0) drillOverall.red++;
+      else drillOverall.amber++;
+    });
+
+    var drillHealthChips = function(dh) {
+      return (dh.star   ? '<span style="color:#fbbf24;font-weight:700;">⭐'+dh.star+'</span> ' : '') +
+             (dh.green  ? '<span style="color:#4ade80;font-weight:700;">🟢'+dh.green+'</span> ' : '') +
+             (dh.amber  ? '<span style="color:#facc15;font-weight:700;">🟡'+dh.amber+'</span> ' : '') +
+             (dh.red    ? '<span style="color:#f87171;font-weight:700;">🔴'+dh.red+'</span> '  : '') +
+             (dh.notSet ? '<span style="color:var(--text-hint);font-weight:700;">—'+dh.notSet+'</span>' : '') || '—';
+    };
+
+    // Product health per product
+    var PROD_LABELS_DD = {'3wc':'3WC','3wp':'3WP','4wc_storm':'4WCS','4wc_turbo':'4WCT'};
+    var prodCardsHtml = ['3wc','3wp','4wc_storm','4wc_turbo'].map(function(pk){
+      var s = {star:0,green:0,amber:0,red:0,notSet:0};
+      drillKeys.forEach(function(dk){
+        var v=((state.dealerHealth[dk]||{})[pk]||'').toLowerCase();
+        if(v==='star')s.star++; else if(v==='green')s.green++; else if(v==='amber')s.amber++; else if(v==='red')s.red++; else s.notSet++;
+      });
+      return '<div style="text-align:center;min-width:70px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:4px;">' + PROD_LABELS_DD[pk] + '</div>' +
+        '<div style="font-size:11px;display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">' +
+          (s.star   ? '<span style="color:#fbbf24;">⭐'+s.star+'</span>'   : '') +
+          (s.green  ? '<span style="color:#4ade80;">🟢'+s.green+'</span>'  : '') +
+          (s.amber  ? '<span style="color:#facc15;">🟡'+s.amber+'</span>'  : '') +
+          (s.red    ? '<span style="color:#f87171;">🔴'+s.red+'</span>'    : '') +
+          (s.notSet ? '<span style="color:var(--text-hint);">—'+s.notSet+'</span>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    currentCard +=
+      '<div style="display:flex;gap:24px;flex-wrap:wrap;">' +
+        '<div>' +
+          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:8px;">Overall Health <span style="font-weight:400;color:var(--text-hint);">(Retailing)</span></div>' +
+          '<div style="font-size:22px;">' + drillHealthChips(drillOverall) + '</div>' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Dealers: ' + drillKeys.size + '</div>' +
+        '</div>' +
+        '<div style="width:1px;background:var(--border);align-self:stretch;"></div>' +
+        '<div>' +
+          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:8px;">Product Health <span style="font-weight:400;color:var(--text-hint);">(Retailing)</span></div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + prodCardsHtml + '</div>' +
+        '</div>' +
+      '</div>';
+
+    if (drillKeys.size === 0) {
+      currentCard += '<div style="font-size:12px;color:var(--flag);margin-top:6px;">No retailing dealers found for this selection.</div>';
+    }
+  } else {
+    var section = function(title, chips) {
+      return '<div style="flex:0 0 auto;">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;">' + title + '</div>' +
+        '<div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">' + chips + '</div>' +
+      '</div>';
+    };
+    var chip = function(label, val, color) {
+      return '<div style="text-align:center;">' +
+        '<div style="font-size:22px;font-weight:700;color:' + (color||'var(--text)') + ';line-height:1;">' + val + '</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);margin-top:3px;white-space:nowrap;">' + label + '</div>' +
+      '</div>';
+    }
+    var sep = function() { return '<div style="width:1px;height:36px;background:var(--border);margin:0 2px;align-self:center;"></div>'; };
+
+    var mouTotal = mouSigned + mouWIP + mouNA;
+    var mouBadge = '<div style="display:flex;gap:6px;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;">' +
+      '<span style="font-size:10px;color:var(--text-muted);font-weight:600;white-space:nowrap;">MoU —</span>' +
+      '<span style="font-size:11px;font-weight:700;color:#4ade80;">Signed: ' + mouSigned + '</span>' +
+      '<span style="color:var(--border);">·</span>' +
+      '<span style="font-size:11px;font-weight:700;color:#f59e0b;">WIP: ' + mouWIP + '</span>' +
+      '<span style="color:var(--border);">·</span>' +
+      '<span style="font-size:11px;font-weight:700;color:#94a3b8;">NA: ' + mouNA + '</span>' +
+      (mouUnset ? '<span style="color:var(--border);">·</span><span style="font-size:11px;font-weight:700;color:var(--text-hint);">Unset: ' + mouUnset + '</span>' : '') +
+    '</div>';
+
+    currentCard +=
+      '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">' +
+        section('Financiers',
+          chip('Total',   activeMetas.length) + sep() +
+          chip('Active',  activeMetas.filter(function(m){ return m.status==='Active'; }).length, '#4ade80') + sep() +
+          chip('Onboarded', activeMetas.filter(function(m){ return m.status==='Onboarded'; }).length, '#60a5fa') + sep() +
+          chip('P1', activeMetas.filter(function(m){ return m.priority==='P1'; }).length, '#a78bfa') +
+          chip('P2', activeMetas.filter(function(m){ return m.priority==='P2'; }).length, '#94a3b8') +
+          '<div style="align-self:flex-end;padding-bottom:2px;">' + mouBadge + '</div>'
+        ) +
+        '<div style="width:1px;background:var(--border);align-self:stretch;"></div>' +
+        section('Dealers <span style="font-size:9px;color:var(--text-hint);font-weight:400;">(Retailing)</span>',
+          chip('Total', live.dealer_total) + sep() +
+          chip('COCO',  live.dealer_coco, '#f59e0b') +
+          chip('DODO',  live.dealer_dodo, '#06b6d4')
+        ) +
+        '<div style="width:1px;background:var(--border);align-self:stretch;"></div>' +
+        section('Overall Health',
+          chip('⭐', live.health_overall_star,  '#fbbf24') +
+          chip('🟢', live.health_overall_green, '#4ade80') +
+          chip('🟡', live.health_overall_amber, '#facc15') +
+          chip('🔴', live.health_overall_red,   '#f87171')
+        ) +
+        '<div style="width:1px;background:var(--border);align-self:stretch;"></div>' +
+        (function() {
+          var PROD_LABELS = {'3wc':'3WC','3wp':'3WP','4wc_storm':'4WCS','4wc_turbo':'4WCT'};
+          var prods = ['3wc','3wp','4wc_storm','4wc_turbo'];
+          var prodHtml = prods.map(function(pk) {
+            var ph = (state.dealerHealth && Object.keys(state.dealerHealth).length) ? (function(){
+              var retailSet = new Set(getDealerMasterList().filter(function(d){ return (d.dealerStatus||'').toLowerCase()==='retailing'; }).map(function(d){ return dealerKey(d.dealerName||d.dealer||'', d.location||''); }));
+              var s={star:0,green:0,amber:0,red:0,notSet:0};
+              retailSet.forEach(function(dk){
+                var v=((state.dealerHealth[dk]||{})[pk]||'').toLowerCase();
+                if(v==='star')s.star++; else if(v==='green')s.green++; else if(v==='amber')s.amber++; else if(v==='red')s.red++;
+                else s.notSet++;
+              });
+              return s;
+            })() : {star:0,green:0,amber:0,red:0};
+            return '<div style="text-align:center;min-width:70px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">' +
+              '<div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:4px;">' + PROD_LABELS[pk] + '</div>' +
+              '<div style="font-size:11px;display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">' +
+                (ph.star  ? '<span style="color:#fbbf24;">⭐'+ph.star+'</span>' : '') +
+                (ph.green ? '<span style="color:#4ade80;">🟢'+ph.green+'</span>' : '') +
+                (ph.amber ? '<span style="color:#facc15;">🟡'+ph.amber+'</span>' : '') +
+                (ph.red   ? '<span style="color:#f87171;">🔴'+ph.red+'</span>' : '') +
+                (ph.notSet? '<span style="color:var(--text-hint);">—'+ph.notSet+'</span>' : '') +
+              '</div>' +
+            '</div>';
+          }).join('');
+          return '<div style="flex:0 0 auto;">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;">Product Health</div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + prodHtml + '</div>' +
+          '</div>';
+        })() +
+      '</div>';
+  }
+  currentCard += '</div>';
+
+  // ── Snapshot filter + table ──
+  var snaps = (state.snapshots || []).slice();
+  snaps.sort(function(a,b){ return (a.snapshot_date||'').localeCompare(b.snapshot_date||''); });
+  if (_snapFilter > 0) {
+    var cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - _snapFilter);
+    snaps = snaps.filter(function(s){ return new Date(s.snapshot_date) >= cutoff; });
+  }
+
+  if (!snaps.length) {
+    container.innerHTML = currentCard + '<div class="empty-state"><div class="empty-icon">📸</div><div>No saved snapshots yet. Take your first snapshot!</div></div>';
+    return;
+  }
+  if (snaps.length < 2) {
+    container.innerHTML = currentCard + '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px;">Month-on-month comparison will appear once you have 2 or more snapshots saved.</div>';
+    return;
+  }
+
+  function delta(curr, prev, key, higherIsBetter) {
+    if (prev===undefined) return '';
+    var d = (parseInt(curr[key])||0) - (parseInt(prev[key])||0);
+    if (d===0) return '<span style="color:var(--text-muted);font-size:10px;">—</span>';
+    var up = higherIsBetter ? d>0 : d<0;
+    return '<span style="font-size:10px;font-weight:700;color:' + (up?'#4ade80':'#f87171') + ';">' + (d>0?'↑':'↓') + Math.abs(d) + '</span>';
+  }
+  function healthBar(snap, prefix) {
+    var star=parseInt(snap[prefix+'_star'])||0, green=parseInt(snap[prefix+'_green'])||0;
+    var amber=parseInt(snap[prefix+'_amber'])||0, red=parseInt(snap[prefix+'_red'])||0;
+    if(!star&&!green&&!amber&&!red) return '—';
+    return (star  ? '<span style="color:#fbbf24;font-size:10px;">⭐'+star+'</span> ' : '') +
+           (green ? '<span style="color:#4ade80;font-size:10px;">🟢'+green+'</span> ' : '') +
+           (amber ? '<span style="color:#facc15;font-size:10px;">🟡'+amber+'</span> ' : '') +
+           (red   ? '<span style="color:#f87171;font-size:10px;">🔴'+red+'</span>'   : '');
+  }
+
+  var PRODS = [{key:'3wc',label:'3WC'},{key:'3wp',label:'3WP'},{key:'4wcs',label:'4WCS'},{key:'4wct',label:'4WCT'}];
+  var isDrill = _snapDrillType && _snapDrillValue;
+
+  var html = '<div style="overflow-x:auto;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr style="background:var(--surface2);color:var(--text-muted);text-align:left;">' +
+    '<th style="padding:8px 12px;white-space:nowrap;">Month</th>';
+  if (!isDrill) {
+    html += '<th style="padding:8px 12px;text-align:center;">Total FIs</th>' +
+      '<th style="padding:8px 12px;text-align:center;">Active</th>' +
+      '<th style="padding:8px 12px;text-align:center;">Onboarded</th>' +
+      '<th style="padding:8px 12px;text-align:center;">Total Dealers</th>' +
+      '<th style="padding:8px 12px;text-align:center;">COCO</th>' +
+      '<th style="padding:8px 12px;text-align:center;">DODO</th>' +
+      '<th style="padding:8px 12px;text-align:center;">Overall Health</th>' +
+      PRODS.map(function(p){ return '<th style="padding:8px 12px;text-align:center;">'+p.label+' Health</th>'; }).join('') +
+      '<th style="padding:8px 12px;text-align:center;">Signed</th>' +
+      '<th style="padding:8px 12px;text-align:center;">WIP</th>' +
+      '<th style="padding:8px 12px;text-align:center;">MoU NA</th>';
+  } else {
+    html += '<th style="padding:8px 12px;text-align:center;">Dealers</th>' +
+      '<th style="padding:8px 12px;text-align:center;">Health</th>';
+  }
+  html += '</tr></thead><tbody>';
+
+  snaps.forEach(function(s, i) {
+    var prev = i > 0 ? snaps[i-1] : undefined;
+    var isLast = i === snaps.length - 1;
+    var rowStyle = isLast ? 'background:rgba(99,102,241,0.08);font-weight:600;' : (i%2===0?'':'background:var(--surface2);');
+    html += '<tr style="' + rowStyle + 'border-bottom:1px solid var(--border);">';
+    html += '<td style="padding:8px 12px;white-space:nowrap;color:var(--accent);font-weight:700;">' +
+      s.snapshot_month + ' ' + s.snapshot_year +
+      (s.snapshot_date ? '<div style="font-size:10px;color:var(--text-muted);font-weight:400;">' + s.snapshot_date + '</div>' : '') +
+      (isLast?' <span style="font-size:10px;color:var(--text-muted);">(latest)</span>':'') +
+      '</td>';
+
+    if (!isDrill) {
+      ['fi_total','fi_active','fi_onboarded','dealer_total','dealer_coco','dealer_dodo'].forEach(function(k) {
+        html += '<td style="padding:8px 12px;text-align:center;">' + (s[k]||0) + ' ' + delta(s,prev,k,true) + '</td>';
+      });
+      html += '<td style="padding:8px 12px;text-align:center;">' + healthBar(s,'health_overall') + '</td>';
+      PRODS.forEach(function(p){
+        html += '<td style="padding:8px 12px;text-align:center;">' + healthBar(s,'health_'+p.key) + '</td>';
+      });
+    } else {
+      var dh = getDrillHealth(s, _snapDrillType, _snapDrillValue);
+      html += '<td style="padding:8px 12px;text-align:center;">' + (dh ? dh.total : '—') + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center;">' + healthChips(dh) + '</td>';
+    }
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+
+  // Summary strip
+  if (snaps.length > 1) {
+    var first = snaps[0], last = snaps[snaps.length-1];
+    var periodLabel = first.snapshot_month+' '+first.snapshot_year+(first.snapshot_date?' ('+first.snapshot_date+')':'')+' → '+last.snapshot_month+' '+last.snapshot_year+(last.snapshot_date?' ('+last.snapshot_date+')':'');
+    var mkChip = function(label, d) {
+      var col = d>0?'#4ade80':d<0?'#f87171':'#94a3b8';
+      return '<span style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;">' +
+        '<span style="color:var(--text-muted);">' + label + ': </span>' +
+        '<span style="font-weight:700;color:' + col + ';">' + (d>0?'+':'') + d + '</span></span>';
+    };
+    var fiDelta = (parseInt(last.fi_total)||0) - (parseInt(first.fi_total)||0);
+    var dlDelta = (parseInt(last.dealer_total)||0) - (parseInt(first.dealer_total)||0);
+    html = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">' +
+      '<span style="font-size:12px;color:var(--text-muted);font-weight:600;">Period: ' + periodLabel + '</span>' +
+      (!isDrill ? mkChip('FIs', fiDelta) + mkChip('Dealers', dlDelta) : '') +
+      '</div>' + html;
+  }
+
+  container.innerHTML = currentCard + html;
+}
+
 </script>
 </body>
 </html>

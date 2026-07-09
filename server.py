@@ -161,6 +161,13 @@ def delete_row(worksheet, match_keys):
 
 # ── API FUNCTIONS ─────────────────────────────────────────────
 def api_get(sheet_name):        return rows_to_dicts(ws(sheet_name))
+def api_append_snapshot(snap_dict):
+    sheet = ws("Monthly_Snapshots")
+    headers = ["snapshot_date","snapshot_month","snapshot_year","fi_total","fi_active","fi_onboarded","fi_suspended","fi_p1","fi_p2","dealer_total","dealer_coco","dealer_dodo","health_overall_star","health_overall_green","health_overall_amber","health_overall_red","health_3wc_star","health_3wc_green","health_3wc_amber","health_3wc_red","health_3wp_star","health_3wp_green","health_3wp_amber","health_3wp_red","health_4wcs_star","health_4wcs_green","health_4wcs_amber","health_4wcs_red","health_4wct_star","health_4wct_green","health_4wct_amber","health_4wct_red","fi_mou_signed","fi_mou_wip","fi_mou_na","ph_3wc_star","ph_3wc_green","ph_3wc_amber","ph_3wc_red","ph_3wp_star","ph_3wp_green","ph_3wp_amber","ph_3wp_red","ph_4wcs_star","ph_4wcs_green","ph_4wcs_amber","ph_4wcs_red","ph_4wct_star","ph_4wct_green","ph_4wct_amber","ph_4wct_red","fi_dealer_links_3wc","fi_dealer_links_3wp","fi_dealer_links_4wcs","fi_dealer_links_4wct","poc_data","zone_data","state_data","dealer_data"]
+    existing = sheet.row_values(1)
+    if not existing:
+        sheet.append_row(headers)
+    sheet.append_row([snap_dict.get(h, "") for h in headers])
 def api_save_fi_master(d):      upsert_row(ws("FI_Master"),      {"name": d["name"]}, d)
 def api_delete_fi_master(n):    delete_row(ws("FI_Master"),      {"name": n})
 def api_save_dealer_master(d):  upsert_row(ws("Dealer_Master"),  {"dealerName": d["dealerName"], "location": d["location"]}, d)
@@ -221,7 +228,7 @@ class Handler(SimpleHTTPRequestHandler):
                 # Public read-only endpoints (no auth required) for Loan Eligibility standalone
                 PUBLIC_GET = {"/api/fi_master", "/api/dealer_master", "/api/added_dealers",
                               "/api/onboarding", "/api/fi_policy", "/api/fi_policy_geo",
-                              "/api/dealer_health", "/api/ping", "/api/login"}
+                              "/api/dealer_health", "/api/ping", "/api/login", "/api/snapshots"}
                 if path not in PUBLIC_GET:
                     token = self.headers.get("X-Session-Token","")
                     if not validate_session(token):
@@ -236,6 +243,11 @@ class Handler(SimpleHTTPRequestHandler):
                 elif path == "/api/dealer_health":  self.send_json(200, api_get("Dealer_Health"))
                 elif path == "/api/fi_policy_geo":   self.send_json(200, api_get_fi_policy_geo())
                 elif path == "/api/taif":             self.send_json(200, api_get_taif())
+                elif path == "/api/snapshots":
+                    try:
+                        self.send_json(200, api_get("Monthly_Snapshots") or [])
+                    except Exception:
+                        self.send_json(200, [])
                 else:                               self.send_json(404, {"error": f"Unknown: {path}"})
             except Exception as e:
                 traceback.print_exc()
@@ -273,6 +285,7 @@ class Handler(SimpleHTTPRequestHandler):
             elif path == "/api/dealer_health": api_save_dealer_health(body)
             elif path == "/api/fi_policy_geo":   api_save_fi_policy_geo(body)
             elif path == "/api/taif":             api_save_taif(body)
+            elif path == "/api/snapshots":        api_append_snapshot(body); self.send_json(200, {"ok": True})
             else: self.send_json(404, {"error": f"Unknown: {path}"}); return
             self.send_json(200, {"ok": True})
         except Exception as e:
