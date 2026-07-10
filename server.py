@@ -181,9 +181,6 @@ def api_save_dealer_health(d):  upsert_row(ws("Dealer_Health"),  {"dealer": d["d
 def api_get_fi_policy_geo():     return rows_to_dicts(ws("FI_Policy_Geo")) or []
 def api_save_fi_policy_geo(d):  upsert_row(ws("FI_Policy_Geo"), {"financier": d["financier"], "productKey": d["productKey"], "seg": d["seg"], "state": d["state"], "city": d["city"]}, d)
 def api_delete_fi_policy_geo(fi, pk, seg, state, city): delete_row(ws("FI_Policy_Geo"), {"financier": fi, "productKey": pk, "seg": seg, "state": state, "city": city})
-def api_get_taif():             return rows_to_dicts(ws("TA_IF_Status")) or []
-def api_save_taif(d):           upsert_row(ws("TA_IF_Status"), {"dealerCode": d["dealerCode"], "city": d["city"]}, d)
-def api_delete_taif(dealer_code, city): delete_row(ws("TA_IF_Status"), {"dealerCode": dealer_code, "city": city})
 
 # ── HTTP HANDLER ──────────────────────────────────────────────
 class Handler(SimpleHTTPRequestHandler):
@@ -242,7 +239,6 @@ class Handler(SimpleHTTPRequestHandler):
                 elif path == "/api/fi_policy":      self.send_json(200, api_get("FI_Policy"))
                 elif path == "/api/dealer_health":  self.send_json(200, api_get("Dealer_Health"))
                 elif path == "/api/fi_policy_geo":   self.send_json(200, api_get_fi_policy_geo())
-                elif path == "/api/taif":             self.send_json(200, api_get_taif())
                 elif path == "/api/snapshots":
                     try:
                         self.send_json(200, api_get("Monthly_Snapshots") or [])
@@ -284,7 +280,6 @@ class Handler(SimpleHTTPRequestHandler):
             elif path == "/api/fi_policy":     api_save_fi_policy(body)
             elif path == "/api/dealer_health": api_save_dealer_health(body)
             elif path == "/api/fi_policy_geo":   api_save_fi_policy_geo(body)
-            elif path == "/api/taif":             api_save_taif(body)
             elif path == "/api/snapshots":        api_append_snapshot(body); self.send_json(200, {"ok": True})
             else: self.send_json(404, {"error": f"Unknown: {path}"}); return
             self.send_json(200, {"ok": True})
@@ -305,7 +300,6 @@ class Handler(SimpleHTTPRequestHandler):
             elif path == "/api/added_dealers": api_delete_added_dealer(q("dealer"), q("location"))
             elif path == "/api/onboarding":    api_delete_onboarding(q("dealer"), q("location"), q("financier"))
             elif path == "/api/fi_policy_geo":   api_delete_fi_policy_geo(q("financier"), q("productKey"), q("seg"), q("state"), q("city"))
-            elif path == "/api/taif":             api_delete_taif(q("dealerCode"), q("city"))
             else: self.send_json(404, {"error": f"Unknown: {path}"}); return
             self.send_json(200, {"ok": True})
         except Exception as e:
