@@ -561,8 +561,8 @@
   .multi-filter-btn { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px 12px; font-size:12px; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:6px; min-width:120px; user-select:none; }
   .multi-filter-btn:hover { border-color:var(--accent); }
   .multi-filter-btn.active { border-color:var(--accent); background:var(--surface3); }
-  .multi-filter-dropdown { display:none; position:absolute; top:100%; left:0; z-index:200; background:var(--surface3); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow-md); min-width:180px; max-height:260px; overflow-y:auto; padding:6px 0; }
-  .multi-filter-dropdown.open { display:block; }
+  .multi-filter-dropdown { display:none; position:absolute; top:100%; left:0; z-index:200; background:var(--surface3); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow-md); min-width:180px; max-height:260px; overflow:hidden; padding:6px 0; flex-direction:column; }
+  .multi-filter-dropdown.open { display:flex; }
   .multi-filter-item { display:flex; align-items:center; gap:8px; padding:7px 14px; cursor:pointer; font-size:12px; color:var(--text); }
   .multi-filter-item:hover { background:var(--surface2); }
   .multi-filter-item input[type=checkbox] { accent-color:var(--accent); width:14px; height:14px; }
@@ -1560,68 +1560,80 @@
       <div class="page-sub">Track TA/IF status and retail code opening for dealers</div>
     </div>
   </div>
-
-  <!-- Top-level sub-tabs -->
   <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;">
-    <button id="subTabTAIF" onclick="switchTAIFSubTab('taif')"
-      style="padding:8px 20px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid var(--accent);margin-bottom:-2px;background:none;color:var(--accent);cursor:pointer;">
-      TA/IF Status
-    </button>
-    <button id="subTabRetail" onclick="switchTAIFSubTab('retail')"
-      style="padding:8px 20px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;color:var(--text-muted);cursor:pointer;">
-      Retail Code Opening
-    </button>
+    <button id="subTabTAIF" onclick="switchTAIFSubTab('taif')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid var(--accent);margin-bottom:-2px;background:none;color:var(--accent);cursor:pointer;">TA/IF Status</button>
+    <button id="subTabRetail" onclick="switchTAIFSubTab('retail')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;color:var(--text-muted);cursor:pointer;">Retail Code Opening</button>
   </div>
 
-  <!-- TA/IF content -->
   <div id="taifSubContent">
-    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
-      <button id="taifFI_shriram" onclick="switchTAIFFI('shriram')" class="btn btn-primary btn-sm" style="font-size:12px;">Shriram — TA</button>
-      <button id="taifFI_hfcl"   onclick="switchTAIFFI('hfcl')"   class="btn btn-secondary btn-sm" style="font-size:12px;">HFCL — IF</button>
-      <button id="taifFI_ecofy"  onclick="switchTAIFFI('ecofy')"  class="btn btn-secondary btn-sm" style="font-size:12px;">Ecofy — TA</button>
+    <div id="taifFITabBar" style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
+      <button id="taifFIBtn_taif_shriram" onclick="switchTAIFFI('shriram')" class="btn btn-primary btn-sm" style="font-size:12px;">Shriram — TA</button>
+      <button id="taifFIBtn_taif_hfcl"   onclick="switchTAIFFI('hfcl')"   class="btn btn-secondary btn-sm" style="font-size:12px;">HFCL — IF</button>
+      <button id="taifFIBtn_taif_ecofy"  onclick="switchTAIFFI('ecofy')"  class="btn btn-secondary btn-sm" style="font-size:12px;">Ecofy — TA</button>
+      <button onclick="openAddViewModal('taif')" class="btn btn-secondary btn-sm" style="font-size:12px;border-style:dashed;">＋ Add View</button>
     </div>
-    <div id="taifFI_shriram_content"><div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <input type="text" class="search-box" id="taifSearch_shriram_ta" placeholder="Search..." oninput="renderTAIFView_shriram_ta()" style="width:200px;">
-        <span style="font-size:12px;color:var(--text-muted);">20 records</span>
+    <div id="taifFI_shriram_content"><div id="taifFilterBar_shriram_ta"></div>
+      <div style="display:none;"><button onclick="openTAIFRowModal('taif','shriram_ta',null)">＋ Add Row</button>
       </div>
       <div id="taifView_shriram_ta"></div></div>
-    <div id="taifFI_hfcl_content"   style="display:none;"><div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <input type="text" class="search-box" id="taifSearch_hfcl_if" placeholder="Search..." oninput="renderTAIFView_hfcl_if()" style="width:200px;">
-        <span style="font-size:12px;color:var(--text-muted);">31 records</span>
+    <div id="taifFI_hfcl_content"  style="display:none;"><div id="taifFilterBar_hfcl_if"></div>
+      <div style="display:none;"><button onclick="openTAIFRowModal('taif','hfcl_if',null)">＋ Add Row</button>
       </div>
       <div id="taifView_hfcl_if"></div></div>
-    <div id="taifFI_ecofy_content"  style="display:none;"><div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <input type="text" class="search-box" id="taifSearch_ecofy_ta" placeholder="Search..." oninput="renderTAIFView_ecofy_ta()" style="width:200px;">
-        <span style="font-size:12px;color:var(--text-muted);">11 records</span>
+    <div id="taifFI_ecofy_content" style="display:none;"><div id="taifFilterBar_ecofy_ta"></div>
+      <div style="display:none;"><button onclick="openTAIFRowModal('taif','ecofy_ta',null)">＋ Add Row</button>
       </div>
       <div id="taifView_ecofy_ta"></div></div>
   </div>
 
-  <!-- Retail Code content -->
   <div id="retailSubContent" style="display:none;">
-    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
-      <button id="retailFI_hfcl"      onclick="switchRetailFI('hfcl')"      class="btn btn-primary btn-sm" style="font-size:12px;">HFCL</button>
-      <button id="retailFI_amu"       onclick="switchRetailFI('amu')"       class="btn btn-secondary btn-sm" style="font-size:12px;">AMU</button>
-      <button id="retailFI_annapurna" onclick="switchRetailFI('annapurna')" class="btn btn-secondary btn-sm" style="font-size:12px;">Annapurna</button>
+    <div id="retailFITabBar" style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
+      <button id="taifFIBtn_retail_hfcl"      onclick="switchRetailFI('hfcl')"      class="btn btn-primary btn-sm" style="font-size:12px;">HFCL</button>
+      <button id="taifFIBtn_retail_amu"       onclick="switchRetailFI('amu')"       class="btn btn-secondary btn-sm" style="font-size:12px;">AMU</button>
+      <button id="taifFIBtn_retail_annapurna" onclick="switchRetailFI('annapurna')" class="btn btn-secondary btn-sm" style="font-size:12px;">Annapurna</button>
+      <button onclick="openAddViewModal('retail')" class="btn btn-secondary btn-sm" style="font-size:12px;border-style:dashed;">＋ Add View</button>
     </div>
-    <div id="retailFI_hfcl_content"><div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <input type="text" class="search-box" id="taifSearch_hfcl_retail" placeholder="Search..." oninput="renderTAIFView_hfcl_retail()" style="width:200px;">
-        <span style="font-size:12px;color:var(--text-muted);">108 records</span>
-      </div>
+    <div id="retailFI_hfcl_content"><div id="taifFilterBar_hfcl_retail"></div>
+      
       <div id="taifView_hfcl_retail"></div></div>
-    <div id="retailFI_amu_content"       style="display:none;"><div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <input type="text" class="search-box" id="taifSearch_amu_retail" placeholder="Search..." oninput="renderTAIFView_amu_retail()" style="width:200px;">
-        <span style="font-size:12px;color:var(--text-muted);">25 records</span>
-      </div>
+    <div id="retailFI_amu_content"       style="display:none;"><div id="taifFilterBar_amu_retail"></div>
+      
       <div id="taifView_amu_retail"></div></div>
-    <div id="retailFI_annapurna_content" style="display:none;"><div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <input type="text" class="search-box" id="taifSearch_annapurna_retail" placeholder="Search..." oninput="renderTAIFView_annapurna_retail()" style="width:200px;">
-        <span style="font-size:12px;color:var(--text-muted);">28 records</span>
-      </div>
+    <div id="retailFI_annapurna_content" style="display:none;"><div id="taifFilterBar_annapurna_retail"></div>
+      
       <div id="taifView_annapurna_retail"></div></div>
   </div>
-
 </div>
+</div>
+
+<!-- TA/IF Row Edit Modal -->
+<div class="modal-overlay" id="taifRowModalOverlay" style="display:none;">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header"><div class="modal-title" id="taifRowModalTitle">Edit Row</div><button class="modal-close" onclick="closeTAIFRowModal()">✕</button></div>
+    <div class="modal-body" id="taifRowModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeTAIFRowModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTAIFRow()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add View Modal -->
+<div class="modal-overlay" id="addViewModalOverlay" style="display:none;">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header"><div class="modal-title">＋ Add New View</div><button class="modal-close" onclick="closeAddViewModal()">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="addViewSection">
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">View Name <span style="color:var(--flag);">*</span></label>
+        <input type="text" class="form-select" id="addViewName" placeholder="e.g. Axis Bank — TA" onkeydown="if(event.key==='Enter') saveAddView()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAddViewModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAddView()">Add View</button>
+    </div>
+  </div>
 </div>
 <!-- ── ADD/EDIT FINANCIER MODAL ── -->
 <div class="modal-overlay" id="modalOverlay">
@@ -5777,6 +5789,11 @@ document.getElementById("confirmDealerMasterOverlay").addEventListener("click", 
 document.getElementById("fiPolicyModalOverlay").addEventListener("click", function(e) { if (e.target===e.currentTarget) closeFIPolicyModal(); });
 document.getElementById("healthModalOverlay").addEventListener("click", e => { if (e.target===e.currentTarget) closeHealthModal(); });
 document.addEventListener("click", e => {
+  // Close TAIF filter dropdowns on outside click
+  if (!e.target.closest('.multi-filter-wrap')) {
+    document.querySelectorAll('.multi-filter-dropdown.open').forEach(function(d){ d.classList.remove('open'); });
+    document.querySelectorAll('.multi-filter-btn.active').forEach(function(b){ b.classList.remove('active'); });
+  }
   const wrap = document.getElementById("dealerPickerWrap");
   if (wrap && !wrap.contains(e.target)) document.getElementById("dealerPickerDropdown").classList.remove("open");
 });
@@ -5806,2669 +5823,457 @@ document.addEventListener("click", e => {
   document.addEventListener(evt, resetInactivityTimer, { passive: true });
 });
 
-var TAIF_DATA = {
-  "shriram_ta": [
-    {
-      "Sr No": 1,
-      "VF - Rm": "Praveen",
-      "State": "Andhra Pradesh",
-      "City": "Vijayawada",
-      "Dealer Name": "Shree Vrinda Automobiles",
-      "Sales RM": "",
-      "TA or Credit limit": "TA",
-      "Target": 50,
-      "Approved": "",
-      "Status": "Pending from Dealer end",
-      "Remarks": "4/7 - 9/7 : Pending docs list shared with the dealer - TA Request Letter in Letterhead, Udhyam Ceritificate, CRIF Report, GSTR 3B Last 6 Months, Latest 6 months Business account statement, Personal Guarantee Details, Company Profile\n10/7:Complete Docs given to Sriram,they Sanction 25 lacs TA"
-    },
-    {
-      "Sr No": 2,
-      "VF - Rm": "Adil",
-      "State": "Assam",
-      "City": "Dhubri",
-      "Dealer Name": "New SNT Motors",
-      "Sales RM": "",
-      "TA or Credit limit": "TA",
-      "Target": 30,
-      "Approved": "",
-      "Status": "Docs Shared to Shriram Approval pending",
-      "Remarks": "7/7 State Head approval Pending"
-    },
-    {
-      "Sr No": 3,
-      "VF - Rm": "Harsh",
-      "State": "CG",
-      "City": "Bilaspur",
-      "Dealer Name": "Infrafields",
-      "Sales RM": "Sidharatha",
-      "TA or Credit limit": "TA",
-      "Target": 25,
-      "Approved": "",
-      "Status": "Docs shared pending From Credit",
-      "Remarks": "06 July - Checklist shared with Dealer, Documents submission Pending \n08 July - Docs received, email done \n10 July -  Hard copy docs shared vai post, will start the process after Raipur RO receives the docs."
-    },
-    {
-      "Sr No": 4,
-      "VF - Rm": "Harsh",
-      "State": "Haryana",
-      "City": "Rewari",
-      "Dealer Name": "Retro",
-      "Sales RM": "Rachit",
-      "TA or Credit limit": "TA",
-      "Target": 40,
-      "Approved": "",
-      "Status": "Docs shared pending From Credit",
-      "Remarks": "06 July- Query raised from Credit team , List shared to dealer // Provide today \n07 July - Docs forwarded to STFC RBH(Mohan) // He forwarded to credit \n08 July -10 July- Case with Credit all docs shared"
-    },
-    {
-      "Sr No": 5,
-      "VF - Rm": "Harsh",
-      "State": "Haryana",
-      "City": "Faridabad",
-      "Dealer Name": "HKS",
-      "Sales RM": "Amit",
-      "TA or Credit limit": "TA",
-      "Target": 50,
-      "Approved": "",
-      "Status": "Docs pending",
-      "Remarks": "06 July- Query raised from Credit team , List shared to dealer // Provide today\n07 July - Few docs pending, email done to dealer , aranging  \n08 July - BR, PG Pending\n09 July- Sales data of 6 months,BR,PG Pending \n10 July - Docs Pending"
-    },
-    {
-      "Sr No": 6,
-      "VF - Rm": "Rohit",
-      "State": "MH",
-      "City": "Prabhani",
-      "Dealer Name": "Vatsalya Motors",
-      "Sales RM": "",
-      "TA or Credit limit": "TA",
-      "Target": 30,
-      "Approved": 20,
-      "Status": "Docs Shared Disbursment Pending",
-      "Remarks": "Disbusrment pending"
-    },
-    {
-      "Sr No": 7,
-      "VF - Rm": "Rohit",
-      "State": "MH",
-      "City": "CSB Nagar",
-      "Dealer Name": "Eco Wheels",
-      "Sales RM": "",
-      "TA or Credit limit": "TA",
-      "Target": 30,
-      "Approved": 30,
-      "Status": "Docs pending",
-      "Remarks": "09/09 ITR Pending"
-    },
-    {
-      "Sr No": 8,
-      "VF - Rm": "Harsh",
-      "State": "MP",
-      "City": "Jabalpur",
-      "Dealer Name": "Elite",
-      "Sales RM": "Sidharatha",
-      "TA or Credit limit": "TA",
-      "Target": 40,
-      "Approved": "",
-      "Status": "Docs Shared to Shriram Approval pending",
-      "Remarks": "07 July - Case with GMCC , revert awaited \n08 July - 10 July-Credit revert awaited"
-    },
-    {
-      "Sr No": 9,
-      "VF - Rm": "Harsh",
-      "State": "MP",
-      "City": "Indore",
-      "Dealer Name": "Royal Automotive",
-      "Sales RM": "Sidharatha",
-      "TA or Credit limit": "TA",
-      "Target": 25,
-      "Approved": "",
-      "Status": "Docs Shared to Shriram Approval pending",
-      "Remarks": "07 July - Case with GMCC , revert awaited \n08 July  -10 July- Credit revert awaited"
-    },
-    {
-      "Sr No": 10,
-      "VF - Rm": "Rohit",
-      "State": "Odisha",
-      "City": "BBSR",
-      "Dealer Name": "Multire Venture",
-      "Sales RM": "",
-      "TA or Credit limit": "TA",
-      "Target": 30,
-      "Approved": "",
-      "Status": "Docs shared pending From Credit",
-      "Remarks": "from 18th-june appproval is pending\n7 July Sanction Pending"
-    },
-    {
-      "Sr No": 11,
-      "VF - Rm": "Shubham",
-      "State": "Rajasthan",
-      "City": "Jaipur",
-      "Dealer Name": "Rahat",
-      "Sales RM": "Sidharatha",
-      "TA or Credit limit": "TA",
-      "Target": 30,
-      "Approved": "",
-      "Status": "Disbursment received",
-      "Remarks": "Disbursment Received"
-    },
-    {
-      "Sr No": 12,
-      "VF - Rm": "Shubham",
-      "State": "Rajasthan",
-      "City": "Bikaner",
-      "Dealer Name": "Roshan Agency",
-      "Sales RM": "Sidharatha",
-      "TA or Credit limit": "TA",
-      "Target": 30,
-      "Approved": "",
-      "Status": "Pending from Dealer end",
-      "Remarks": "26-06 Checklist shared with Dealer, Documents submission Pending\n09-07 Reminder given to dealer, documentation still pending"
-    },
-    {
-      "Sr No": 13,
-      "VF - Rm": "Praveen",
-      "State": "Tamilnadu",
-      "City": "Chennai",
-      "Dealer Name": "MSJ Motors",
-      "Sales RM": "",
-      "TA or Credit limit": "TA",
-      "Target": 20,
-      "Approved": "",
-      "Status": "Pending from Dealer end",
-      "Remarks": "7/7 : Latest 6 months Sales Data to be provided. Dealer yet to provide"
-    },
-    {
-      "Sr No": 14,
-      "VF - Rm": "Praveen",
-      "State": "Tamilnadu",
-      "City": "Trichy",
-      "Dealer Name": "AJ Electric",
-      "Sales RM": "",
-      "TA or Credit limit": "TA",
-      "Target": 40,
-      "Approved": "",
-      "Status": "Docs shared pending From Credit",
-      "Remarks": "6/7 : Docs submitted by the dealer. File in credit with Shriram Finance\n9/7 : Approved for 25 Lakhs, Need dealer consent for this amount"
-    },
-    {
-      "Sr No": 15,
-      "VF - Rm": "Praveen",
-      "State": "Telangana",
-      "City": "Hyderbad",
-      "Dealer Name": "Pragathi Commercials",
-      "Sales RM": "",
-      "TA or Credit limit": "TA",
-      "Target": 25,
-      "Approved": "",
-      "Status": "Pending from Dealer end",
-      "Remarks": "7/7 -10/7: Docs submitted ealier are not clear. Clear self attested docs to be submitted"
-    },
-    {
-      "Sr No": 16,
-      "VF - Rm": "Harsh",
-      "State": "UP",
-      "City": "Noida",
-      "Dealer Name": "Smart",
-      "Sales RM": "Vikas",
-      "TA or Credit limit": "TA",
-      "Target": 100,
-      "Approved": 50,
-      "Status": "SL Pending",
-      "Remarks": "06 July - Case soft approved \n07 July-  SL expected today\n08 July - Loan Agreement Today\n10 July - File sign done, case with branch for final signoff"
-    },
-    {
-      "Sr No": 17,
-      "VF - Rm": "Rohit",
-      "State": "WB",
-      "City": "Howrah",
-      "Dealer Name": "RNS Green",
-      "Sales RM": "",
-      "TA or Credit limit": "TA",
-      "Target": 30,
-      "Approved": "",
-      "Status": "Docs shared pending From Credit",
-      "Remarks": "Docs shared To Shriram RBH Revert pending, also need to discuss sales regrading for confirmation"
-    },
-    {
-      "Sr No": 18,
-      "VF - Rm": "Rohit",
-      "State": "MH",
-      "City": "Yavatmal",
-      "Dealer Name": "Varma Enterprises",
-      "Sales RM": "Vinay",
-      "TA or Credit limit": "",
-      "Target": 30,
-      "Approved": "",
-      "Status": "Proposal Shared",
-      "Remarks": "Proposal sent, Login by monday"
-    },
-    {
-      "Sr No": 19,
-      "VF - Rm": "Rohit",
-      "State": "MH",
-      "City": "Nagpur",
-      "Dealer Name": "Sahni Infracon",
-      "Sales RM": "Vinay",
-      "TA or Credit limit": "",
-      "Target": 30,
-      "Approved": "",
-      "Status": "Proposal Shared",
-      "Remarks": "Proposal sent, Login by monday"
-    },
-    {
-      "Sr No": 20,
-      "VF - Rm": "Praveen",
-      "State": "Tamilnadu",
-      "City": "Salem",
-      "Dealer Name": "Bharani Motors",
-      "Sales RM": "",
-      "TA or Credit limit": "TA",
-      "Target": 40,
-      "Approved": "",
-      "Status": "",
-      "Remarks": "7/7 : Dosc shared by the dealer. To be reviewed by Shriram"
+var TAIF_DATA = {"shriram_ta": [{"Sr. No.": 1, "State": "Tamilnadu", "City": "Trichy", "Dealer Name": "AJ Electric", "VF RM": "Praveen", "Sales RM": "", "Type": "TA", "Status": "Docs shared pending From Credit", "Remarks": "6/7 : Docs submitted by the dealer. File in credit with Shriram Finance\n9/7 : Approved for 25 Lakhs, Need dealer consent for this amount"}, {"Sr. No.": 2, "State": "Tamilnadu", "City": "Salem", "Dealer Name": "Bharani Motors", "VF RM": "Praveen", "Sales RM": "", "Type": "TA", "Status": "", "Remarks": "7/7 : Dosc shared by the dealer. To be reviewed by Shriram"}, {"Sr. No.": 3, "State": "MH", "City": "CSB Nagar", "Dealer Name": "Eco Wheels", "VF RM": "Rohit", "Sales RM": "", "Type": "TA", "Status": "Docs pending", "Remarks": "09/09 ITR Pending"}, {"Sr. No.": 4, "State": "MP", "City": "Jabalpur", "Dealer Name": "Elite", "VF RM": "Harsh", "Sales RM": "Sidharatha", "Type": "TA", "Status": "Docs Shared to Shriram Approval pending", "Remarks": "07 July - Case with GMCC , revert awaited \n08 July - 10 July-Credit revert awaited"}, {"Sr. No.": 5, "State": "Haryana", "City": "Faridabad", "Dealer Name": "HKS", "VF RM": "Harsh", "Sales RM": "Amit", "Type": "TA", "Status": "Docs pending", "Remarks": "06 July- Query raised from Credit team , List shared to dealer // Provide today\n07 July - Few docs pending, email done to dealer , aranging  \n08 July - BR, PG Pending\n09 July- Sales data of 6 months,BR,PG Pending \n10 July - Docs Pending"}, {"Sr. No.": 6, "State": "CG", "City": "Bilaspur", "Dealer Name": "Infrafields", "VF RM": "Harsh", "Sales RM": "Sidharatha", "Type": "TA", "Status": "Docs shared pending From Credit", "Remarks": "06 July - Checklist shared with Dealer, Documents submission Pending \n08 July - Docs received, email done \n10 July -  Hard copy docs shared vai post, will start the process after Raipur RO receives the docs."}, {"Sr. No.": 7, "State": "Tamilnadu", "City": "Chennai", "Dealer Name": "MSJ Motors", "VF RM": "Praveen", "Sales RM": "", "Type": "TA", "Status": "Pending from Dealer end", "Remarks": "7/7 : Latest 6 months Sales Data to be provided. Dealer yet to provide"}, {"Sr. No.": 8, "State": "Odisha", "City": "BBSR", "Dealer Name": "Multire Venture", "VF RM": "Rohit", "Sales RM": "", "Type": "TA", "Status": "Docs shared pending From Credit", "Remarks": "from 18th-june appproval is pending\n7 July Sanction Pending"}, {"Sr. No.": 9, "State": "Assam", "City": "Dhubri", "Dealer Name": "New SNT Motors", "VF RM": "Adil", "Sales RM": "", "Type": "TA", "Status": "Docs Shared to Shriram Approval pending", "Remarks": "7/7 State Head approval Pending"}, {"Sr. No.": 10, "State": "Telangana", "City": "Hyderbad", "Dealer Name": "Pragathi Commercials", "VF RM": "Praveen", "Sales RM": "", "Type": "TA", "Status": "Pending from Dealer end", "Remarks": "7/7 -10/7: Docs submitted ealier are not clear. Clear self attested docs to be submitted"}, {"Sr. No.": 11, "State": "Rajasthan", "City": "Jaipur", "Dealer Name": "Rahat", "VF RM": "Shubham", "Sales RM": "Sidharatha", "Type": "TA", "Status": "Disbursment received", "Remarks": "Disbursment Received"}, {"Sr. No.": 12, "State": "Haryana", "City": "Rewari", "Dealer Name": "Retro", "VF RM": "Harsh", "Sales RM": "Rachit", "Type": "TA", "Status": "Docs shared pending From Credit", "Remarks": "06 July- Query raised from Credit team , List shared to dealer // Provide today \n07 July - Docs forwarded to STFC RBH(Mohan) // He forwarded to credit \n08 July -10 July- Case with Credit all docs shared"}, {"Sr. No.": 13, "State": "WB", "City": "Howrah", "Dealer Name": "RNS Green", "VF RM": "Rohit", "Sales RM": "", "Type": "TA", "Status": "Docs shared pending From Credit", "Remarks": "Docs shared To Shriram RBH Revert pending, also need to discuss sales regrading for confirmation"}, {"Sr. No.": 14, "State": "Rajasthan", "City": "Bikaner", "Dealer Name": "Roshan Agency", "VF RM": "Shubham", "Sales RM": "Sidharatha", "Type": "TA", "Status": "Pending from Dealer end", "Remarks": "26-06 Checklist shared with Dealer, Documents submission Pending\n09-07 Reminder given to dealer, documentation still pending"}, {"Sr. No.": 15, "State": "MP", "City": "Indore", "Dealer Name": "Royal Automotive", "VF RM": "Harsh", "Sales RM": "Sidharatha", "Type": "TA", "Status": "Docs Shared to Shriram Approval pending", "Remarks": "07 July - Case with GMCC , revert awaited \n08 July  -10 July- Credit revert awaited"}, {"Sr. No.": 16, "State": "MH", "City": "Nagpur", "Dealer Name": "Sahni Infracon", "VF RM": "Rohit", "Sales RM": "Vinay", "Type": "", "Status": "Discussion Initiated", "Remarks": "Proposal sent, Login by monday"}, {"Sr. No.": 17, "State": "Andhra Pradesh", "City": "Vijayawada", "Dealer Name": "Shree Vrinda Automobiles", "VF RM": "Praveen", "Sales RM": "", "Type": "TA", "Status": "Pending from Dealer end", "Remarks": "4/7 - 9/7 : Pending docs list shared with the dealer - TA Request Letter in Letterhead, Udhyam Ceritificate, CRIF Report, GSTR 3B Last 6 Months, Latest 6 months Business account statement, Personal Guarantee Details, Company Profile\n10/7:Complete Docs given to Sriram,they Sanction 25 lacs TA"}, {"Sr. No.": 18, "State": "UP", "City": "Noida", "Dealer Name": "Smart", "VF RM": "Harsh", "Sales RM": "Vikas", "Type": "TA", "Status": "SL Pending", "Remarks": "06 July - Case soft approved \n07 July-  SL expected today\n08 July - Loan Agreement Today\n10 July - File sign done, case with branch for final signoff"}, {"Sr. No.": 19, "State": "MH", "City": "Yavatmal", "Dealer Name": "Varma Enterprises", "VF RM": "Rohit", "Sales RM": "Vinay", "Type": "", "Status": "Discussion Initiated", "Remarks": "Proposal sent, Login by monday"}, {"Sr. No.": 20, "State": "MH", "City": "Prabhani", "Dealer Name": "Vatsalya Motors", "VF RM": "Rohit", "Sales RM": "", "Type": "TA", "Status": "Docs Shared Disbursment Pending", "Remarks": "Disbusrment pending"}], "hfcl_if": [{"Sr. No.": 1, "State": "Assam", "City": "Guwahati", "Dealer Name": "Adhinath Carriers", "VF RM": "Adil Noush", "Sales RM": "Subesh", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Not interested"}, {"Sr. No.": 2, "State": "Maharashtra", "City": "Nagpur", "Dealer Name": "AK Sahni Infracon", "VF RM": "Rohit Singh", "Sales RM": "Vinay", "Type": "IF", "Status": "Docs Shared HFCL", "Remarks": "06/07 List of documents shared with Dealer, Documents Pending for Process                                          07/07 ( Follow to be sent by rohit 08/09 loan application form is pending rest is completed\nDocuments shared with HFCL 09/09 All docs submited pending from HFCL"}, {"Sr. No.": 3, "State": "Jammu and Kashmir", "City": "Srinagar", "Dealer Name": "Autowings EV", "VF RM": "Shubham", "Sales RM": "Rachit", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Discussed with Sales RM, he mentioned that TA is not needed"}, {"Sr. No.": 4, "State": "Uttar Pradesh", "City": "G. Noida", "Dealer Name": "Bhutani AutoCorp", "VF RM": "Raj Dwivedi", "Sales RM": "Vikas", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "DP has IF from SBI"}, {"Sr. No.": 5, "State": "Uttrakhand", "City": "Dehradun", "Dealer Name": "Doon Motors", "VF RM": "Shubham", "Sales RM": "Rachit", "Type": "IF", "Status": "Discussion Initiated", "Remarks": "Discussed with Sales RM, he mentioned that TA is not needed"}, {"Sr. No.": 6, "State": "Delhi", "City": "W. Delhi", "Dealer Name": "Ecoedge Enterprises", "VF RM": "Raj Dwivedi", "Sales RM": "vikas", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Not interested"}, {"Sr. No.": 7, "State": "Uttar Pradesh", "City": "Lucknow", "Dealer Name": "Ecoedge Enterprises", "VF RM": "Adil Noush", "Sales RM": "Subesh", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Not interested"}, {"Sr. No.": 8, "State": "Kerala", "City": "Kochi", "Dealer Name": "EVM", "VF RM": "Praveen Kumar", "Sales RM": "Amitabh", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Dlr yet to confirm"}, {"Sr. No.": 9, "State": "Haryana", "City": "Faridabad", "Dealer Name": "HKS Automobiles", "VF RM": "Raj Dwivedi", "Sales RM": "Amit Vishwkarma", "Type": "IF", "Status": "SL Received but Disbursment pending", "Remarks": "06/07 Disbursement Pending \n07July-10 July- Disbursement Pending"}, {"Sr. No.": 10, "State": "Karnataka", "City": "Bangalore", "Dealer Name": "Indhu India Motors", "VF RM": "Praveen Kumar", "Sales RM": "Amitabh", "Type": "IF", "Status": "Docs Pending", "Remarks": "Dlr not willing to avail CF"}, {"Sr. No.": 11, "State": "Uttar Pradesh", "City": "Varanasi", "Dealer Name": "Krishna Auto Sales", "VF RM": "Adil Noush", "Sales RM": "Subesh", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Not interested"}, {"Sr. No.": 12, "State": "Chhattisgarh", "City": "Raipur", "Dealer Name": "Maple Drive Pvt Ltd", "VF RM": "Raj Dwivedi", "Sales RM": "Siddharth", "Type": "IF", "Status": "Docs Pending", "Remarks": "06/07-Docs Pending                                                                                                                            07/07-Confirmation received today Docs Awaited Mail to be shared to dealer \n08/07-Docs pending \n09/07- Docs Pending \n10/07- Docs pending"}, {"Sr. No.": 13, "State": "Tamil Nadu", "City": "Chennai", "Dealer Name": "MSJ Motors", "VF RM": "Praveen Kumar", "Sales RM": "Arup", "Type": "IF", "Status": "Docs Pending", "Remarks": "06/07 Dealer Networth Ceritifcate, Tax Audit Report FY 24 pending                                                                07/07 Follow up mail Sent by praveen 08/09 still docs not received, 10/07 - Still docs pending CA is not well con call done with the dealer along with the RM"}, {"Sr. No.": 14, "State": "Odisha", "City": "Bhubaneshwar", "Dealer Name": "Multire Ventures", "VF RM": "Rohit Singh", "Sales RM": "Subesh", "Type": "IF", "Status": "Docs Shared HFCL", "Remarks": "06/07 We have received sanction confirmation on 15 lakhs, dealer will confirm 07/07 ( As per the discussion with RM and dealer They will confirm once they will get the clarity, 09/07 \nDealer will confirm for 15 lakhs sanction, 10/-7 Will take the final decision"}, {"Sr. No.": 15, "State": "Telangana", "City": "Hyderabad", "Dealer Name": "Pragati Commercials", "VF RM": "Praveen Kumar", "Sales RM": "No RM Available", "Type": "IF", "Status": "Docs Pending", "Remarks": "06/07 Dlr yet to submit the documents - Filled Application form, Masked Aadhar Card, Existing loan details, Networth Certficate of Shravani Reddy, Aksheta Reddy, Sucharitha Reddy all the Partners, Latest Partnership Deed, Partners Profit Sharing ratio on Letterhead, ITR - FY 25, Provisional Financials - FY 26, Monthwise Sales Data, Details of all Credit facilities availed, Latest Udhyam Ceritificate, Bank Statment from 1st Dec 2025 till 31 May 2026\n07/07 Still document pending Follow up mail Sent By praveen 08/07 - 09/07 Still docs not received mail sent on 7th , 10/07 Follow up call will be done today"}, {"Sr. No.": 16, "State": "Rajasthan", "City": "Jaipur", "Dealer Name": "Rahat Automotive", "VF RM": "Shubham", "Sales RM": "Siddharth", "Type": "IF", "Status": "Docs Pending", "Remarks": "06/07 Discussion done with Dealer Along with the TM,07/07 - Shubham will share the docs list (via email) to the Dealer\n09-07 - Reminded again to DP for Documentation he confirmed to complete by tommorow EOD\n10/07 Still docs pending"}, {"Sr. No.": 17, "State": "Madhya Pradesh", "City": "Bhopal", "Dealer Name": "RND Electrik", "VF RM": "Raj Dwivedi", "Sales RM": "Siddharth", "Type": "IF", "Status": "Discussion Initiated", "Remarks": "08/07- Intro email done, Docs awaited \n10/07 - Docs awaited"}, {"Sr. No.": 18, "State": "West Bengal", "City": "Kolkata (Howrah)", "Dealer Name": "RNS Green", "VF RM": "Rohit Singh", "Sales RM": "Arup", "Type": "IF", "Status": "Hold,DL Closed or RM Deny", "Remarks": "Under Discussion with Sales"}, {"Sr. No.": 19, "State": "Madhya Pradesh", "City": "Indore", "Dealer Name": "Shilaka Enterprises", "VF RM": "Raj Dwivedi", "Sales RM": "Siddharth", "Type": "IF", "Status": "Hold,DL Closed or RM Deny", "Remarks": "Dealer Closed"}, {"Sr. No.": 20, "State": "Uttar Pradesh", "City": "Agra 2", "Dealer Name": "Shree Balaji Automobiles", "VF RM": "Raj Dwivedi", "Sales RM": "Rachit", "Type": "IF", "Status": "Discussion Initiated", "Remarks": "(Rachit Sent a mail to dealer on 22nd June and then on 27th June and latest email was done by Raj on 7th July)  \n07/07 Docs Pending                                                                       08/07 Reminder email done to dealer, docs awaited, \n10/07 will be confirm today"}, {"Sr. No.": 21, "State": "Andhra Pradesh", "City": "Vijayawada", "Dealer Name": "Shree Vrinda Automobiles", "VF RM": "Praveen Kumar", "Sales RM": "Amitabh", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Dealer need time to decide, Since he is going to avail TA in Shriram and recently got CF funding from Ecofy"}, {"Sr. No.": 22, "State": "Delhi", "City": "S. Delhi - Okhla", "Dealer Name": "Sincere Marketing", "VF RM": "Raj Dwivedi", "Sales RM": "vikas", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "ROi Is too high , interested in Bank only"}, {"Sr. No.": 23, "State": "Andhra Pradesh", "City": "Vizag", "Dealer Name": "Siva Sai PVR Motors", "VF RM": "Praveen Kumar", "Sales RM": "No RM Available", "Type": "IF", "Status": "Rejected", "Remarks": "06/07 Rejected since Dealer do not have business vintage. Rental income wont be considered"}, {"Sr. No.": 24, "State": "Uttar Pradesh", "City": "Ghaziabad", "Dealer Name": "Smart Solution", "VF RM": "Raj Dwivedi", "Sales RM": "vikas", "Type": "IF", "Status": "Disbursed", "Remarks": "Disbursment done on 07 July 79,20,000"}, {"Sr. No.": 25, "State": "Uttar Pradesh", "City": "Noida", "Dealer Name": "Smart Solution - Noida", "VF RM": "Raj Dwivedi", "Sales RM": "Vikas", "Type": "IF", "Status": "Disbursed", "Remarks": "Disbursment done on 07 July 79,20,000"}, {"Sr. No.": 26, "State": "Delhi", "City": "E. Delhi", "Dealer Name": "Smart Solution -ED", "VF RM": "Raj Dwivedi", "Sales RM": "vikas", "Type": "IF", "Status": "Disbursed", "Remarks": "Disbursment done on 07 July 79,20,000"}, {"Sr. No.": 27, "State": "Tamil Nadu", "City": "Coimbatore 2", "Dealer Name": "SS Motors", "VF RM": "Praveen Kumar", "Sales RM": "Arup", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "DEALER NOT INTERESTED IN CF SINCE THE INTEREST RATE IS HIGH"}, {"Sr. No.": 28, "State": "Haryana", "City": "Gurgaon", "Dealer Name": "Techup Consulting", "VF RM": "Raj Dwivedi", "Sales RM": "Vikas", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "DP has IF from SBI"}, {"Sr. No.": 29, "State": "Tamil Nadu", "City": "Chennai 2", "Dealer Name": "The Empire", "VF RM": "Praveen Kumar", "Sales RM": "Arup", "Type": "IF", "Status": "Docs Pending", "Remarks": "06/07 Only KYC Documents sent rest is pending \n07/07 Reminder mail sent to dealer - Discussed with RM : Dealer has sufficient funds"}, {"Sr. No.": 30, "State": "Tamil Nadu", "City": "Tirupur", "Dealer Name": "Ultimate Vehicles", "VF RM": "Praveen Kumar", "Sales RM": "Arup", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "DEALER NOT INTERESTED IN CF SINCE THE INTEREST RATE IS HIGH"}, {"Sr. No.": 31, "State": "Uttar Pradesh", "City": "Agra", "Dealer Name": "Vishal Agencies", "VF RM": "Raj Dwivedi", "Sales RM": "Rachit", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Not interested"}], "ecofy_ta": [{"Sr. No.": 1, "State": "", "City": "", "Dealer Name": "ECO WHEELS AUTOMOTIVE", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32602103086 | Limit: ₹4008756 | POS: ₹3078296 | Avail: ₹930460 | Exp: 28 Feb 2027"}, {"Sr. No.": 2, "State": "", "City": "", "Dealer Name": "ECOEDGE ENTERPRISES PRIVATE LIMITED", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32601102881 | Limit: ₹10000000 | POS: ₹- | Avail: ₹10000000 | Exp: 24 Jan 2027"}, {"Sr. No.": 3, "State": "", "City": "", "Dealer Name": "HKS AUTOMOBILES PRIVATE LIMITED", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32601102859 | Limit: ₹5013772 | POS: ₹4978068 | Avail: ₹35704 | Exp: 21 Jan 2027"}, {"Sr. No.": 4, "State": "", "City": "", "Dealer Name": "Infra Field", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Pending", "Remarks": "LAN:  | Limit: ₹ | POS: ₹ | Avail: ₹ | Exp: "}, {"Sr. No.": 5, "State": "", "City": "", "Dealer Name": "M S J Motors", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32601102913 | Limit: ₹4516446 | POS: ₹4129984 | Avail: ₹386462 | Exp: 30 Jan 2027"}, {"Sr. No.": 6, "State": "", "City": "", "Dealer Name": "SHREE VRINDA AUTOMOBILES", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Sanctioned", "Remarks": "LAN: - | Limit: ₹3500000 | POS: ₹- | Avail: ₹- | Exp: "}, {"Sr. No.": 7, "State": "", "City": "", "Dealer Name": "Shrey Enterprises", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Sanctioned", "Remarks": "LAN: Hold | Limit: ₹3000000 | POS: ₹ | Avail: ₹ | Exp: "}, {"Sr. No.": 8, "State": "", "City": "", "Dealer Name": "SKRB AUTOMOBILITY PRIVATE LIMITED", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32602102992 | Limit: ₹4512951 | POS: ₹4467141 | Avail: ₹45810 | Exp: 14 Feb 2027"}, {"Sr. No.": 9, "State": "", "City": "", "Dealer Name": "SKYJUMP SOLUTIONS PRIVATE LIMITED", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32603103331 | Limit: ₹3012698 | POS: ₹2729599 | Avail: ₹283099 | Exp: 31 Mar 2027"}, {"Sr. No.": 10, "State": "", "City": "", "Dealer Name": "SMART SOLUTION", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32510102497 | Limit: ₹4995000 | POS: ₹4775050 | Avail: ₹219950 | Exp: 30 Oct 2026"}, {"Sr. No.": 11, "State": "", "City": "", "Dealer Name": "THE EMPIRE", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32603103105 | Limit: ₹1503155 | POS: ₹1491282 | Avail: ₹11873 | Exp: 05 Mar 2027"}], "hfcl_retail": [{"Sr. No.": 1, "State": "TN", "City": "Trichy", "Dealer Name": "AJ Electric", "VF SPOC": "Sharan", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 2, "State": "TN", "City": "Tenkasi", "Dealer Name": "AJ Electric", "VF SPOC": "Sharan", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 3, "State": "Rajasthan", "City": "Jaipur", "Dealer Name": "Akar Fourwheels", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 4, "State": "Madhya Pradesh", "City": "Rajgarh", "Dealer Name": "Anand Green Biotech Energy Pvt Ltd", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 5, "State": "Uttar Pradesh", "City": "Bareilly", "Dealer Name": "Aneja Transport", "VF SPOC": "Harsh", "Status": "27 June - Docs sent to HFCL over email \n01 - 10 July  - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 6, "State": "AP", "City": "Kurnool", "Dealer Name": "Anirudh Automobiles", "VF SPOC": "Durgaprasad", "Status": "Code created as per HFLC", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 7, "State": "Rajasthan", "City": "Bharatpur", "Dealer Name": "Arya Enterprises", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 8, "State": "MH", "City": "Baramati", "Dealer Name": "Ashwamedh Automotive", "VF SPOC": "Rohit", "Status": "Documents shared, Dealer code in Process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 9, "State": "J&K", "City": "Srinagar", "Dealer Name": "Auto Wings", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 10, "State": "TN", "City": "Kallakuruchi", "Dealer Name": "Bharani Motors", "VF SPOC": "Sharan", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 11, "State": "TN", "City": "Salem", "Dealer Name": "Bharani Motors", "VF SPOC": "Sharan", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 12, "State": "BR", "City": "Purnea", "Dealer Name": "Bharat Auto", "VF SPOC": "Adil", "Status": "Docs shared to HFCL on 9 June\n7/7-10/7 Expecting code within this week", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 13, "State": "Uttar Pradesh", "City": "Greater Noida", "Dealer Name": "Bhutani Autocorp", "VF SPOC": "Harsh", "Status": "07 July - Partners authority letter, Dealer Empanelment form pending from dealer end \n08 July -10 July- Partner sign pending on authority letter, Patner lives in Ludhiana, he will share by post by Monday 13July", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 14, "State": "AS", "City": "Goalpara", "Dealer Name": "Brave Riders", "VF SPOC": "Adil", "Status": "7/7-10/7 TC Awaited", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 15, "State": "BR", "City": "Patna", "Dealer Name": "COCO", "VF SPOC": "Adil", "Status": "7/7-10/7 MH code is in process- Post that other COCO will also get live- With reference to that", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 16, "State": "Chandigarh", "City": "Chandigarh", "Dealer Name": "COCO", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 17, "State": "JH", "City": "Ranchi", "Dealer Name": "COCO", "VF SPOC": "Adil", "Status": "7/7-10/7  MH code is in process- Post that other COCO will also get live- With reference to that", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 18, "State": "Delhi", "City": "Delhi", "Dealer Name": "COCO_Delhi", "VF SPOC": "Harsh", "Status": "Docs pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 19, "State": "Punjab", "City": "Ludiana", "Dealer Name": "DC Energies", "VF SPOC": "Shubham", "Status": "07-07-HFCL Manpower alligned, Documents collection pending \n09-07 HFCL Executive Visit alligned for today to complete the documetation", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 20, "State": "MH", "City": "akola", "Dealer Name": "Deepintel Globle Ventures", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 21, "State": "Dehradun", "City": "Dehradun", "Dealer Name": "Doon Motors", "VF SPOC": "Shubham", "Status": "07-07 E-Sign Pending at dealer end\n09-07 E-sign Sign Complete, Code will be created in 48 Hours confirmed by HFCl TM", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 22, "State": "BR", "City": "Dharbhanga", "Dealer Name": "Eco electric", "VF SPOC": "Adil", "Status": "7/7-10/7  HFCL not operational- Still pushing to open dealer code", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 23, "State": "MH", "City": "CSB Nagar", "Dealer Name": "Eco Wheels", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 24, "State": "UP", "City": "Lucknow", "Dealer Name": "Ecoedge", "VF SPOC": "Adil", "Status": "7/7-10/7  BR pending from 27 June", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 25, "State": "Delhi", "City": "W. Delhi", "Dealer Name": "Ecoedge Enterprises", "VF SPOC": "Harsh", "Status": "07 July - Email Done Docs pending from Dealer End \n08 July - Docs Still pending \n10 July - Email Done,docs still Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 26, "State": "Haryana", "City": "Sonipat", "Dealer Name": "Ecoedge Enterprises", "VF SPOC": "Harsh", "Status": "07 July - Email Done Docs pending from Dealer End \n08 July - Docs Still pending \n10 July - Email Done,docs still Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 27, "State": "TN", "City": "Tiruvanamalai", "Dealer Name": "Elektro Orbit", "VF SPOC": "Sharan", "Status": "7/7 ;Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 28, "State": "TN", "City": "Vellore", "Dealer Name": "Elektro Orbit", "VF SPOC": "Sharan", "Status": "7/7 ;Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 29, "State": "Madhya Pradesh", "City": "Jabalpur", "Dealer Name": "Elite Motors", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 30, "State": "KL", "City": "Trivandrum", "Dealer Name": "EVM Automobiles", "VF SPOC": "Anil", "Status": "HFCL do not have manpower", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 31, "State": "KL", "City": "Cochin", "Dealer Name": "EVM Automobiles", "VF SPOC": "Anil", "Status": "HFCL do not have manpower", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 32, "State": "KL", "City": "Calicut", "Dealer Name": "EVM Automobiles", "VF SPOC": "Anil", "Status": "HFCL do not have manpower", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 33, "State": "JH", "City": "Ranchi", "Dealer Name": "Evtria", "VF SPOC": "Adil", "Status": "Docs shared on 15 June\n7/7 Still impanelment in process. Docs Shared again\n9/7 - Mail Topup given", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 34, "State": "AP", "City": "Tirupathi", "Dealer Name": "Garuda EV", "VF SPOC": "Durgaprasad", "Status": "Code created as per HFLC", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 35, "State": "TN", "City": "Madurai", "Dealer Name": "Gee Motors", "VF SPOC": "Sharan", "Status": "9/7 : All docx pending from dealer, mail sent", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 36, "State": "Delhi", "City": "North Delhi", "Dealer Name": "Green Stone", "VF SPOC": "Harsh", "Status": "29 June - Docs sent to HFCL over email \n01 - 10 July  - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 37, "State": "UP", "City": "Gorakhpur", "Dealer Name": "Hanumant\n Enterprises", "VF SPOC": "Adil", "Status": "Impanelment form pending from 25th June\n7/7-10/7  Still impanelment in process", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 38, "State": "Rajasthan", "City": "Jodhpur", "Dealer Name": "Himmat Jai Automotive", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 39, "State": "Haryana", "City": "Faridabad", "Dealer Name": "HKS Automobiles", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 40, "State": "KA", "City": "Hubballi", "Dealer Name": "Indhu India Motors Pvt. ltd.", "VF SPOC": "Anil", "Status": "June : All docs Submitted, Code creation under process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 41, "State": "KA", "City": "Bengaluru", "Dealer Name": "Indu India", "VF SPOC": "Anil", "Status": "June : All docs Submitted, Code creation under process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 42, "State": "Chhattisgarh", "City": "Bilaspur", "Dealer Name": "Infrafield Services", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 43, "State": "AS", "City": "GHY", "Dealer Name": "Kothari Euler", "VF SPOC": "Adil", "Status": "Docs shared to HFCL on 11 June\n7/7-10/7 Assam spoc needed in HFCL", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 44, "State": "UP", "City": "Varanasi", "Dealer Name": "Krishna Auto", "VF SPOC": "Adil", "Status": "DAR10032", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 45, "State": "KA", "City": "Bengaluru", "Dealer Name": "KVR Constructions", "VF SPOC": "Anil", "Status": "June : All docs Submitted, Code creation under process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 46, "State": "GJ", "City": "Bharuch", "Dealer Name": "Madhav Vehicles", "VF SPOC": "Rohit", "Status": "On hold", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 47, "State": "Madhya Pradesh", "City": "Katni", "Dealer Name": "Manvik Enterprises", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 48, "State": "Chhattisgarh", "City": "Raipur", "Dealer Name": "Maple Drive Pvt Ltd", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 49, "State": "UP", "City": "Lucknow", "Dealer Name": "MG Road Link", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 50, "State": "Uttar Pradesh", "City": "Etawah", "Dealer Name": "Mishra Commercials", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 51, "State": "GJ", "City": "Somnath", "Dealer Name": "Moddeshwary Motors", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 52, "State": "UP", "City": "Lakhimpur", "Dealer Name": "Momentum Point", "VF SPOC": "Adil", "Status": "8/7 Code expecting by EOD\n8/7 Code created", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 53, "State": "TN", "City": "Chennai", "Dealer Name": "MSJ Motors", "VF SPOC": "Sharan", "Status": "7/7 : Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 54, "State": "OD", "City": "BBSR", "Dealer Name": "Multire Venture", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 55, "State": "TR", "City": "Agartala", "Dealer Name": "Nag Automobiles", "VF SPOC": "Adil", "Status": "7/7-10/7 TC Awaited", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 56, "State": "Rajasthan", "City": "Sikar", "Dealer Name": "NRK Motors", "VF SPOC": "Shubham", "Status": "02-07 Docs shared to HFCL\n10-07 E-sign Mail initiation pending from HFCL End", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 57, "State": "AS", "City": "Golaghat", "Dealer Name": "OP Motors", "VF SPOC": "Adil", "Status": "Docs collected on 5 July\n7/7 Verifying the docs will share tomorrow\n8/7 docs shared\n9/7- 10/7 team said 2 wheeler team will revert", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 58, "State": "Haryana", "City": "Jhajjar", "Dealer Name": "Param Automobiles", "VF SPOC": "Harsh", "Status": "25 June - Docs sent to HFCL over email \n01 - 10 July  - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 59, "State": "Uttar Pradesh", "City": "Aligarh", "Dealer Name": "Plan Bee", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 60, "State": "TS", "City": "Hyderabad", "Dealer Name": "Pragathi commercial", "VF SPOC": "Anil", "Status": "9/7 : All docs Submitted, Code creation under process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 61, "State": "Rajasthan", "City": "Jaipur", "Dealer Name": "Rahat Automotive", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 62, "State": "Uttar Pradesh", "City": "Moradabad", "Dealer Name": "Rajpoot Automobiles", "VF SPOC": "Harsh", "Status": "07 July - Dealer partner authority letter signature pending, partner out of station\n08 July - Dealer will come back by 14th, Patner sign on authority letter pending \n10 July - Docs Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 63, "State": "Haryana", "City": "Kosli (Rewari)", "Dealer Name": "Retro Automobiles LLP", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 64, "State": "GJ", "City": "Gandhidham", "Dealer Name": "Rising Ladders", "VF SPOC": "Rohit", "Status": "KYC, GST, MSME received, remaining pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 65, "State": "Madhya Pradesh", "City": "Bhopal", "Dealer Name": "RND Electrik", "VF SPOC": "Harsh", "Status": "06 July - All docs complete, shared with HFCL\n07 - 10 July - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 66, "State": "WB", "City": "Howrah", "Dealer Name": "RNS Green", "VF SPOC": "Rohit", "Status": "Documents shared with HFCL, HCL manpower not there", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 67, "State": "Rajasthan", "City": "Bikaner", "Dealer Name": "Roshan Motora", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 68, "State": "Madhya Pradesh", "City": "Indore", "Dealer Name": "Royal Automobile", "VF SPOC": "Harsh", "Status": "9 - 10 July - Documents shared , Dealer code in Process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 69, "State": "Rajasthan", "City": "Udaipur", "Dealer Name": "Rudra Motors", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 70, "State": "MH", "City": "Nagpur", "Dealer Name": "Sahni Infracon", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 71, "State": "MH", "City": "Chandrapur", "Dealer Name": "Sahni Infracon", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 72, "State": "Uttar Pradesh", "City": "Meerut", "Dealer Name": "Satinpod Global Service", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 73, "State": "BR", "City": "Muzaffarpur", "Dealer Name": "Saumya Motors", "VF SPOC": "Adil", "Status": "Docs shared to HFCL on 9 June\n7/7-10/7 Expecting code within this week", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 74, "State": "AP", "City": "Ongole", "Dealer Name": "SHAAKTII ELITE POWER\n SOLUTIONS PVT. LTD.", "VF SPOC": "Durgaprasad", "Status": "HFCL is not operational", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 75, "State": "Uttar Pradesh", "City": "Agra 2", "Dealer Name": "Shree Balaji Automobiles", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 76, "State": "J&K", "City": "Jammu", "Dealer Name": "Shree Motors", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 77, "State": "AP", "City": "Nellore", "Dealer Name": "Shree Vrinda Automobiles", "VF SPOC": "Durgaprasad", "Status": "8/7 : All docs shared, Code pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 78, "State": "AP", "City": "Vijayawada", "Dealer Name": "Shree Vrinda Automobiles", "VF SPOC": "Durgaprasad", "Status": "8/7 : All docs shared, Code pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 79, "State": "Uttar Pradesh", "City": "Mathura", "Dealer Name": "Shreya Enterprises", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 80, "State": "Delhi", "City": "Okhla", "Dealer Name": "Sincere Marketing", "VF SPOC": "Harsh", "Status": "07 July - Docs Pending, list shared \n08 July - Docs received today, shared with HFCL\n10 July - Docs shared with Sameer", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 81, "State": "Rajasthan", "City": "Chittorgarh", "Dealer Name": "Sisodia Automobile Pvt Ltd", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 82, "State": "AP", "City": "Vizag", "Dealer Name": "Siva Sai P V R Motors", "VF SPOC": "Durgaprasad", "Status": "8/7 : Passport size photo and PAL is pending\n9/7 : All docs submitted", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 83, "State": "UP", "City": "Kanpur", "Dealer Name": "SKRB", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 84, "State": "MH", "City": "Dhule & Jalgon", "Dealer Name": "Sky Jump Solutions", "VF SPOC": "Rohit", "Status": "Documents shared, Dealer code in Process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 85, "State": "Delhi", "City": "Jhagirpuri", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 86, "State": "Delhi", "City": "E. Delhi", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 87, "State": "Uttar Pradesh", "City": "Ghaziabad", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 88, "State": "Uttar Pradesh", "City": "Noida", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 89, "State": "AS", "City": "Dhubri", "Dealer Name": "SNT Motors", "VF SPOC": "Adil", "Status": "Docs shared to HFCL on 26 June\n7/7-10/7  Assam spoc needed in HFCL", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 90, "State": "TN", "City": "Hosur", "Dealer Name": "Sri Mahalaxmee Agri and Construction Equipment", "VF SPOC": "Anil", "Status": "10/7 : Dealership inaguration is scheduled on 13/07", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 91, "State": "WB", "City": "Siliguri", "Dealer Name": "Sri RS Vistar Ventures", "VF SPOC": "Rohit", "Status": "Documents shared with HFCL, HCL manpower not there", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 92, "State": "UP", "City": "Prayagraj", "Dealer Name": "SS Enterprises", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 93, "State": "TN", "City": "Coimbatore", "Dealer Name": "SS Motors", "VF SPOC": "Sharan", "Status": "7/7 ;Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 94, "State": "TS", "City": "Nizamabad", "Dealer Name": "SSM Motors", "VF SPOC": "Anil", "Status": "Dealer Code issued, HFCL Manpower not present", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 95, "State": "Chhattisgarh", "City": "Ambikapur", "Dealer Name": "Sulaxmi Automobiles", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 96, "State": "Madhya Pradesh", "City": "Ujjain", "Dealer Name": "Swastik Enterprises", "VF SPOC": "Harsh", "Status": "9 - 10 July - EKYC pending from Dealer end (Dealer is out of India)", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 97, "State": "Rajasthan", "City": "Banswara", "Dealer Name": "Taiyyab Motors", "VF SPOC": "Shubham", "Status": "07-07 Masked Aadhar pending, Rest documents have been completed\n08-07 Visited Banswara met DP asked to share Masked Aadhar will be following up for the same", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 98, "State": "Haryana", "City": "Gurgaon", "Dealer Name": "Techup Consulting", "VF SPOC": "Harsh", "Status": "26 June - Docs sent to HFCL over email \n01 - 10July  - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 99, "State": "TN", "City": "Chennai", "Dealer Name": "The Empire", "VF SPOC": "Sharan", "Status": "7/7 ;Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 100, "State": "JH", "City": "Dumka", "Dealer Name": "TKG", "VF SPOC": "Adil", "Status": "HFCL not operational- Still pushing to open dealer code\n7/7-10/7 Same status", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 101, "State": "TN", "City": "Tiruppur", "Dealer Name": "Ultimate Vehicles", "VF SPOC": "Sharan", "Status": "7/7 ;Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 102, "State": "MH", "City": "Yavatmal", "Dealer Name": "Varma Emterprises", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 103, "State": "MH", "City": "Daund", "Dealer Name": "Varsha Motors", "VF SPOC": "Rohit", "Status": "Documents shared, Dealer code in Process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 104, "State": "MH", "City": "Prabhani", "Dealer Name": "Vatsalya Motors", "VF SPOC": "Rohit", "Status": "Sign stamp Pending on documents", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 105, "State": "KA", "City": "Bijapur", "Dealer Name": "Vijay Business Ventures LLP", "VF SPOC": "Anil", "Status": "10/7 : Dealership yet to start business operations", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 106, "State": "Uttar Pradesh", "City": "Agra", "Dealer Name": "Vishal Agencies", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 107, "State": "WB", "City": "Durgapur", "Dealer Name": "Volt Wheels", "VF SPOC": "Rohit", "Status": "Documents shared with HFCL, HCL manpower not there", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 108, "State": "Haryana", "City": "Kurukshetra", "Dealer Name": "VPS Motors", "VF SPOC": "Harsh", "Status": "24 June - Docs sent over email \n01 - 10 July  - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}], "amu_retail": [{"Sr. No.": 1, "State": "Bihar", "City": "Patna", "Dealer Name": "Anand Automobiles", "VF SPOC": "Adil", "Status": "10/7 RBH  will visit the dealer - Today.", "Disbursement Status": "No", "Remarks": "10/7 RBH  will visit the dealer - Today."}, {"Sr. No.": 2, "State": "Madhya Pradesh", "City": "Gwalior", "Dealer Name": "Art of Awadh", "VF SPOC": "Raj", "Status": "Dealer closed", "Disbursement Status": "No", "Remarks": "Dealer closed"}, {"Sr. No.": 3, "State": "Uttar Pradesh", "City": "Lucknow", "Dealer Name": "COCO_Lucknow", "VF SPOC": "Adil", "Status": "7/7-10/7 The financier also requires Saurabh \nSir's mother's KYC documents to open the code.", "Disbursement Status": "No", "Remarks": "7/7-10/7 The financier also requires Saurabh \nSir's mother's KYC documents to open the code."}, {"Sr. No.": 4, "State": "Bihar", "City": "Patna", "Dealer Name": "COCO_Patna", "VF SPOC": "Adil", "Status": "7/7-8/7  Waiting- RBH response for code\n9/7 RBH saying- Give me some time for COCO code.", "Disbursement Status": "No", "Remarks": "7/7-8/7  Waiting- RBH response for code\n9/7 RBH saying- Give me some time for COCO code."}, {"Sr. No.": 5, "State": "Uttrakhand", "City": "Dehradun", "Dealer Name": "Doon Motors", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 6, "State": "Uttar Pradesh", "City": "Lucknow", "Dealer Name": "Ecoedge Enterprises", "VF SPOC": "Adil", "Status": "7/7-10/7  Autorisation letter pending. Dealer end.", "Disbursement Status": "No", "Remarks": "7/7-10/7  Autorisation letter pending. Dealer end."}, {"Sr. No.": 7, "State": "Madhya Pradesh", "City": "Jabalpur", "Dealer Name": "Elite Motors", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 8, "State": "Uttar Pradesh", "City": "Gorakhpur", "Dealer Name": "Hanumant Entprises", "VF SPOC": "Adil", "Status": "7/7-8/7  Docs pending. Dealer end\n10/7- The dealer said they will provide all the documents within two days.", "Disbursement Status": "No", "Remarks": "7/7-8/7  Docs pending. Dealer end\n10/7- The dealer said they will provide all the documents within two days."}, {"Sr. No.": 9, "State": "Uttar Pradesh", "City": "Varanasi", "Dealer Name": "Krishna Auto Sales", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": "Code Created"}, {"Sr. No.": 10, "State": "Madhya Pradesh", "City": "Katni", "Dealer Name": "Manvik Enterprises", "VF SPOC": "Raj", "Status": "Docs shared to ASM of AMU // Manpower is not available", "Disbursement Status": "No", "Remarks": "Docs shared to ASM of AMU // Manpower is not available"}, {"Sr. No.": 11, "State": "Uttar Pradesh", "City": "Lucknow", "Dealer Name": "MG Road Link", "VF SPOC": "Adil", "Status": "7/7-8/7  Docs pending. Dealer end\n9/7 - Financier- Alok  will visit the dealer -  Tomorrow\n10/7  Financier- Alok  will visit the dealer- Today \nafter that , he will collect the docs.", "Disbursement Status": "No", "Remarks": "7/7-8/7  Docs pending. Dealer end\n9/7 - Financier- Alok  will visit the dealer -  Tomorrow\n10/7  Financier- Alok  will visit the dealer- Today \nafter that , he will collect the docs."}, {"Sr. No.": 12, "State": "Uttar Pradesh", "City": "Etawah", "Dealer Name": "Mishra Commercials", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 13, "State": "Odisha", "City": "Bhubaneswar", "Dealer Name": "Multire Ventures", "VF SPOC": "Rohit Singh", "Status": "", "Disbursement Status": "Yes", "Remarks": ""}, {"Sr. No.": 14, "State": "Uttar Pradesh", "City": "Aligarh", "Dealer Name": "Plan Bee", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 15, "State": "Madhya Pradesh", "City": "Bhopal", "Dealer Name": "RND Electrik", "VF SPOC": "Raj", "Status": "Docs shared to ASM of AMU // Manpower is not available", "Disbursement Status": "No", "Remarks": "Docs shared to ASM of AMU // Manpower is not available"}, {"Sr. No.": 16, "State": "Madhya Pradesh", "City": "Indore", "Dealer Name": "Royal Automobile", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 17, "State": "Bihar", "City": "Muzaffarpur", "Dealer Name": "Saumya Motors", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": "Code Created"}, {"Sr. No.": 18, "State": "Uttar Pradesh", "City": "New Agra", "Dealer Name": "Shree Balaji Automobiles", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 19, "State": "Uttar Pradesh", "City": "Mathura", "Dealer Name": "Shreya Enterprises", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 20, "State": "Odisha", "City": "Balasore", "Dealer Name": "Shubham Motors", "VF SPOC": "Rohit Singh", "Status": "TC Pending", "Disbursement Status": "No", "Remarks": "TC Pending"}, {"Sr. No.": 21, "State": "Uttar Pradesh", "City": "Kanpur", "Dealer Name": "SKRB Automobiles", "VF SPOC": "Adil", "Status": "7/7-10/7  Authorisation letter pending. Financier end", "Disbursement Status": "No", "Remarks": "7/7-10/7  Authorisation letter pending. Financier end"}, {"Sr. No.": 22, "State": "Uttar Pradesh", "City": "Noida", "Dealer Name": "Smart Solution", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "No", "Remarks": "Code Created"}, {"Sr. No.": 23, "State": "Uttar Pradesh", "City": "Prayagraj", "Dealer Name": "SS Enterprises", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": "Code Created"}, {"Sr. No.": 24, "State": "Madhya Pradesh", "City": "Ujjain", "Dealer Name": "Swastik Enterprises", "VF SPOC": "Raj", "Status": "Manpower is not available", "Disbursement Status": "No", "Remarks": "Manpower is not available"}, {"Sr. No.": 25, "State": "Uttar Pradesh", "City": "Agra", "Dealer Name": "Vishal Agencies", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}], "annapurna_retail": [{"Sr. No.": 1, "State": "RJ", "City": "Jaipur", "Dealer Name": "Akar Fourwheels", "VF SPOC": "Shubham", "Status": "Docs shared to Annapurna", "Disbursement Status": "", "Remarks": "07-07 - Documentation Completed, Agreement pending from annapurana\n09-07 - Agreement pending from annapurna end"}, {"Sr. No.": 2, "State": "Uttar Pradesh", "City": "Bareilly", "Dealer Name": "Aneja Transport", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Notarised agreement Pending"}, {"Sr. No.": 3, "State": "Bihar", "City": "Purnea", "Dealer Name": "Bharat Auto", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": ""}, {"Sr. No.": 4, "State": "Uttar Pradesh", "City": "Greater Noida", "Dealer Name": "Bhutani Autocorp", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Docs pending"}, {"Sr. No.": 5, "State": "Bihar", "City": "Patna", "Dealer Name": "COCO", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": ""}, {"Sr. No.": 6, "State": "Bihar", "City": "Dharbhanga", "Dealer Name": "Eco electric", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 7, "State": "UP", "City": "Lucknow", "Dealer Name": "Ecoedge", "VF SPOC": "Adil", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "9/7- 10/7  Agreement pending dealer end."}, {"Sr. No.": 8, "State": "Madhya Pradesh", "City": "Jabalpur", "Dealer Name": "Elite Motors", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": "No Manpower"}, {"Sr. No.": 9, "State": "RJ", "City": "Jodhpur", "Dealer Name": "Himmat Jai Automotives", "VF SPOC": "Shubham", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Manpower Not Available"}, {"Sr. No.": 10, "State": "Chhattisgarh", "City": "Bilaspur", "Dealer Name": "Infrafield Services", "VF SPOC": "Harsh", "Status": "Dealer Not intrested", "Disbursement Status": "", "Remarks": "Not ready for 6 month EMI guarantee"}, {"Sr. No.": 11, "State": "Chhattisgarh", "City": "Raipur", "Dealer Name": "Maple Drive Pvt Ltd", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "No", "Remarks": "Notarised agreement Pending"}, {"Sr. No.": 12, "State": "UP", "City": "Lucknow", "Dealer Name": "MG Road Link", "VF SPOC": "Adil", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "9/7- 10/7  Agreement pending- Financier end.  it will come by Tomorrow"}, {"Sr. No.": 13, "State": "Odisha", "City": "Bhubaneswar", "Dealer Name": "Multire Ventures", "VF SPOC": "Rohit Singh", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Disbursement Received"}, {"Sr. No.": 14, "State": "RJ", "City": "Sikar", "Dealer Name": "NRK Motors", "VF SPOC": "Shubham", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Manpower Not Available"}, {"Sr. No.": 15, "State": "RJ", "City": "Jaipur", "Dealer Name": "Rahat Automotives", "VF SPOC": "Shubham", "Status": "Code Created", "Disbursement Status": "", "Remarks": "code opened"}, {"Sr. No.": 16, "State": "Uttar Pradesh", "City": "Moradabad", "Dealer Name": "Rajpoot Automobiles", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": "Docs Shared, No Manpower"}, {"Sr. No.": 17, "State": "Madhya Pradesh", "City": "Bhopal", "Dealer Name": "RND Electric", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Docs list shared to dealer"}, {"Sr. No.": 18, "State": "RJ", "City": "Bikaner", "Dealer Name": "Roshan Motors", "VF SPOC": "Shubham", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Manpower Not Available"}, {"Sr. No.": 19, "State": "Madhya Pradesh", "City": "Indore", "Dealer Name": "Royal Automotive", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": "No Manpower"}, {"Sr. No.": 20, "State": "Bihar", "City": "Muzaffarpur", "Dealer Name": "Saumya Motors", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 21, "State": "Madhya Pradesh", "City": "Gwalior", "Dealer Name": "Shivam Motors", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "New Dealer TC Pending"}, {"Sr. No.": 22, "State": "Uttar Pradesh", "City": "Agra 2", "Dealer Name": "Shree Balaji Automobiles", "VF SPOC": "Harsh", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "code opened"}, {"Sr. No.": 23, "State": "Uttar Pradesh", "City": "Mathura", "Dealer Name": "Shreya Enterprises", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": "Docs Shared, No Manpower"}, {"Sr. No.": 24, "State": "Uttar Pradesh", "City": "Ghaziabad", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Docs pending"}, {"Sr. No.": 25, "State": "Uttar Pradesh", "City": "Noida", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Docs pending"}, {"Sr. No.": 26, "State": "UP", "City": "Prayagraj", "Dealer Name": "SS Enterprises", "VF SPOC": "Adil", "Status": "Docs shared to Annapurna", "Disbursement Status": "", "Remarks": "9/7- 10/7  Docs shared to Annapurna"}, {"Sr. No.": 27, "State": "Madhya Pradesh", "City": "Ujjain", "Dealer Name": "Swastik Enterprises", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": "No Manpower"}, {"Sr. No.": 28, "State": "Uttar Pradesh", "City": "Agra", "Dealer Name": "Vishal Agencies", "VF SPOC": "Harsh", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "code opened"}]};
+
+var _taifCustomViews  = [];
+var _taifFilters = {}; // key -> { vfRm:[], dealer:[], city:[], state:[], status:[] }
+
+function getTAIFFilters(key) {
+  if (!_taifFilters[key]) _taifFilters[key] = { vfRm:[], dealer:[], city:[], state:[], status:[] };
+  return _taifFilters[key];
+}
+
+function taifFilterDropdown(key, field, label, values, selectedArr, onchange) {
+  var id = 'taifMF_' + key + '_' + field;
+  var btnId = id + '_btn';
+  var ddId  = id + '_dd';
+  var selectedCount = selectedArr.length;
+  var btnLabel = selectedCount ? selectedCount + ' selected' : label;
+
+  // Filter values by search inside dropdown
+  var html = '<div class="multi-filter-wrap" style="position:relative;">' +
+    '<div class="multi-filter-btn" id="'+btnId+'" onclick="toggleTAIFFilter(\''+ddId+'\',\''+btnId+'\')" style="min-width:130px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+      escHtml(btnLabel) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>' +
+    '</div>' +
+    '<div class="multi-filter-dropdown" id="'+ddId+'" style="min-width:220px;max-height:260px;overflow:hidden;">' +
+      '<input type="text" placeholder="Search..." oninput="filterTAIFDropdown(this,\'+ddId+\')"" ' +
+        'style="margin:6px 8px 4px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;width:calc(100% - 16px);box-sizing:border-box;">' +
+      '<div id="'+ddId+'_items" style="overflow-y:auto;flex:1;">' +
+        values.map(function(v){
+          var checked = selectedArr.indexOf(v) > -1;
+      '<input type="checkbox" value="'+escHtml(v)+'" '+(checked?'checked':'')+' onchange="onTAIFFilterChange(\''+key+'\',\''+field+'\',this)"><span>'+escHtml(v)+'</span></label>';
+        }).join('') +
+      '</div>' +
+      '<div class="multi-filter-clear" onclick="clearTAIFFilter(\''+key+'\',\''+field+'\',\''+btnId+'\',\''+label+'\')">✕ Clear</div>' +
+    '</div>' +
+  '</div>';
+  return html;
+}
+
+function toggleTAIFFilter(ddId, btnId) {
+  var dd  = document.getElementById(ddId);
+  var btn = document.getElementById(btnId);
+  if (!dd) return;
+  var isOpen = dd.classList.contains('open');
+  document.querySelectorAll('.multi-filter-dropdown').forEach(function(d){ d.classList.remove('open'); });
+  document.querySelectorAll('.multi-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (!isOpen) { dd.classList.add('open'); if (btn) btn.classList.add('active'); }
+}
+
+function filterTAIFDropdown(input, ddId) {
+  var search = input.value.toLowerCase();
+  var items = document.getElementById(ddId + '_items');
+  if (!items) return;
+  items.querySelectorAll('label.multi-filter-item').forEach(function(lbl) {
+    var txt = lbl.textContent.toLowerCase();
+    lbl.style.display = txt.includes(search) ? '' : 'none';
+  });
+}
+
+function onTAIFFilterChange(key, field, cb) {
+  var filters = getTAIFFilters(key);
+  var val = cb.value;
+  if (cb.checked) { if (filters[field].indexOf(val) === -1) filters[field].push(val); }
+  else { var i = filters[field].indexOf(val); if (i > -1) filters[field].splice(i,1); }
+  // Update button label
+  var btnId = 'taifMF_'+key+'_'+field+'_btn';
+  var btn   = document.getElementById(btnId);
+  if (btn) {
+    var labels = { vfRm:'VF RM', dealer:'Dealer', city:'City', state:'State', status:'Status' };
+    btn.innerHTML = (filters[field].length ? filters[field].length+' selected' : labels[field]||field) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
+  }
+  refreshTAIFView(key.indexOf('retail') > -1 ? 'retail' : 'taif', key);
+}
+
+function clearTAIFFilter(key, field, btnId, label) {
+  var filters = getTAIFFilters(key);
+  filters[field] = [];
+  var btn = document.getElementById(btnId);
+  if (btn) btn.innerHTML = escHtml(label) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
+  // Uncheck all checkboxes
+  var ddId = 'taifMF_'+key+'_'+field+'_dd';
+  var dd = document.getElementById(ddId);
+  if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked = false; });
+  refreshTAIFView(key.endsWith('_retail')?'retail':'taif', key);
+}
+
+function buildTAIFFilterBar(key, rows, section, renderFn) {
+  var isRetail = section === 'retail';
+  var vfField  = isRetail ? 'VF SPOC' : 'VF RM';
+  var filters  = getTAIFFilters(key);
+
+  function uniq(field) {
+    return [...new Set(rows.map(function(r){ return String(r[field]||''); }).filter(Boolean))].sort();
+  }
+
+  var html = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">' +
+    '<input type="text" class="search-box" id="taifSearch_'+key+'" placeholder="Search..." oninput="'+renderFn+'()" style="width:160px;">' +
+    taifFilterDropdown(key, 'state',  'State',  uniq('State'),          filters.state,  renderFn) +
+    taifFilterDropdown(key, 'city',   'City',   uniq('City'),           filters.city,   renderFn) +
+    taifFilterDropdown(key, 'dealer', 'Dealer', uniq('Dealer Name'),    filters.dealer, renderFn) +
+    taifFilterDropdown(key, 'vfRm',   vfField,  uniq(vfField),          filters.vfRm,   renderFn) +
+    taifFilterDropdown(key, 'status', 'Status', uniq('Status'),         filters.status, renderFn) +
+    '<button class="btn btn-secondary btn-sm" onclick="clearAllTAIFFilters(\''+key+'\',\''+renderFn+'\')" style="font-size:11px;">✕ Clear</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="openTAIFRowModal(\''+section+'\',\''+key+'\',null)">＋ Add Row</button>' +
+    '<button class="btn btn-secondary btn-sm" onclick="exportTAIFView(\''+section+'\',\''+key+'\')">⬇ Export</button>' +
+  '</div>';
+  return html;
+}
+
+function clearAllTAIFFilters(key, renderFn) {
+  _taifFilters[key] = { vfRm:[], dealer:[], city:[], state:[], status:[] };
+  ['vfRm','dealer','city','state','status'].forEach(function(f) {
+    var ddId = 'taifMF_'+key+'_'+f+'_dd';
+    var dd = document.getElementById(ddId);
+    if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked=false; });
+    var btnId = 'taifMF_'+key+'_'+f+'_btn';
+    var labels = { vfRm:'VF RM', dealer:'Dealer', city:'City', state:'State', status:'Status' };
+    var btn = document.getElementById(btnId);
+    if (btn) btn.innerHTML = (labels[f]||f) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
+  });
+  var fn = window[renderFn];
+  if (typeof fn === 'function') fn();
+  else refreshTAIFView(key.indexOf('retail') > -1 ? 'retail' : 'taif', key);
+}
+
+function applyTAIFFilters(rows, key, section) {
+  var filters = getTAIFFilters(key);
+  var isRetail = section === 'retail';
+  var vfField  = isRetail ? 'VF SPOC' : 'VF RM';
+  var searchEl = document.getElementById('taifSearch_'+key);
+  var search   = searchEl ? searchEl.value.toLowerCase() : '';
+  return rows.filter(function(r) {
+    if (search && !Object.values(r).some(function(v){ return String(v||'').toLowerCase().includes(search); })) return false;
+    if (filters.state.length  && filters.state.indexOf(String(r['State']||''))         === -1) return false;
+    if (filters.city.length   && filters.city.indexOf(String(r['City']||''))            === -1) return false;
+    if (filters.dealer.length && filters.dealer.indexOf(String(r['Dealer Name']||''))  === -1) return false;
+    if (filters.vfRm.length   && filters.vfRm.indexOf(String(r[vfField]||''))          === -1) return false;
+    if (filters.status.length && filters.status.indexOf(String(r['Status']||''))       === -1) return false;
+    return true;
+  });
+}  // {id, label, data:[]}
+var _retailCustomViews = []; // {id, label, data:[]}
+var _editTarget = null;      // {section, key, idx} or null for new
+
+// ── TA/IF modal ──
+var TAIF_COLS   = ['State','City','Dealer Name','VF RM','Sales RM','Type','Status','Remarks'];
+var RETAIL_COLS = ['State','City','Dealer Name','VF SPOC','Status','Disbursement Status','Remarks'];
+
+function openTAIFRowModal(section, key, idx) {
+  _editTarget = {section:section, key:key, idx:idx};
+  var isRetail = section === 'retail';
+  var cols = isRetail ? RETAIL_COLS : TAIF_COLS;
+  var row = {};
+  if (idx !== null) {
+    var arr = getTAIFArray(section, key);
+    row = arr[idx] || {};
+  }
+  var body = '';
+  cols.forEach(function(c) {
+    var val = (row[c]||'');
+    if (c === 'Type') {
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+c+'</label>' +
+        '<select class="form-select" id="taifModal_'+c.replace(/[ .]/g,'_')+'"><option value="TA"'+(val==='TA'?' selected':'')+'>TA</option><option value="IF"'+(val==='IF'?' selected':'')+'>IF</option><option value="Credit Limit"'+(val==='Credit Limit'?' selected':'')+'>Credit Limit</option></select></div>';
+    } else if (c === 'Status' && !isRetail) {
+      var STATUS_OPTS = ['','Disbursed','Discussion Initiated','Docs Pending','Docs Shared','Eligible but not Interested','Hold / Dealer Closed / RM Denied','Rejected','SL Received but Disbursement Pending'];
+      var opts = STATUS_OPTS.map(function(o){ return '<option value="'+escHtml(o)+'"'+(val===o?' selected':'')+'>'+escHtml(o||'— Select Status —')+'</option>'; }).join('');
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+c+'</label><select class="form-select" id="taifModal_'+c.replace(/[ .]/g,'_')+'">'+opts+'</select></div>';
+    } else if (c === 'Disbursement Status') {
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+c+'</label>' +
+        '<input type="text" class="form-select" id="taifModal_'+c.replace(/[ .]/g,'_')+'" value="'+escHtml(val)+'" placeholder="'+c+'"></div>';
+    } else if (c === 'Remarks') {
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+c+'</label>' +
+        '<textarea class="form-select" id="taifModal_'+c.replace(/[ .]/g,'_')+'" rows="2" style="resize:vertical;">'+escHtml(val)+'</textarea></div>';
+    } else {
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+c+'</label>' +
+        '<input type="text" class="form-select" id="taifModal_'+c.replace(/[ .]/g,'_')+'" value="'+escHtml(val)+'" placeholder="'+c+'"></div>';
     }
-  ],
-  "hfcl_if": [
-    {
-      "S,no": 6,
-      "State": "Andhra Pradesh",
-      "City": "Vijayawada",
-      "sales RM": "",
-      "VF RM - Name": "Praveen Kumar",
-      "VF RM Mobile No": 9738036361,
-      "VF RM Email ID": "anil.b@eulermotors.com",
-      "RM Sales": "Amitabh",
-      "RM Mobile No": 9008325750,
-      "RM Email Id": "amitabh.singh@eulermotors.com",
-      "Dealer Name": "Shree Vrinda Automobiles",
-      "Dealer Number": 9003138083,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "Dealer need time to decide, Since he is going to avail TA in Shriram and recently got CF funding from Ecofy"
-    },
-    {
-      "S,no": 7,
-      "State": "Andhra Pradesh",
-      "City": "Vizag",
-      "sales RM": "No RM Available",
-      "VF RM - Name": "Praveen Kumar",
-      "VF RM Mobile No": 9738036361,
-      "VF RM Email ID": "anil.b@eulermotors.com",
-      "RM Sales": "Amitabh",
-      "RM Mobile No": 9008325750,
-      "RM Email Id": "amitabh.singh@eulermotors.com",
-      "Dealer Name": "Siva Sai PVR Motors",
-      "Dealer Number": 8523852311,
-      "Dealer Interested": "YES",
-      "Docs Status": "Fully Submitted",
-      "Approval Status": "Rejected",
-      "Disbursement Status": "",
-      "Status": "Rejected",
-      "Remarks": "06/07 Rejected since Dealer do not have business vintage. Rental income wont be considered"
-    },
-    {
-      "S,no": 1,
-      "State": "Assam",
-      "City": "Guwahati",
-      "sales RM": "Subesh",
-      "VF RM - Name": "Adil Noush",
-      "VF RM Mobile No": 7409580938,
-      "VF RM Email ID": "noush.adil@eulermotors.com",
-      "RM Sales": "Subesh",
-      "RM Mobile No": 7086016783,
-      "RM Email Id": "subesh.mukherjee@eulermotors.com",
-      "Dealer Name": "Adhinath Carriers",
-      "Dealer Number": 9560569111,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "Not interested"
-    },
-    {
-      "S,no": 17,
-      "State": "Chhattisgarh",
-      "City": "Raipur",
-      "sales RM": "Siddharth",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": 7355283700,
-      "VF RM Email ID": "raj.dwivedi@eulermotors.com",
-      "RM Sales": "Siddhartha",
-      "RM Mobile No": 7289846262,
-      "RM Email Id": "siddhartha.sharma@eulermotors.com",
-      "Dealer Name": "Maple Drive Pvt Ltd",
-      "Dealer Number": 9907130007,
-      "Dealer Interested": "YES",
-      "Docs Status": "Docs Not Provided",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Docs Pending",
-      "Remarks": "06/07-Docs Pending                                                                                                                            07/07-Confirmation received today Docs Awaited Mail to be shared to dealer \n08/07-Docs pending \n09/07- Docs Pending \n10/07- Docs pending"
-    },
-    {
-      "S,no": 18,
-      "State": "Delhi",
-      "City": "S. Delhi - Okhla",
-      "sales RM": "vikas",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": 7355283700,
-      "VF RM Email ID": "raj.dwivedi@eulermotors.com",
-      "RM Sales": "Siddhartha",
-      "RM Mobile No": 7289846262,
-      "RM Email Id": "siddhartha.sharma@eulermotors.com",
-      "Dealer Name": "Sincere Marketing",
-      "Dealer Number": 9911535356,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "ROi Is too high , interested in Bank only"
-    },
-    {
-      "S,no": 19,
-      "State": "Delhi",
-      "City": "W. Delhi",
-      "sales RM": "vikas",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": 7355283700,
-      "VF RM Email ID": "raj.dwivedi@eulermotors.com",
-      "RM Sales": "Siddhartha",
-      "RM Mobile No": 7289846262,
-      "RM Email Id": "siddhartha.sharma@eulermotors.com",
-      "Dealer Name": "Ecoedge Enterprises",
-      "Dealer Number": 9990010078,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "Not interested"
-    },
-    {
-      "S,no": 20,
-      "State": "Delhi",
-      "City": "E. Delhi",
-      "sales RM": "vikas",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": "",
-      "VF RM Email ID": "",
-      "RM Sales": "",
-      "RM Mobile No": "",
-      "RM Email Id": "",
-      "Dealer Name": "Smart Solution -ED",
-      "Dealer Number": "",
-      "Dealer Interested": "YES",
-      "Docs Status": "YES",
-      "Approval Status": "Fully Submitted",
-      "Disbursement Status": "Disbursed",
-      "Status": "Disbursed",
-      "Remarks": "Disbursment done on 07 July 79,20,000"
-    },
-    {
-      "S,no": 12,
-      "State": "Haryana",
-      "City": "Faridabad",
-      "sales RM": "Amit Vishwkarma",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": 7355283700,
-      "VF RM Email ID": "raj.dwivedi@eulermotors.com",
-      "RM Sales": "Rachit",
-      "RM Mobile No": 7347021804,
-      "RM Email Id": "rachit.sharma@eulermotors.com",
-      "Dealer Name": "HKS Automobiles",
-      "Dealer Number": 9811034266,
-      "Dealer Interested": "YES",
-      "Docs Status": "Fully Submitted",
-      "Approval Status": "Approved",
-      "Disbursement Status": "Under Disbursement",
-      "Status": "SL Received but Disbursment pending",
-      "Remarks": "06/07 Disbursement Pending \n07July-10 July- Disbursement Pending"
-    },
-    {
-      "S,no": 14,
-      "State": "Haryana",
-      "City": "Gurgaon",
-      "sales RM": "Vikas",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": 7355283700,
-      "VF RM Email ID": "raj.dwivedi@eulermotors.com",
-      "RM Sales": "Rachit",
-      "RM Mobile No": 7347021804,
-      "RM Email Id": "rachit.sharma@eulermotors.com",
-      "Dealer Name": "Techup Consulting",
-      "Dealer Number": "98183 31010",
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "DP has IF from SBI"
-    },
-    {
-      "S,no": 31,
-      "State": "Jammu and Kashmir",
-      "City": "Srinagar",
-      "sales RM": "",
-      "VF RM - Name": "Shubham",
-      "VF RM Mobile No": 7798344456,
-      "VF RM Email ID": "shubham.pandey@eulermotors.com",
-      "RM Sales": "Rachit",
-      "RM Mobile No": 7347021804,
-      "RM Email Id": "rachit.sharma@eulermotors.com",
-      "Dealer Name": "Autowings EV",
-      "Dealer Number": 9419008070,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "Discussed with Sales RM, he mentioned that TA is not needed"
-    },
-    {
-      "S,no": 4,
-      "State": "Karnataka",
-      "City": "Bangalore",
-      "sales RM": "",
-      "VF RM - Name": "Praveen Kumar",
-      "VF RM Mobile No": 9738036361,
-      "VF RM Email ID": "anil.b@eulermotors.com",
-      "RM Sales": "Amitabh",
-      "RM Mobile No": 9008325750,
-      "RM Email Id": "amitabh.singh@eulermotors.com",
-      "Dealer Name": "Indhu India Motors",
-      "Dealer Number": "80502 39360",
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Docs Pending",
-      "Remarks": "Dlr not willing to avail CF"
-    },
-    {
-      "S,no": 8,
-      "State": "Kerala",
-      "City": "Kochi",
-      "sales RM": "",
-      "VF RM - Name": "Praveen Kumar",
-      "VF RM Mobile No": 9741192580,
-      "VF RM Email ID": "praveen.v@eulermotors.com",
-      "RM Sales": "Amitabh",
-      "RM Mobile No": 9008325750,
-      "RM Email Id": "amitabh.singh@eulermotors.com",
-      "Dealer Name": "EVM",
-      "Dealer Number": 8056166111,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "Dlr yet to confirm"
-    },
-    {
-      "S,no": 11,
-      "State": "Madhya Pradesh",
-      "City": "Bhopal",
-      "sales RM": "Siddharth",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": 7355283700,
-      "VF RM Email ID": "raj.dwivedi@eulermotors.com",
-      "RM Sales": "Vikas",
-      "RM Mobile No": 7669115090,
-      "RM Email Id": "vikas.bisht@eulermotors.com",
-      "Dealer Name": "RND Electrik",
-      "Dealer Number": 8319990230,
-      "Dealer Interested": "YES",
-      "Docs Status": "Docs Not Provided",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Discussion Initiated",
-      "Remarks": "08/07- Intro email done, Docs awaited \n10/07 - Docs awaited"
-    },
-    {
-      "S,no": 15,
-      "State": "Madhya Pradesh",
-      "City": "Indore",
-      "sales RM": "Siddharth",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": 7355283700,
-      "VF RM Email ID": "raj.dwivedi@eulermotors.com",
-      "RM Sales": "Vikas",
-      "RM Mobile No": 7669115090,
-      "RM Email Id": "vikas.bisht@eulermotors.com",
-      "Dealer Name": "Shilaka Enterprises",
-      "Dealer Number": 7772922237,
-      "Dealer Interested": "On hold",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Hold,DL Closed or RM Deny",
-      "Remarks": "Dealer Closed"
-    },
-    {
-      "S,no": 24,
-      "State": "Maharashtra",
-      "City": "Nagpur",
-      "sales RM": "Vinay",
-      "VF RM - Name": "Rohit Singh",
-      "VF RM Mobile No": 9354003020,
-      "VF RM Email ID": "Rohit.vf@eulermotors.com",
-      "RM Sales": "Vinay",
-      "RM Mobile No": 7091096270,
-      "RM Email Id": "vinay.binu@eulermotors.com",
-      "Dealer Name": "AK Sahni Infracon",
-      "Dealer Number": 9049104448,
-      "Dealer Interested": "YES",
-      "Docs Status": "Fully Submitted",
-      "Approval Status": "WIP",
-      "Disbursement Status": "",
-      "Status": "Docs Shared HFCL",
-      "Remarks": "06/07 List of documents shared with Dealer, Documents Pending for Process                                          07/07 ( Follow to be sent by rohit 08/09 loan application form is pending rest is completed\nDocuments shared with HFCL 09/09 All docs submited pending from HFCL"
-    },
-    {
-      "S,no": 22,
-      "State": "Odisha",
-      "City": "Bhubaneshwar",
-      "sales RM": "Subesh",
-      "VF RM - Name": "Rohit Singh",
-      "VF RM Mobile No": 9354003020,
-      "VF RM Email ID": "Rohit.vf@eulermotors.com",
-      "RM Sales": "Subesh",
-      "RM Mobile No": 7086016783,
-      "RM Email Id": "subesh.mukherjee@eulermotors.com",
-      "Dealer Name": "Multire Ventures",
-      "Dealer Number": 9090454655,
-      "Dealer Interested": "YES",
-      "Docs Status": "Fully Submitted",
-      "Approval Status": "Approved",
-      "Disbursement Status": "",
-      "Status": "Docs Shared HFCL",
-      "Remarks": "06/07 We have received sanction confirmation on 15 lakhs, dealer will confirm 07/07 ( As per the discussion with RM and dealer They will confirm once they will get the clarity, 09/07 \nDealer will confirm for 15 lakhs sanction, 10/-7 Will take the final decision"
-    },
-    {
-      "S,no": 30,
-      "State": "Rajasthan",
-      "City": "Jaipur",
-      "sales RM": "Siddharth",
-      "VF RM - Name": "Shubham",
-      "VF RM Mobile No": 7798344456,
-      "VF RM Email ID": "shubham.pandey@eulermotors.com",
-      "RM Sales": "Siddhartha",
-      "RM Mobile No": 7289846262,
-      "RM Email Id": "siddhartha.sharma@eulermotors.com",
-      "Dealer Name": "Rahat Automotive",
-      "Dealer Number": 8290499999,
-      "Dealer Interested": "YES",
-      "Docs Status": "Docs Not Provided",
-      "Approval Status": "Pending",
-      "Disbursement Status": "",
-      "Status": "Docs Pending",
-      "Remarks": "06/07 Discussion done with Dealer Along with the TM,07/07 - Shubham will share the docs list (via email) to the Dealer\n09-07 - Reminded again to DP for Documentation he confirmed to complete by tommorow EOD\n10/07 Still docs pending"
-    },
-    {
-      "S,no": 25,
-      "State": "Tamil Nadu",
-      "City": "Chennai",
-      "sales RM": "Arup",
-      "VF RM - Name": "Praveen Kumar",
-      "VF RM Mobile No": 6380241013,
-      "VF RM Email ID": "sharankumar.rajaguru@eulermotors.com",
-      "RM Sales": "Arup",
-      "RM Mobile No": 9355998019,
-      "RM Email Id": "arup.chowdhury@eulermotors.com",
-      "Dealer Name": "MSJ Motors",
-      "Dealer Number": 9884355517,
-      "Dealer Interested": "YES",
-      "Docs Status": "Part Docs Submitted",
-      "Approval Status": "Pending",
-      "Disbursement Status": "",
-      "Status": "Docs Pending",
-      "Remarks": "06/07 Dealer Networth Ceritifcate, Tax Audit Report FY 24 pending                                                                07/07 Follow up mail Sent by praveen 08/09 still docs not received, 10/07 - Still docs pending CA is not well con call done with the dealer along with the RM"
-    },
-    {
-      "S,no": 26,
-      "State": "Tamil Nadu",
-      "City": "Chennai 2",
-      "sales RM": "Arup",
-      "VF RM - Name": "Praveen Kumar",
-      "VF RM Mobile No": 6380241013,
-      "VF RM Email ID": "sharankumar.rajaguru@eulermotors.com",
-      "RM Sales": "Arup",
-      "RM Mobile No": 9355998019,
-      "RM Email Id": "arup.chowdhury@eulermotors.com",
-      "Dealer Name": "The Empire",
-      "Dealer Number": 7338709369,
-      "Dealer Interested": "YES",
-      "Docs Status": "Part Docs Submitted",
-      "Approval Status": "Pending",
-      "Disbursement Status": "",
-      "Status": "Docs Pending",
-      "Remarks": "06/07 Only KYC Documents sent rest is pending \n07/07 Reminder mail sent to dealer - Discussed with RM : Dealer has sufficient funds"
-    },
-    {
-      "S,no": 27,
-      "State": "Tamil Nadu",
-      "City": "Coimbatore 2",
-      "sales RM": "",
-      "VF RM - Name": "Praveen Kumar",
-      "VF RM Mobile No": 6380241013,
-      "VF RM Email ID": "sharankumar.rajaguru@eulermotors.com",
-      "RM Sales": "Arup",
-      "RM Mobile No": 9355998019,
-      "RM Email Id": "arup.chowdhury@eulermotors.com",
-      "Dealer Name": "SS Motors",
-      "Dealer Number": 9894235588,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "DEALER NOT INTERESTED IN CF SINCE THE INTEREST RATE IS HIGH"
-    },
-    {
-      "S,no": 28,
-      "State": "Tamil Nadu",
-      "City": "Tirupur",
-      "sales RM": "",
-      "VF RM - Name": "Praveen Kumar",
-      "VF RM Mobile No": 6380241013,
-      "VF RM Email ID": "sharankumar.rajaguru@eulermotors.com",
-      "RM Sales": "Arup",
-      "RM Mobile No": 9355998019,
-      "RM Email Id": "arup.chowdhury@eulermotors.com",
-      "Dealer Name": "Ultimate Vehicles",
-      "Dealer Number": 9842966666,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "DEALER NOT INTERESTED IN CF SINCE THE INTEREST RATE IS HIGH"
-    },
-    {
-      "S,no": 5,
-      "State": "Telangana",
-      "City": "Hyderabad",
-      "sales RM": "No RM Available",
-      "VF RM - Name": "Praveen Kumar",
-      "VF RM Mobile No": 9738036361,
-      "VF RM Email ID": "anil.b@eulermotors.com",
-      "RM Sales": "Amitabh",
-      "RM Mobile No": 9008325750,
-      "RM Email Id": "amitabh.singh@eulermotors.com",
-      "Dealer Name": "Pragati Commercials",
-      "Dealer Number": 9959899030,
-      "Dealer Interested": "YES",
-      "Docs Status": "Docs Not Provided",
-      "Approval Status": "Pending",
-      "Disbursement Status": "",
-      "Status": "Docs Pending",
-      "Remarks": "06/07 Dlr yet to submit the documents - Filled Application form, Masked Aadhar Card, Existing loan details, Networth Certficate of Shravani Reddy, Aksheta Reddy, Sucharitha Reddy all the Partners, Latest Partnership Deed, Partners Profit Sharing ratio on Letterhead, ITR - FY 25, Provisional Financials - FY 26, Monthwise Sales Data, Details of all Credit facilities availed, Latest Udhyam Ceritificate, Bank Statment from 1st Dec 2025 till 31 May 2026\n07/07 Still document pending Follow up mail Sent By praveen 08/07 - 09/07 Still docs not received mail sent on 7th , 10/07 Follow up call will be done today"
-    },
-    {
-      "S,no": 2,
-      "State": "Uttar Pradesh",
-      "City": "Lucknow",
-      "sales RM": "Subesh",
-      "VF RM - Name": "Adil Noush",
-      "VF RM Mobile No": 7409580938,
-      "VF RM Email ID": "noush.adil@eulermotors.com",
-      "RM Sales": "Subesh",
-      "RM Mobile No": 7086016783,
-      "RM Email Id": "subesh.mukherjee@eulermotors.com",
-      "Dealer Name": "Ecoedge Enterprises",
-      "Dealer Number": 9990010078,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "Not interested"
-    },
-    {
-      "S,no": 3,
-      "State": "Uttar Pradesh",
-      "City": "Varanasi",
-      "sales RM": "Subesh",
-      "VF RM - Name": "Adil Noush",
-      "VF RM Mobile No": 7409580938,
-      "VF RM Email ID": "noush.adil@eulermotors.com",
-      "RM Sales": "Subesh",
-      "RM Mobile No": 7086016783,
-      "RM Email Id": "subesh.mukherjee@eulermotors.com",
-      "Dealer Name": "Krishna Auto Sales",
-      "Dealer Number": 9560760202,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "Not interested"
-    },
-    {
-      "S,no": 9,
-      "State": "Uttar Pradesh",
-      "City": "Agra",
-      "sales RM": "Rachit",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": 7355283700,
-      "VF RM Email ID": "raj.dwivedi@eulermotors.com",
-      "RM Sales": "Subesh",
-      "RM Mobile No": 7086016783,
-      "RM Email Id": "subesh.mukherjee@eulermotors.com",
-      "Dealer Name": "Vishal Agencies",
-      "Dealer Number": 9319833636,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "Not interested"
-    },
-    {
-      "S,no": 10,
-      "State": "Uttar Pradesh",
-      "City": "Agra 2",
-      "sales RM": "Rachit",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": 7355283700,
-      "VF RM Email ID": "raj.dwivedi@eulermotors.com",
-      "RM Sales": "Vikas",
-      "RM Mobile No": 7669115090,
-      "RM Email Id": "vikas.bisht@eulermotors.com",
-      "Dealer Name": "Shree Balaji Automobiles",
-      "Dealer Number": 9458426160,
-      "Dealer Interested": "YES",
-      "Docs Status": "Docs Not Provided",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Discussion Initiated",
-      "Remarks": "(Rachit Sent a mail to dealer on 22nd June and then on 27th June and latest email was done by Raj on 7th July)  \n07/07 Docs Pending                                                                       08/07 Reminder email done to dealer, docs awaited, \n10/07 will be confirm today"
-    },
-    {
-      "S,no": 13,
-      "State": "Uttar Pradesh",
-      "City": "G. Noida",
-      "sales RM": "Vikas",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": 7355283700,
-      "VF RM Email ID": "raj.dwivedi@eulermotors.com",
-      "RM Sales": "Vikas",
-      "RM Mobile No": 7669115090,
-      "RM Email Id": "vikas.bisht@eulermotors.com",
-      "Dealer Name": "Bhutani AutoCorp",
-      "Dealer Number": 8287712173,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Eligible But Not Interested",
-      "Remarks": "DP has IF from SBI"
-    },
-    {
-      "S,no": 16,
-      "State": "Uttar Pradesh",
-      "City": "Noida",
-      "sales RM": "Vikas",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": 7355283700,
-      "VF RM Email ID": "raj.dwivedi@eulermotors.com",
-      "RM Sales": "Vikas",
-      "RM Mobile No": 7669115090,
-      "RM Email Id": "vikas.bisht@eulermotors.com",
-      "Dealer Name": "Smart Solution - Noida",
-      "Dealer Number": 9555344158,
-      "Dealer Interested": "YES",
-      "Docs Status": "Fully Submitted",
-      "Approval Status": "Approved",
-      "Disbursement Status": "Disbursed",
-      "Status": "Disbursed",
-      "Remarks": "Disbursment done on 07 July 79,20,000"
-    },
-    {
-      "S,no": 21,
-      "State": "Uttar Pradesh",
-      "City": "Ghaziabad",
-      "sales RM": "vikas",
-      "VF RM - Name": "Raj Dwivedi",
-      "VF RM Mobile No": "",
-      "VF RM Email ID": "",
-      "RM Sales": "",
-      "RM Mobile No": "",
-      "RM Email Id": "",
-      "Dealer Name": "Smart Solution",
-      "Dealer Number": "",
-      "Dealer Interested": "YES",
-      "Docs Status": "YES",
-      "Approval Status": "Fully Submitted",
-      "Disbursement Status": "Disbursed",
-      "Status": "Disbursed",
-      "Remarks": "Disbursment done on 07 July 79,20,000"
-    },
-    {
-      "S,no": 29,
-      "State": "Uttrakhand",
-      "City": "Dehradun",
-      "sales RM": "",
-      "VF RM - Name": "Shubham",
-      "VF RM Mobile No": 7798344456,
-      "VF RM Email ID": "shubham.pandey@eulermotors.com",
-      "RM Sales": "Rachit",
-      "RM Mobile No": 7347021804,
-      "RM Email Id": "rachit.sharma@eulermotors.com",
-      "Dealer Name": "Doon Motors",
-      "Dealer Number": 9520876455,
-      "Dealer Interested": "NO",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Discussion Initiated",
-      "Remarks": "Discussed with Sales RM, he mentioned that TA is not needed"
-    },
-    {
-      "S,no": 23,
-      "State": "West Bengal",
-      "City": "Kolkata (Howrah)",
-      "sales RM": "Arup",
-      "VF RM - Name": "Rohit Singh",
-      "VF RM Mobile No": 9354003020,
-      "VF RM Email ID": "Rohit.vf@eulermotors.com",
-      "RM Sales": "Arup",
-      "RM Mobile No": 9355998019,
-      "RM Email Id": "arup.chowdhury@eulermotors.com",
-      "Dealer Name": "RNS Green",
-      "Dealer Number": 9123663716,
-      "Dealer Interested": "On hold",
-      "Docs Status": "",
-      "Approval Status": "",
-      "Disbursement Status": "",
-      "Status": "Hold,DL Closed or RM Deny",
-      "Remarks": "Under Discussion with Sales"
+  });
+  document.getElementById('taifRowModalTitle').textContent = idx !== null ? 'Edit Row' : 'Add New Row';
+  document.getElementById('taifRowModalBody').innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+body+'</div>';
+  document.getElementById('taifRowModalOverlay').style.display = 'flex';
+}
+
+function closeTAIFRowModal() {
+  document.getElementById('taifRowModalOverlay').style.display = 'none';
+  _editTarget = null;
+}
+
+function saveTAIFRow() {
+  if (!_editTarget) return;
+  var isRetail = _editTarget.section === 'retail';
+  var cols = isRetail ? RETAIL_COLS : TAIF_COLS;
+  var row = {};
+  cols.forEach(function(c) {
+    var el = document.getElementById('taifModal_'+c.replace(/[ .]/g,'_'));
+    row[c] = el ? el.value.trim() : '';
+  });
+  var arr = getTAIFArray(_editTarget.section, _editTarget.key);
+  if (_editTarget.idx !== null) {
+    row['Sr. No.'] = arr[_editTarget.idx]['Sr. No.'];
+    arr[_editTarget.idx] = row;
+  } else {
+    row['Sr. No.'] = arr.length + 1;
+    arr.push(row);
+  }
+  // Re-sort by Dealer Name
+  arr.sort(function(a,b){ return String(a['Dealer Name']||'').localeCompare(String(b['Dealer Name']||'')); });
+  arr.forEach(function(r,i){ r['Sr. No.'] = i+1; });
+  var _section = _editTarget.section;
+  var _key     = _editTarget.key;
+  setTAIFArray(_section, _key, arr);
+  closeTAIFRowModal();
+  refreshTAIFView(_section, _key);
+  toast('✅ Row saved');
+}
+
+function exportTAIFView(section, key) {
+  var isRetail = section === 'retail';
+  var cols = isRetail
+    ? ['Sr. No.','State','City','Dealer Name','VF SPOC','Status','Disbursement Status','Remarks']
+    : ['Sr. No.','State','City','Dealer Name','VF RM','Sales RM','Type','Status','Remarks'];
+  var rows = applyTAIFFilters(getTAIFArray(section, key), key, section);
+  var aoa  = [cols];
+  rows.forEach(function(r){ aoa.push(cols.map(function(c){ return r[c]||''; })); });
+  var wb = XLSX.utils.book_new();
+  var label = key.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), label.slice(0,31));
+  XLSX.writeFile(wb, 'Euler_' + key + '_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+
+
+function deleteTAIFRow(section, key, idx) {
+  if (!confirm('Delete this row?')) return;
+  var arr = getTAIFArray(section, key);
+  arr.splice(idx, 1);
+  arr.forEach(function(r,i){ r['Sr. No.'] = i+1; });
+  setTAIFArray(section, key, arr);
+  refreshTAIFView(section, key);
+  toast('🗑 Row deleted');
+}
+
+function getTAIFArray(section, key) {
+  if (key.startsWith('custom_')) {
+    var views = section === 'taif' ? _taifCustomViews : _retailCustomViews;
+    var v = views.find(function(x){ return x.id===key; });
+    return v ? v.data : [];
+  }
+  return TAIF_DATA[key] || [];
+}
+
+function setTAIFArray(section, key, arr) {
+  if (key.startsWith('custom_')) {
+    var views = section === 'taif' ? _taifCustomViews : _retailCustomViews;
+    var v = views.find(function(x){ return x.id===key; });
+    if (v) v.data = arr;
+  } else {
+    TAIF_DATA[key] = arr;
+  }
+}
+
+function refreshTAIFView(section, key) {
+  var fnName = 'renderTAIFView_' + key;
+  if (typeof window[fnName] === 'function') window[fnName]();
+  else renderTAIFCustomView(section, key);
+}
+
+// ── Add custom sub-view ──
+function openAddViewModal(section) {
+  document.getElementById('addViewSection').value = section;
+  document.getElementById('addViewName').value = '';
+  document.getElementById('addViewModalOverlay').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('addViewName').focus(); }, 100);
+}
+
+function closeAddViewModal() {
+  document.getElementById('addViewModalOverlay').style.display = 'none';
+}
+
+function saveAddView() {
+  var section = document.getElementById('addViewSection').value;
+  var name    = document.getElementById('addViewName').value.trim();
+  if (!name) { toast('⚠ Enter a view name'); return; }
+  var id = 'custom_' + Date.now();
+  var views = section === 'taif' ? _taifCustomViews : _retailCustomViews;
+  views.push({ id: id, label: name, data: [] });
+  closeAddViewModal();
+  rebuildTAIFTabs(section);
+  // Switch to new view
+  if (section === 'taif')   switchTAIFFI(id);
+  else                      switchRetailFI(id);
+  toast('✅ View "' + name + '" added');
+}
+
+function rebuildTAIFTabs(section) {
+  var isTAIF = section === 'taif';
+  var bar    = document.getElementById(isTAIF ? 'taifFITabBar' : 'retailFITabBar');
+  var cont   = document.getElementById(isTAIF ? 'taifSubContent' : 'retailSubContent');
+  if (!bar || !cont) return;
+
+  var views   = isTAIF ? _taifCustomViews : _retailCustomViews;
+  var fixed   = isTAIF
+    ? [{id:'shriram', label:'Shriram — TA'},{id:'hfcl',label:'HFCL — IF'},{id:'ecofy',label:'Ecofy — TA'}]
+    : [{id:'hfcl',label:'HFCL'},{id:'amu',label:'AMU'},{id:'annapurna',label:'Annapurna'}];
+
+  // Rebuild tab buttons
+  var btns = '';
+  fixed.concat(views).forEach(function(v) {
+    btns += '<button id="taifFIBtn_'+section+'_'+v.id+'" onclick="'+(isTAIF?'switchTAIFFI':'switchRetailFI')+'(\''+v.id+'\')" class="btn btn-secondary btn-sm" style="font-size:12px;">'+escHtml(v.label)+'</button>';
+  });
+    btns += '<button onclick="openAddViewModal(\''+section+'\')" class="btn btn-secondary btn-sm" style="font-size:12px;border-style:dashed;">＋ Add View</button>';
+  bar.innerHTML = btns;
+
+  // Add content div for new custom view if missing
+  views.forEach(function(v) {
+    if (!document.getElementById('taifFI_'+v.id+'_content')) {
+      var div = document.createElement('div');
+      div.id = 'taifFI_'+v.id+'_content';
+      div.style.display = 'none';
+      div.innerHTML = buildTAIFViewHTML(v.id, section);
+      cont.appendChild(div);
     }
-  ],
-  "ecofy_ta": [
-    {
-      "LAN": 32602102992,
-      "Borrower name": "SKRB AUTOMOBILITY PRIVATE LIMITED",
-      "Sanction Date": "14 Feb 2026",
-      "Expiry Date": "14 Feb 2027",
-      "Sanction limit": 4512951,
-      "POS": 4467141,
-      "Available limit": 45810,
-      "Sanction Loan Status": "Disbursed"
-    },
-    {
-      "LAN": 32510102497,
-      "Borrower name": "SMART SOLUTION",
-      "Sanction Date": "30 Oct 2025",
-      "Expiry Date": "30 Oct 2026",
-      "Sanction limit": 4995000,
-      "POS": 4775050,
-      "Available limit": 219950,
-      "Sanction Loan Status": "Disbursed"
-    },
-    {
-      "LAN": 32601102859,
-      "Borrower name": "HKS AUTOMOBILES PRIVATE LIMITED",
-      "Sanction Date": "21 Jan 2026",
-      "Expiry Date": "21 Jan 2027",
-      "Sanction limit": 5013772,
-      "POS": 4978068,
-      "Available limit": 35704,
-      "Sanction Loan Status": "Disbursed"
-    },
-    {
-      "LAN": 32601102881,
-      "Borrower name": "ECOEDGE ENTERPRISES PRIVATE LIMITED",
-      "Sanction Date": "24 Jan 2026",
-      "Expiry Date": "24 Jan 2027",
-      "Sanction limit": 10000000,
-      "POS": "-",
-      "Available limit": 10000000,
-      "Sanction Loan Status": "Disbursed"
-    },
-    {
-      "LAN": 32602103086,
-      "Borrower name": "ECO WHEELS AUTOMOTIVE",
-      "Sanction Date": "28 Feb 2026",
-      "Expiry Date": "28 Feb 2027",
-      "Sanction limit": 4008756,
-      "POS": 3078296,
-      "Available limit": 930460,
-      "Sanction Loan Status": "Disbursed"
-    },
-    {
-      "LAN": 32603103331,
-      "Borrower name": "SKYJUMP SOLUTIONS PRIVATE LIMITED",
-      "Sanction Date": "31 Mar 2026",
-      "Expiry Date": "31 Mar 2027",
-      "Sanction limit": 3012698,
-      "POS": 2729599,
-      "Available limit": 283099,
-      "Sanction Loan Status": "Disbursed"
-    },
-    {
-      "LAN": 32601102913,
-      "Borrower name": "M S J Motors",
-      "Sanction Date": "30 Jan 2026",
-      "Expiry Date": "30 Jan 2027",
-      "Sanction limit": 4516446,
-      "POS": 4129984,
-      "Available limit": 386462,
-      "Sanction Loan Status": "Disbursed"
-    },
-    {
-      "LAN": 32603103105,
-      "Borrower name": "THE EMPIRE",
-      "Sanction Date": "05 Mar 2026",
-      "Expiry Date": "05 Mar 2027",
-      "Sanction limit": 1503155,
-      "POS": 1491282,
-      "Available limit": 11873,
-      "Sanction Loan Status": "Disbursed"
-    },
-    {
-      "LAN": "-",
-      "Borrower name": "SHREE VRINDA AUTOMOBILES",
-      "Sanction Date": "28 May 2024",
-      "Expiry Date": "",
-      "Sanction limit": 3500000,
-      "POS": "-",
-      "Available limit": "-",
-      "Sanction Loan Status": "Sanctioned"
-    },
-    {
-      "LAN": "Hold",
-      "Borrower name": "Shrey Enterprises",
-      "Sanction Date": "29 Jun 2026",
-      "Expiry Date": "",
-      "Sanction limit": 3000000,
-      "POS": "",
-      "Available limit": "",
-      "Sanction Loan Status": "Sanctioned"
-    },
-    {
-      "LAN": "",
-      "Borrower name": "Infra Field",
-      "Sanction Date": "07 Apr 2026",
-      "Expiry Date": "",
-      "Sanction limit": "",
-      "POS": "",
-      "Available limit": "",
-      "Sanction Loan Status": "Pending"
-    }
-  ],
-  "hfcl_retail": [
-    {
-      "State": "AP",
-      "City": "Kurnool",
-      "Dealer / COCO": "Anirudh Automobiles",
-      "VF Spoc": "Durgaprasad",
-      "Remarks": "Code created as per HFLC",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sudhakar"
-    },
-    {
-      "State": "AP",
-      "City": "Tirupathi",
-      "Dealer / COCO": "Garuda EV",
-      "VF Spoc": "Durgaprasad",
-      "Remarks": "Code created as per HFLC",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sudhakar"
-    },
-    {
-      "State": "AP",
-      "City": "Vizag",
-      "Dealer / COCO": "Siva Sai P V R Motors",
-      "VF Spoc": "Durgaprasad",
-      "Remarks": "8/7 : Passport size photo and PAL is pending\n9/7 : All docs submitted",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Chandra Mouli"
-    },
-    {
-      "State": "AP",
-      "City": "Nellore",
-      "Dealer / COCO": "Shree Vrinda Automobiles",
-      "VF Spoc": "Durgaprasad",
-      "Remarks": "8/7 : All docs shared, Code pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sudhakar"
-    },
-    {
-      "State": "AP",
-      "City": "Vijayawada",
-      "Dealer / COCO": "Shree Vrinda Automobiles",
-      "VF Spoc": "Durgaprasad",
-      "Remarks": "8/7 : All docs shared, Code pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sudhakar"
-    },
-    {
-      "State": "AP",
-      "City": "Ongole",
-      "Dealer / COCO": "SHAAKTII ELITE POWER\n SOLUTIONS PVT. LTD.",
-      "VF Spoc": "Durgaprasad",
-      "Remarks": "HFCL is not operational",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sudhakar"
-    },
-    {
-      "State": "AS",
-      "City": "Goalpara",
-      "Dealer / COCO": "Brave Riders",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-10/7 TC Awaited",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "-"
-    },
-    {
-      "State": "AS",
-      "City": "GHY",
-      "Dealer / COCO": "Kothari Euler",
-      "VF Spoc": "Adil",
-      "Remarks": "Docs shared to HFCL on 11 June\n7/7-10/7 Assam spoc needed in HFCL",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "-"
-    },
-    {
-      "State": "AS",
-      "City": "Golaghat",
-      "Dealer / COCO": "OP Motors",
-      "VF Spoc": "Adil",
-      "Remarks": "Docs collected on 5 July\n7/7 Verifying the docs will share tomorrow\n8/7 docs shared\n9/7- 10/7 team said 2 wheeler team will revert",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "-"
-    },
-    {
-      "State": "AS",
-      "City": "Dhubri",
-      "Dealer / COCO": "SNT Motors",
-      "VF Spoc": "Adil",
-      "Remarks": "Docs shared to HFCL on 26 June\n7/7-10/7  Assam spoc needed in HFCL",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "-"
-    },
-    {
-      "State": "BR",
-      "City": "Patna",
-      "Dealer / COCO": "COCO",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-10/7 MH code is in process- Post that other COCO will also get live- With reference to that",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "-"
-    },
-    {
-      "State": "BR",
-      "City": "Purnea",
-      "Dealer / COCO": "Bharat Auto",
-      "VF Spoc": "Adil",
-      "Remarks": "Docs shared to HFCL on 9 June\n7/7-10/7 Expecting code within this week",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Chaya"
-    },
-    {
-      "State": "BR",
-      "City": "Dharbhanga",
-      "Dealer / COCO": "Eco electric",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-10/7  HFCL not operational- Still pushing to open dealer code",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Chaya"
-    },
-    {
-      "State": "BR",
-      "City": "Muzaffarpur",
-      "Dealer / COCO": "Saumya Motors",
-      "VF Spoc": "Adil",
-      "Remarks": "Docs shared to HFCL on 9 June\n7/7-10/7 Expecting code within this week",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Chaya"
-    },
-    {
-      "State": "Chandigarh",
-      "City": "Chandigarh",
-      "Dealer / COCO": "COCO",
-      "VF Spoc": "Shubham",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Anchal/Gaurav"
-    },
-    {
-      "State": "Chhattisgarh",
-      "City": "Bilaspur",
-      "Dealer / COCO": "Infrafield Services",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Hemant"
-    },
-    {
-      "State": "Chhattisgarh",
-      "City": "Raipur",
-      "Dealer / COCO": "Maple Drive Pvt Ltd",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Hemant"
-    },
-    {
-      "State": "Chhattisgarh",
-      "City": "Ambikapur",
-      "Dealer / COCO": "Sulaxmi Automobiles",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Hemant"
-    },
-    {
-      "State": "Dehradun",
-      "City": "Dehradun",
-      "Dealer / COCO": "Doon Motors",
-      "VF Spoc": "Shubham",
-      "Remarks": "07-07 E-Sign Pending at dealer end\n09-07 E-sign Sign Complete, Code will be created in 48 Hours confirmed by HFCl TM",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Anchal/Gaurav"
-    },
-    {
-      "State": "Delhi",
-      "City": "Jhagirpuri",
-      "Dealer / COCO": "Smart Solution",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "Delhi",
-      "City": "E. Delhi",
-      "Dealer / COCO": "Smart Solution",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "Haryana",
-      "City": "Faridabad",
-      "Dealer / COCO": "HKS Automobiles",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "Haryana",
-      "City": "Kosli (Rewari)",
-      "Dealer / COCO": "Retro Automobiles LLP",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Anchal"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Rajgarh",
-      "Dealer / COCO": "Anand Green Biotech Energy Pvt Ltd",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Dheeraj"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Jabalpur",
-      "Dealer / COCO": "Elite Motors",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Dheeraj"
-    },
-    {
-      "State": "GJ",
-      "City": "Gandhidham",
-      "Dealer / COCO": "Rising Ladders",
-      "VF Spoc": "Rohit",
-      "Remarks": "KYC, GST, MSME received, remaining pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "GJ",
-      "City": "Bharuch",
-      "Dealer / COCO": "Madhav Vehicles",
-      "VF Spoc": "Rohit",
-      "Remarks": "On hold",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "GJ",
-      "City": "Somnath",
-      "Dealer / COCO": "Moddeshwary Motors",
-      "VF Spoc": "Rohit",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Katni",
-      "Dealer / COCO": "Manvik Enterprises",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Dheeraj"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Etawah",
-      "Dealer / COCO": "Mishra Commercials",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Shekhar"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Aligarh",
-      "Dealer / COCO": "Plan Bee",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "shekhar"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Meerut",
-      "Dealer / COCO": "Satinpod Global Service",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Gaurav Sen"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Agra 2",
-      "Dealer / COCO": "Shree Balaji Automobiles",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "shekhar"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Ghaziabad",
-      "Dealer / COCO": "Smart Solution",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "J&K",
-      "City": "Jammu",
-      "Dealer / COCO": "Shree Motors",
-      "VF Spoc": "Shubham",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Anchal/Gaurav"
-    },
-    {
-      "State": "J&K",
-      "City": "Srinagar",
-      "Dealer / COCO": "Auto Wings",
-      "VF Spoc": "Shubham",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Anchal/Gaurav"
-    },
-    {
-      "State": "JH",
-      "City": "Ranchi",
-      "Dealer / COCO": "COCO",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-10/7  MH code is in process- Post that other COCO will also get live- With reference to that",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "-"
-    },
-    {
-      "State": "JH",
-      "City": "Ranchi",
-      "Dealer / COCO": "Evtria",
-      "VF Spoc": "Adil",
-      "Remarks": "Docs shared on 15 June\n7/7 Still impanelment in process. Docs Shared again\n9/7 - Mail Topup given",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Harshvardhan / Chahat"
-    },
-    {
-      "State": "JH",
-      "City": "Dumka",
-      "Dealer / COCO": "TKG",
-      "VF Spoc": "Adil",
-      "Remarks": "HFCL not operational- Still pushing to open dealer code\n7/7-10/7 Same status",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Harshvardhan"
-    },
-    {
-      "State": "KA",
-      "City": "Bengaluru",
-      "Dealer / COCO": "Indu India",
-      "VF Spoc": "Anil",
-      "Remarks": "June : All docs Submitted, Code creation under process",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sunil"
-    },
-    {
-      "State": "KA",
-      "City": "Bengaluru",
-      "Dealer / COCO": "KVR Constructions",
-      "VF Spoc": "Anil",
-      "Remarks": "June : All docs Submitted, Code creation under process",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sunil"
-    },
-    {
-      "State": "KA",
-      "City": "Hubballi",
-      "Dealer / COCO": "Indhu India Motors Pvt. ltd.",
-      "VF Spoc": "Anil",
-      "Remarks": "June : All docs Submitted, Code creation under process",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sunil"
-    },
-    {
-      "State": "KA",
-      "City": "Bijapur",
-      "Dealer / COCO": "Vijay Business Ventures LLP",
-      "VF Spoc": "Anil",
-      "Remarks": "10/7 : Dealership yet to start business operations",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sunil"
-    },
-    {
-      "State": "KL",
-      "City": "Trivandrum",
-      "Dealer / COCO": "EVM Automobiles",
-      "VF Spoc": "Anil",
-      "Remarks": "HFCL do not have manpower",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "KL",
-      "City": "Cochin",
-      "Dealer / COCO": "EVM Automobiles",
-      "VF Spoc": "Anil",
-      "Remarks": "HFCL do not have manpower",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "KL",
-      "City": "Calicut",
-      "Dealer / COCO": "EVM Automobiles",
-      "VF Spoc": "Anil",
-      "Remarks": "HFCL do not have manpower",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Noida",
-      "Dealer / COCO": "Smart Solution",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Agra",
-      "Dealer / COCO": "Vishal Agencies",
-      "VF Spoc": "Harsh",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "shekhar"
-    },
-    {
-      "State": "Delhi",
-      "City": "Delhi",
-      "Dealer / COCO": "COCO_Delhi",
-      "VF Spoc": "Harsh",
-      "Remarks": "Docs pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "Delhi",
-      "City": "W. Delhi",
-      "Dealer / COCO": "Ecoedge Enterprises",
-      "VF Spoc": "Harsh",
-      "Remarks": "07 July - Email Done Docs pending from Dealer End \n08 July - Docs Still pending \n10 July - Email Done,docs still Pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "Delhi",
-      "City": "Okhla",
-      "Dealer / COCO": "Sincere Marketing",
-      "VF Spoc": "Harsh",
-      "Remarks": "07 July - Docs Pending, list shared \n08 July - Docs received today, shared with HFCL\n10 July - Docs shared with Sameer",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "Haryana",
-      "City": "Sonipat",
-      "Dealer / COCO": "Ecoedge Enterprises",
-      "VF Spoc": "Harsh",
-      "Remarks": "07 July - Email Done Docs pending from Dealer End \n08 July - Docs Still pending \n10 July - Email Done,docs still Pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "MH",
-      "City": "Yavatmal",
-      "Dealer / COCO": "Varma Emterprises",
-      "VF Spoc": "Rohit",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "MH",
-      "City": "CSB Nagar",
-      "Dealer / COCO": "Eco Wheels",
-      "VF Spoc": "Rohit",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "MH",
-      "City": "akola",
-      "Dealer / COCO": "Deepintel Globle Ventures",
-      "VF Spoc": "Rohit",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "MH",
-      "City": "Nagpur",
-      "Dealer / COCO": "Sahni Infracon",
-      "VF Spoc": "Rohit",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "MH",
-      "City": "Chandrapur",
-      "Dealer / COCO": "Sahni Infracon",
-      "VF Spoc": "Rohit",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "MH",
-      "City": "Prabhani",
-      "Dealer / COCO": "Vatsalya Motors",
-      "VF Spoc": "Rohit",
-      "Remarks": "Sign stamp Pending on documents",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "MH",
-      "City": "Dhule & Jalgon",
-      "Dealer / COCO": "Sky Jump Solutions",
-      "VF Spoc": "Rohit",
-      "Remarks": "Documents shared, Dealer code in Process",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "MH",
-      "City": "Daund",
-      "Dealer / COCO": "Varsha Motors",
-      "VF Spoc": "Rohit",
-      "Remarks": "Documents shared, Dealer code in Process",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "MH",
-      "City": "Baramati",
-      "Dealer / COCO": "Ashwamedh Automotive",
-      "VF Spoc": "Rohit",
-      "Remarks": "Documents shared, Dealer code in Process",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "OD",
-      "City": "BBSR",
-      "Dealer / COCO": "Multire Venture",
-      "VF Spoc": "Rohit",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "Punjab",
-      "City": "Ludiana",
-      "Dealer / COCO": "DC Energies",
-      "VF Spoc": "Shubham",
-      "Remarks": "07-07-HFCL Manpower alligned, Documents collection pending \n09-07 HFCL Executive Visit alligned for today to complete the documetation",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Anchal/Gaurav"
-    },
-    {
-      "State": "Rajasthan",
-      "City": "Jaipur",
-      "Dealer / COCO": "Rahat Automotive",
-      "VF Spoc": "Shubham",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sumit"
-    },
-    {
-      "State": "Rajasthan",
-      "City": "Jaipur",
-      "Dealer / COCO": "Akar Fourwheels",
-      "VF Spoc": "Shubham",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sumit"
-    },
-    {
-      "State": "Rajasthan",
-      "City": "Jodhpur",
-      "Dealer / COCO": "Himmat Jai Automotive",
-      "VF Spoc": "Shubham",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Chetan"
-    },
-    {
-      "State": "Rajasthan",
-      "City": "Bikaner",
-      "Dealer / COCO": "Roshan Motora",
-      "VF Spoc": "Shubham",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sumit"
-    },
-    {
-      "State": "Rajasthan",
-      "City": "Udaipur",
-      "Dealer / COCO": "Rudra Motors",
-      "VF Spoc": "Shubham",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Chetan"
-    },
-    {
-      "State": "Rajasthan",
-      "City": "Chittorgarh",
-      "Dealer / COCO": "Sisodia Automobile Pvt Ltd",
-      "VF Spoc": "Shubham",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Chetan"
-    },
-    {
-      "State": "Rajasthan",
-      "City": "Banswara",
-      "Dealer / COCO": "Taiyyab Motors",
-      "VF Spoc": "Shubham",
-      "Remarks": "07-07 Masked Aadhar pending, Rest documents have been completed\n08-07 Visited Banswara met DP asked to share Masked Aadhar will be following up for the same",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Chetan"
-    },
-    {
-      "State": "Rajasthan",
-      "City": "Bharatpur",
-      "Dealer / COCO": "Arya Enterprises",
-      "VF Spoc": "Shubham",
-      "Remarks": "",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sumit"
-    },
-    {
-      "State": "Rajasthan",
-      "City": "Sikar",
-      "Dealer / COCO": "NRK Motors",
-      "VF Spoc": "Shubham",
-      "Remarks": "02-07 Docs shared to HFCL\n10-07 E-sign Mail initiation pending from HFCL End",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sumit"
-    },
-    {
-      "State": "TN",
-      "City": "Kallakuruchi",
-      "Dealer / COCO": "Bharani Motors",
-      "VF Spoc": "Sharan",
-      "Remarks": "Code Created",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Vijay"
-    },
-    {
-      "State": "TN",
-      "City": "Salem",
-      "Dealer / COCO": "Bharani Motors",
-      "VF Spoc": "Sharan",
-      "Remarks": "Code Created",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Vijay"
-    },
-    {
-      "State": "TN",
-      "City": "Trichy",
-      "Dealer / COCO": "AJ Electric",
-      "VF Spoc": "Sharan",
-      "Remarks": "Code Created",
-      "Disbursement Status": "",
-      "HFCL SPOC": "VIjay"
-    },
-    {
-      "State": "TN",
-      "City": "Tenkasi",
-      "Dealer / COCO": "AJ Electric",
-      "VF Spoc": "Sharan",
-      "Remarks": "Code Created",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "TN",
-      "City": "Chennai",
-      "Dealer / COCO": "MSJ Motors",
-      "VF Spoc": "Sharan",
-      "Remarks": "7/7 : Complete docs shared, Code Pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Jana"
-    },
-    {
-      "State": "TN",
-      "City": "Chennai",
-      "Dealer / COCO": "The Empire",
-      "VF Spoc": "Sharan",
-      "Remarks": "7/7 ;Complete docs shared, Code Pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Jana"
-    },
-    {
-      "State": "TN",
-      "City": "Coimbatore",
-      "Dealer / COCO": "SS Motors",
-      "VF Spoc": "Sharan",
-      "Remarks": "7/7 ;Complete docs shared, Code Pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "VIjay"
-    },
-    {
-      "State": "TN",
-      "City": "Tiruppur",
-      "Dealer / COCO": "Ultimate Vehicles",
-      "VF Spoc": "Sharan",
-      "Remarks": "7/7 ;Complete docs shared, Code Pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "VIjay"
-    },
-    {
-      "State": "TN",
-      "City": "Tiruvanamalai",
-      "Dealer / COCO": "Elektro Orbit",
-      "VF Spoc": "Sharan",
-      "Remarks": "7/7 ;Complete docs shared, Code Pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Jana"
-    },
-    {
-      "State": "TN",
-      "City": "Vellore",
-      "Dealer / COCO": "Elektro Orbit",
-      "VF Spoc": "Sharan",
-      "Remarks": "7/7 ;Complete docs shared, Code Pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Jana"
-    },
-    {
-      "State": "TN",
-      "City": "Hosur",
-      "Dealer / COCO": "Sri Mahalaxmee Agri and Construction Equipment",
-      "VF Spoc": "Anil",
-      "Remarks": "10/7 : Dealership inaguration is scheduled on 13/07",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "TN",
-      "City": "Madurai",
-      "Dealer / COCO": "Gee Motors",
-      "VF Spoc": "Sharan",
-      "Remarks": "9/7 : All docx pending from dealer, mail sent",
-      "Disbursement Status": "",
-      "HFCL SPOC": "VIjay"
-    },
-    {
-      "State": "TR",
-      "City": "Agartala",
-      "Dealer / COCO": "Nag Automobiles",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-10/7 TC Awaited",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "-"
-    },
-    {
-      "State": "TS",
-      "City": "Nizamabad",
-      "Dealer / COCO": "SSM Motors",
-      "VF Spoc": "Anil",
-      "Remarks": "Dealer Code issued, HFCL Manpower not present",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Charan Reddy"
-    },
-    {
-      "State": "TS",
-      "City": "Hyderabad",
-      "Dealer / COCO": "Pragathi commercial",
-      "VF Spoc": "Anil",
-      "Remarks": "9/7 : All docs Submitted, Code creation under process",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Charan Reddy"
-    },
-    {
-      "State": "UP",
-      "City": "Varanasi",
-      "Dealer / COCO": "Krishna Auto",
-      "VF Spoc": "Adil",
-      "Remarks": "DAR10032",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Shekhar"
-    },
-    {
-      "State": "UP",
-      "City": "Lucknow",
-      "Dealer / COCO": "MG Road Link",
-      "VF Spoc": "Adil",
-      "Remarks": "Code Created",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Shekhar"
-    },
-    {
-      "State": "UP",
-      "City": "Kanpur",
-      "Dealer / COCO": "SKRB",
-      "VF Spoc": "Adil",
-      "Remarks": "Code Created",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Shekhar"
-    },
-    {
-      "State": "UP",
-      "City": "Prayagraj",
-      "Dealer / COCO": "SS Enterprises",
-      "VF Spoc": "Adil",
-      "Remarks": "Code Created",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Shekhar"
-    },
-    {
-      "State": "UP",
-      "City": "Lakhimpur",
-      "Dealer / COCO": "Momentum Point",
-      "VF Spoc": "Adil",
-      "Remarks": "8/7 Code expecting by EOD\n8/7 Code created",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Shekhar"
-    },
-    {
-      "State": "UP",
-      "City": "Lucknow",
-      "Dealer / COCO": "Ecoedge",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-10/7  BR pending from 27 June",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Shekhar"
-    },
-    {
-      "State": "UP",
-      "City": "Gorakhpur",
-      "Dealer / COCO": "Hanumant\n Enterprises",
-      "VF Spoc": "Adil",
-      "Remarks": "Impanelment form pending from 25th June\n7/7-10/7  Still impanelment in process",
-      "Disbursement Status": "No",
-      "HFCL SPOC": "Shekhar"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Greater Noida",
-      "Dealer / COCO": "Bhutani Autocorp",
-      "VF Spoc": "Harsh",
-      "Remarks": "07 July - Partners authority letter, Dealer Empanelment form pending from dealer end \n08 July -10 July- Partner sign pending on authority letter, Patner lives in Ludhiana, he will share by post by Monday 13July",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Moradabad",
-      "Dealer / COCO": "Rajpoot Automobiles",
-      "VF Spoc": "Harsh",
-      "Remarks": "07 July - Dealer partner authority letter signature pending, partner out of station\n08 July - Dealer will come back by 14th, Patner sign on authority letter pending \n10 July - Docs Pending",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Gaurav Sen"
-    },
-    {
-      "State": "Delhi",
-      "City": "North Delhi",
-      "Dealer / COCO": "Green Stone",
-      "VF Spoc": "Harsh",
-      "Remarks": "29 June - Docs sent to HFCL over email \n01 - 10 July  - Retail code opening in process",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "Haryana",
-      "City": "Jhajjar",
-      "Dealer / COCO": "Param Automobiles",
-      "VF Spoc": "Harsh",
-      "Remarks": "25 June - Docs sent to HFCL over email \n01 - 10 July  - Retail code opening in process",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "Haryana",
-      "City": "Gurgaon",
-      "Dealer / COCO": "Techup Consulting",
-      "VF Spoc": "Harsh",
-      "Remarks": "26 June - Docs sent to HFCL over email \n01 - 10July  - Retail code opening in process",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Sameer"
-    },
-    {
-      "State": "Haryana",
-      "City": "Kurukshetra",
-      "Dealer / COCO": "VPS Motors",
-      "VF Spoc": "Harsh",
-      "Remarks": "24 June - Docs sent over email \n01 - 10 July  - Retail code opening in process",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Anchal"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Bhopal",
-      "Dealer / COCO": "RND Electrik",
-      "VF Spoc": "Harsh",
-      "Remarks": "06 July - All docs complete, shared with HFCL\n07 - 10 July - Retail code opening in process",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Khusboo"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Indore",
-      "Dealer / COCO": "Royal Automobile",
-      "VF Spoc": "Harsh",
-      "Remarks": "9 - 10 July - Documents shared , Dealer code in Process",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Dheeraj"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Ujjain",
-      "Dealer / COCO": "Swastik Enterprises",
-      "VF Spoc": "Harsh",
-      "Remarks": "9 - 10 July - EKYC pending from Dealer end (Dealer is out of India)",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Khusboo"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Bareilly",
-      "Dealer / COCO": "Aneja Transport",
-      "VF Spoc": "Harsh",
-      "Remarks": "27 June - Docs sent to HFCL over email \n01 - 10 July  - Retail code opening in process",
-      "Disbursement Status": "",
-      "HFCL SPOC": "Gaurav Sen"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Mathura",
-      "Dealer / COCO": "Shreya Enterprises",
-      "VF Spoc": "Harsh",
-      "Remarks": "No Manpower",
-      "Disbursement Status": "",
-      "HFCL SPOC": "shekhar"
-    },
-    {
-      "State": "WB",
-      "City": "Siliguri",
-      "Dealer / COCO": "Sri RS Vistar Ventures",
-      "VF Spoc": "Rohit",
-      "Remarks": "Documents shared with HFCL, HCL manpower not there",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "WB",
-      "City": "Durgapur",
-      "Dealer / COCO": "Volt Wheels",
-      "VF Spoc": "Rohit",
-      "Remarks": "Documents shared with HFCL, HCL manpower not there",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    },
-    {
-      "State": "WB",
-      "City": "Howrah",
-      "Dealer / COCO": "RNS Green",
-      "VF Spoc": "Rohit",
-      "Remarks": "Documents shared with HFCL, HCL manpower not there",
-      "Disbursement Status": "",
-      "HFCL SPOC": ""
-    }
-  ],
-  "amu_retail": [
-    {
-      "State": "Bihar",
-      "City": "Muzaffarpur",
-      "Dealer / COCO": "Saumya Motors",
-      "VF Spoc": "Adil",
-      "Remarks": "Code Created",
-      "Disbursement Status": "No",
-      "RM": "Arup"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Prayagraj",
-      "Dealer / COCO": "SS Enterprises",
-      "VF Spoc": "Adil",
-      "Remarks": "Code Created",
-      "Disbursement Status": "No",
-      "RM": "Subesh"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Varanasi",
-      "Dealer / COCO": "Krishna Auto Sales",
-      "VF Spoc": "Adil",
-      "Remarks": "Code Created",
-      "Disbursement Status": "No",
-      "RM": "Subesh"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Indore",
-      "Dealer / COCO": "Royal Automobile",
-      "VF Spoc": "Raj",
-      "Remarks": "Code Created",
-      "Disbursement Status": "Yes",
-      "RM": ""
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Jabalpur",
-      "Dealer / COCO": "Elite Motors",
-      "VF Spoc": "Raj",
-      "Remarks": "Code Created",
-      "Disbursement Status": "Yes",
-      "RM": ""
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Agra",
-      "Dealer / COCO": "Vishal Agencies",
-      "VF Spoc": "Raj",
-      "Remarks": "Code Created",
-      "Disbursement Status": "Yes",
-      "RM": ""
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Aligarh",
-      "Dealer / COCO": "Plan Bee",
-      "VF Spoc": "Raj",
-      "Remarks": "Code Created",
-      "Disbursement Status": "Yes",
-      "RM": ""
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Etawah",
-      "Dealer / COCO": "Mishra Commercials",
-      "VF Spoc": "Raj",
-      "Remarks": "Code Created",
-      "Disbursement Status": "Yes",
-      "RM": ""
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Mathura",
-      "Dealer / COCO": "Shreya Enterprises",
-      "VF Spoc": "Raj",
-      "Remarks": "Code Created",
-      "Disbursement Status": "Yes",
-      "RM": ""
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "New Agra",
-      "Dealer / COCO": "Shree Balaji Automobiles",
-      "VF Spoc": "Raj",
-      "Remarks": "Code Created",
-      "Disbursement Status": "Yes",
-      "RM": ""
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Noida",
-      "Dealer / COCO": "Smart Solution",
-      "VF Spoc": "Raj",
-      "Remarks": "Code Created",
-      "Disbursement Status": "No",
-      "RM": ""
-    },
-    {
-      "State": "Odisha",
-      "City": "Bhubaneswar",
-      "Dealer / COCO": "Multire Ventures",
-      "VF Spoc": "Rohit Singh",
-      "Remarks": "",
-      "Disbursement Status": "Yes",
-      "RM": ""
-    },
-    {
-      "State": "Uttrakhand",
-      "City": "Dehradun",
-      "Dealer / COCO": "Doon Motors",
-      "VF Spoc": "Shubham",
-      "Remarks": "",
-      "Disbursement Status": "No",
-      "RM": ""
-    },
-    {
-      "State": "Bihar",
-      "City": "Patna",
-      "Dealer / COCO": "Anand Automobiles",
-      "VF Spoc": "Adil",
-      "Remarks": "10/7 RBH  will visit the dealer - Today.",
-      "Disbursement Status": "No",
-      "RM": "Arup"
-    },
-    {
-      "State": "Bihar",
-      "City": "Patna",
-      "Dealer / COCO": "COCO_Patna",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-8/7  Waiting- RBH response for code\n9/7 RBH saying- Give me some time for COCO code.",
-      "Disbursement Status": "No",
-      "RM": "Arup"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Gorakhpur",
-      "Dealer / COCO": "Hanumant Entprises",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-8/7  Docs pending. Dealer end\n10/7- The dealer said they will provide all the documents within two days.",
-      "Disbursement Status": "No",
-      "RM": "Subesh"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Kanpur",
-      "Dealer / COCO": "SKRB Automobiles",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-10/7  Authorisation letter pending. Financier end",
-      "Disbursement Status": "No",
-      "RM": "Subesh"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Lucknow",
-      "Dealer / COCO": "COCO_Lucknow",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-10/7 The financier also requires Saurabh \nSir's mother's KYC documents to open the code.",
-      "Disbursement Status": "No",
-      "RM": "Subesh"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Lucknow",
-      "Dealer / COCO": "Ecoedge Enterprises",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-10/7  Autorisation letter pending. Dealer end.",
-      "Disbursement Status": "No",
-      "RM": "Subesh"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Lucknow",
-      "Dealer / COCO": "MG Road Link",
-      "VF Spoc": "Adil",
-      "Remarks": "7/7-8/7  Docs pending. Dealer end\n9/7 - Financier- Alok  will visit the dealer -  Tomorrow\n10/7  Financier- Alok  will visit the dealer- Today \nafter that , he will collect the docs.",
-      "Disbursement Status": "No",
-      "RM": "Subesh"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Bhopal",
-      "Dealer / COCO": "RND Electrik",
-      "VF Spoc": "Raj",
-      "Remarks": "Docs shared to ASM of AMU // Manpower is not available",
-      "Disbursement Status": "No",
-      "RM": ""
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Gwalior",
-      "Dealer / COCO": "Art of Awadh",
-      "VF Spoc": "Raj",
-      "Remarks": "Dealer closed",
-      "Disbursement Status": "No",
-      "RM": ""
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Katni",
-      "Dealer / COCO": "Manvik Enterprises",
-      "VF Spoc": "Raj",
-      "Remarks": "Docs shared to ASM of AMU // Manpower is not available",
-      "Disbursement Status": "No",
-      "RM": ""
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Ujjain",
-      "Dealer / COCO": "Swastik Enterprises",
-      "VF Spoc": "Raj",
-      "Remarks": "Manpower is not available",
-      "Disbursement Status": "No",
-      "RM": ""
-    },
-    {
-      "State": "Odisha",
-      "City": "Balasore",
-      "Dealer / COCO": "Shubham Motors",
-      "VF Spoc": "Rohit Singh",
-      "Remarks": "TC Pending",
-      "Disbursement Status": "No",
-      "RM": ""
-    }
-  ],
-  "annapurna_retail": [
-    {
-      "State": "Bihar",
-      "City": "Purnea",
-      "Dealer / COCO": "Bharat Auto",
-      "VF Spoc": "Adil",
-      "Status": "Code Created",
-      "Disbursement Status": "Yes",
-      "Remarks": ""
-    },
-    {
-      "State": "Bihar",
-      "City": "Patna",
-      "Dealer / COCO": "COCO",
-      "VF Spoc": "Adil",
-      "Status": "Code Created",
-      "Disbursement Status": "Yes",
-      "Remarks": ""
-    },
-    {
-      "State": "Bihar",
-      "City": "Dharbhanga",
-      "Dealer / COCO": "Eco electric",
-      "VF Spoc": "Adil",
-      "Status": "Code Created",
-      "Disbursement Status": "",
-      "Remarks": ""
-    },
-    {
-      "State": "Bihar",
-      "City": "Muzaffarpur",
-      "Dealer / COCO": "Saumya Motors",
-      "VF Spoc": "Adil",
-      "Status": "Code Created",
-      "Disbursement Status": "",
-      "Remarks": ""
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Agra",
-      "Dealer / COCO": "Vishal Agencies",
-      "VF Spoc": "Harsh",
-      "Status": "Code Created",
-      "Disbursement Status": "Yes",
-      "Remarks": "code opened"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Agra 2",
-      "Dealer / COCO": "Shree Balaji Automobiles",
-      "VF Spoc": "Harsh",
-      "Status": "Code Created",
-      "Disbursement Status": "Yes",
-      "Remarks": "code opened"
-    },
-    {
-      "State": "Chhattisgarh",
-      "City": "Bilaspur",
-      "Dealer / COCO": "Infrafield Services",
-      "VF Spoc": "Harsh",
-      "Status": "Dealer Not intrested",
-      "Disbursement Status": "",
-      "Remarks": "Not ready for 6 month EMI guarantee"
-    },
-    {
-      "State": "Chhattisgarh",
-      "City": "Raipur",
-      "Dealer / COCO": "Maple Drive Pvt Ltd",
-      "VF Spoc": "Harsh",
-      "Status": "Docs Pending",
-      "Disbursement Status": "No",
-      "Remarks": "Notarised agreement Pending"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Bareilly",
-      "Dealer / COCO": "Aneja Transport",
-      "VF Spoc": "Harsh",
-      "Status": "Docs Pending",
-      "Disbursement Status": "",
-      "Remarks": "Notarised agreement Pending"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Ghaziabad",
-      "Dealer / COCO": "Smart Solution",
-      "VF Spoc": "Harsh",
-      "Status": "Docs Pending",
-      "Disbursement Status": "",
-      "Remarks": "Docs pending"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Greater Noida",
-      "Dealer / COCO": "Bhutani Autocorp",
-      "VF Spoc": "Harsh",
-      "Status": "Docs Pending",
-      "Disbursement Status": "",
-      "Remarks": "Docs pending"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Noida",
-      "Dealer / COCO": "Smart Solution",
-      "VF Spoc": "Harsh",
-      "Status": "Docs Pending",
-      "Disbursement Status": "",
-      "Remarks": "Docs pending"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Gwalior",
-      "Dealer / COCO": "Shivam Motors",
-      "VF Spoc": "Harsh",
-      "Status": "Docs Pending",
-      "Disbursement Status": "",
-      "Remarks": "New Dealer TC Pending"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Bhopal",
-      "Dealer / COCO": "RND Electric",
-      "VF Spoc": "Harsh",
-      "Status": "Docs Pending",
-      "Disbursement Status": "",
-      "Remarks": "Docs list shared to dealer"
-    },
-    {
-      "State": "Odisha",
-      "City": "Bhubaneswar",
-      "Dealer / COCO": "Multire Ventures",
-      "VF Spoc": "Rohit Singh",
-      "Status": "Code Created",
-      "Disbursement Status": "Yes",
-      "Remarks": "Disbursement Received"
-    },
-    {
-      "State": "RJ",
-      "City": "Jaipur",
-      "Dealer / COCO": "Rahat Automotives",
-      "VF Spoc": "Shubham",
-      "Status": "Code Created",
-      "Disbursement Status": "",
-      "Remarks": "code opened"
-    },
-    {
-      "State": "RJ",
-      "City": "Bikaner",
-      "Dealer / COCO": "Roshan Motors",
-      "VF Spoc": "Shubham",
-      "Status": "Docs Pending",
-      "Disbursement Status": "",
-      "Remarks": "Manpower Not Available"
-    },
-    {
-      "State": "RJ",
-      "City": "Jodhpur",
-      "Dealer / COCO": "Himmat Jai Automotives",
-      "VF Spoc": "Shubham",
-      "Status": "Docs Pending",
-      "Disbursement Status": "",
-      "Remarks": "Manpower Not Available"
-    },
-    {
-      "State": "RJ",
-      "City": "Sikar",
-      "Dealer / COCO": "NRK Motors",
-      "VF Spoc": "Shubham",
-      "Status": "Docs Pending",
-      "Disbursement Status": "",
-      "Remarks": "Manpower Not Available"
-    },
-    {
-      "State": "RJ",
-      "City": "Jaipur",
-      "Dealer / COCO": "Akar Fourwheels",
-      "VF Spoc": "Shubham",
-      "Status": "Docs shared to Annapurna",
-      "Disbursement Status": "",
-      "Remarks": "07-07 - Documentation Completed, Agreement pending from annapurana\n09-07 - Agreement pending from annapurna end"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Mathura",
-      "Dealer / COCO": "Shreya Enterprises",
-      "VF Spoc": "Harsh",
-      "Status": "No Manpower",
-      "Disbursement Status": "",
-      "Remarks": "Docs Shared, No Manpower"
-    },
-    {
-      "State": "Uttar Pradesh",
-      "City": "Moradabad",
-      "Dealer / COCO": "Rajpoot Automobiles",
-      "VF Spoc": "Harsh",
-      "Status": "No Manpower",
-      "Disbursement Status": "",
-      "Remarks": "Docs Shared, No Manpower"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Jabalpur",
-      "Dealer / COCO": "Elite Motors",
-      "VF Spoc": "Harsh",
-      "Status": "No Manpower",
-      "Disbursement Status": "",
-      "Remarks": "No Manpower"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Indore",
-      "Dealer / COCO": "Royal Automotive",
-      "VF Spoc": "Harsh",
-      "Status": "No Manpower",
-      "Disbursement Status": "",
-      "Remarks": "No Manpower"
-    },
-    {
-      "State": "Madhya Pradesh",
-      "City": "Ujjain",
-      "Dealer / COCO": "Swastik Enterprises",
-      "VF Spoc": "Harsh",
-      "Status": "No Manpower",
-      "Disbursement Status": "",
-      "Remarks": "No Manpower"
-    },
-    {
-      "State": "UP",
-      "City": "Lucknow",
-      "Dealer / COCO": "Ecoedge",
-      "VF Spoc": "Adil",
-      "Status": "Docs Pending",
-      "Disbursement Status": "",
-      "Remarks": "9/7- 10/7  Agreement pending dealer end."
-    },
-    {
-      "State": "UP",
-      "City": "Lucknow",
-      "Dealer / COCO": "MG Road Link",
-      "VF Spoc": "Adil",
-      "Status": "Docs Pending",
-      "Disbursement Status": "",
-      "Remarks": "9/7- 10/7  Agreement pending- Financier end.  it will come by Tomorrow"
-    },
-    {
-      "State": "UP",
-      "City": "Prayagraj",
-      "Dealer / COCO": "SS Enterprises",
-      "VF Spoc": "Adil",
-      "Status": "Docs shared to Annapurna",
-      "Disbursement Status": "",
-      "Remarks": "9/7- 10/7  Docs shared to Annapurna"
-    }
-  ]
-};
+  });
+}
+
+function buildTAIFViewHTML(key, section) {
+  return '<div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+    '<input type="text" class="search-box" id="taifSearch_'+key+'" placeholder="Search..." oninput="renderTAIFCustomView(\''+section+'\',\''+key+'\')" style="width:200px;">' +
+    '<button class="btn btn-primary btn-sm" onclick="openTAIFRowModal(\''+section+'\',\''+key+'\',null)">＋ Add Row</button>' +
+    '</div><div id="taifView_'+key+'"></div>';
+}
+
+function renderTAIFCustomView(section, key) {
+  var el = document.getElementById('taifView_'+key);
+  if (!el) return;
+  var isRetail = section === 'retail';
+  var cols = ['Sr. No.'].concat(isRetail ? RETAIL_COLS : TAIF_COLS);
+  var badgeCols = isRetail ? ['Status','Disbursement Status'] : ['Status'];
+  var rows = getTAIFArray(section, key);
+  var searchEl = document.getElementById('taifSearch_'+key);
+  var search = searchEl ? searchEl.value.toLowerCase() : '';
+  var filtered = rows.filter(function(r){
+    if (!search) return true;
+    return cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(search); });
+  });
+  el.innerHTML = renderTAIFTable(filtered, rows, cols, badgeCols, section, key);
+}
+
+function renderTAIFTable(filtered, allRows, cols, badgeCols, section, key) {
+  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr style="background:var(--surface2);color:var(--text-muted);">';
+  cols.forEach(function(c){ html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">'+c+'</th>'; });
+  html += '<th style="padding:8px 12px;width:70px;">Actions</th></tr></thead><tbody>';
+  var realIdx = 0;
+  filtered.forEach(function(r, i) {
+    var origIdx = allRows.indexOf(r);
+    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--surface2);':'')+'">'; 
+    cols.forEach(function(c){
+      var v = String(r[c]||'');
+      if (badgeCols.indexOf(c) > -1 && v) {
+        var col = v.toLowerCase().match(/disbursed|approved|created|done|yes|complete/) ? '#4ade80' :
+                  v.toLowerCase().match(/pending|submitted|applied|processing/) ? '#f59e0b' :
+                  v.toLowerCase().match(/rejected|not interested|no |declined/) ? '#f87171' : '#94a3b8';
+        v = '<span style="background:'+col+'22;color:'+col+';border:1px solid '+col+'44;border-radius:4px;padding:2px 8px;font-size:11px;white-space:nowrap;">'+v+'</span>';
+      }
+      html += '<td style="padding:7px 12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(r[c]||'').replace(/"/g,"'")+'">'+v+'</td>';
+    });
+    html += '<td style="padding:7px 8px;white-space:nowrap;">' +
+      '<button class="btn btn-secondary btn-sm" onclick="openTAIFRowModal(\''+section+'\',\''+key+'\','+origIdx+')" style="padding:2px 8px;font-size:11px;">✏️</button> ' +
+      '<button class="btn btn-danger btn-sm" onclick="deleteTAIFRow(\''+section+'\',\''+key+'\','+origIdx+')" style="padding:2px 8px;font-size:11px;">🗑</button>' +
+      '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+  html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">'+filtered.length+' of '+allRows.length+' records</div>';
+  return html;
+}
 
 function renderTAIFView_shriram_ta() {
-  var el = document.getElementById('taifView_shriram_ta');
-  if (!el) return;
+  var filterBarEl = document.getElementById('taifFilterBar_shriram_ta');
   var rows = TAIF_DATA['shriram_ta'];
-  var cols = ["Sr No", "VF - Rm", "State", "City", "Dealer Name", "Sales RM", "TA or Credit limit", "Target", "Approved", "Status", "Remarks"];
-  var badgeCols = ["Status"];
-  var searchEl = document.getElementById('taifSearch_shriram_ta');
-  var search = searchEl ? searchEl.value.toLowerCase() : '';
-  var filtered = rows.filter(function(r){
-    if (!search) return true;
-    return cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(search); });
-  });
-  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead><tr style="background:var(--surface2);color:var(--text-muted);">';
-  cols.forEach(function(c){ html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">'+c+'</th>'; });
-  html += '</tr></thead><tbody>';
-  filtered.forEach(function(r, i){
-    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--surface2);':'')+'">';
-    cols.forEach(function(c){
-      var v = String(r[c]||'');
-      if (badgeCols.indexOf(c) > -1 && v) {
-        var col = v.toLowerCase().match(/disbursed|approved|created|done|yes|complete/) ? '#4ade80' :
-                  v.toLowerCase().match(/pending|submitted|applied|processing|progress/) ? '#f59e0b' :
-                  v.toLowerCase().match(/rejected|not interested|no |declined/) ? '#f87171' : '#94a3b8';
-        v = '<span style="background:'+col+'22;color:'+col+';border:1px solid '+col+'44;border-radius:4px;padding:2px 8px;font-size:11px;white-space:nowrap;">'+v+'</span>';
-      }
-      html += '<td style="padding:7px 12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(r[c]||'').replace(/"/g,"'")+'">'+v+'</td>';
-    });
-    html += '</tr>';
-  });
-  html += '</tbody></table></div>';
-  html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">'+filtered.length+' of '+rows.length+' records</div>';
-  el.innerHTML = html;
+  var cols = ["Sr. No.", "State", "City", "Dealer Name", "VF RM", "Sales RM", "Type", "Status", "Remarks"];
+  var badgeCols = ["Status", "Type"];
+  var section = 'taif';
+  if (filterBarEl && !filterBarEl.hasChildNodes()) filterBarEl.innerHTML = buildTAIFFilterBar('shriram_ta', rows, section, 'renderTAIFView_shriram_ta');
+  var filtered = applyTAIFFilters(rows, 'shriram_ta', section);
+  var el = document.getElementById('taifView_shriram_ta');
+  if (el) el.innerHTML = renderTAIFTable(filtered, rows, cols, badgeCols, section, 'shriram_ta');
 }
+
 
 function renderTAIFView_hfcl_if() {
-  var el = document.getElementById('taifView_hfcl_if');
-  if (!el) return;
+  var filterBarEl = document.getElementById('taifFilterBar_hfcl_if');
   var rows = TAIF_DATA['hfcl_if'];
-  var cols = ["S,no", "State", "City", "VF RM - Name", "Dealer Name", "Dealer Number", "Dealer Interested", "Docs Status", "Approval Status", "Status", "Remarks"];
-  var badgeCols = ["Status", "Dealer Interested", "Docs Status", "Approval Status"];
-  var searchEl = document.getElementById('taifSearch_hfcl_if');
-  var search = searchEl ? searchEl.value.toLowerCase() : '';
-  var filtered = rows.filter(function(r){
-    if (!search) return true;
-    return cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(search); });
-  });
-  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead><tr style="background:var(--surface2);color:var(--text-muted);">';
-  cols.forEach(function(c){ html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">'+c+'</th>'; });
-  html += '</tr></thead><tbody>';
-  filtered.forEach(function(r, i){
-    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--surface2);':'')+'">';
-    cols.forEach(function(c){
-      var v = String(r[c]||'');
-      if (badgeCols.indexOf(c) > -1 && v) {
-        var col = v.toLowerCase().match(/disbursed|approved|created|done|yes|complete/) ? '#4ade80' :
-                  v.toLowerCase().match(/pending|submitted|applied|processing|progress/) ? '#f59e0b' :
-                  v.toLowerCase().match(/rejected|not interested|no |declined/) ? '#f87171' : '#94a3b8';
-        v = '<span style="background:'+col+'22;color:'+col+';border:1px solid '+col+'44;border-radius:4px;padding:2px 8px;font-size:11px;white-space:nowrap;">'+v+'</span>';
-      }
-      html += '<td style="padding:7px 12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(r[c]||'').replace(/"/g,"'")+'">'+v+'</td>';
-    });
-    html += '</tr>';
-  });
-  html += '</tbody></table></div>';
-  html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">'+filtered.length+' of '+rows.length+' records</div>';
-  el.innerHTML = html;
+  var cols = ["Sr. No.", "State", "City", "Dealer Name", "VF RM", "Sales RM", "Type", "Status", "Remarks"];
+  var badgeCols = ["Status"];
+  var section = 'taif';
+  if (filterBarEl && !filterBarEl.hasChildNodes()) filterBarEl.innerHTML = buildTAIFFilterBar('hfcl_if', rows, section, 'renderTAIFView_hfcl_if');
+  var filtered = applyTAIFFilters(rows, 'hfcl_if', section);
+  var el = document.getElementById('taifView_hfcl_if');
+  if (el) el.innerHTML = renderTAIFTable(filtered, rows, cols, badgeCols, section, 'hfcl_if');
 }
+
 
 function renderTAIFView_ecofy_ta() {
-  var el = document.getElementById('taifView_ecofy_ta');
-  if (!el) return;
+  var filterBarEl = document.getElementById('taifFilterBar_ecofy_ta');
   var rows = TAIF_DATA['ecofy_ta'];
-  var cols = ["LAN", "Borrower name", "Sanction Date", "Expiry Date", "Sanction limit", "POS", "Available limit", "Sanction Loan Status"];
-  var badgeCols = ["Sanction Loan Status"];
-  var searchEl = document.getElementById('taifSearch_ecofy_ta');
-  var search = searchEl ? searchEl.value.toLowerCase() : '';
-  var filtered = rows.filter(function(r){
-    if (!search) return true;
-    return cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(search); });
-  });
-  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead><tr style="background:var(--surface2);color:var(--text-muted);">';
-  cols.forEach(function(c){ html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">'+c+'</th>'; });
-  html += '</tr></thead><tbody>';
-  filtered.forEach(function(r, i){
-    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--surface2);':'')+'">';
-    cols.forEach(function(c){
-      var v = String(r[c]||'');
-      if (badgeCols.indexOf(c) > -1 && v) {
-        var col = v.toLowerCase().match(/disbursed|approved|created|done|yes|complete/) ? '#4ade80' :
-                  v.toLowerCase().match(/pending|submitted|applied|processing|progress/) ? '#f59e0b' :
-                  v.toLowerCase().match(/rejected|not interested|no |declined/) ? '#f87171' : '#94a3b8';
-        v = '<span style="background:'+col+'22;color:'+col+';border:1px solid '+col+'44;border-radius:4px;padding:2px 8px;font-size:11px;white-space:nowrap;">'+v+'</span>';
-      }
-      html += '<td style="padding:7px 12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(r[c]||'').replace(/"/g,"'")+'">'+v+'</td>';
-    });
-    html += '</tr>';
-  });
-  html += '</tbody></table></div>';
-  html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">'+filtered.length+' of '+rows.length+' records</div>';
-  el.innerHTML = html;
+  var cols = ["Sr. No.", "State", "City", "Dealer Name", "VF RM", "Sales RM", "Type", "Status", "Remarks"];
+  var badgeCols = ["Status", "Type"];
+  var section = 'taif';
+  if (filterBarEl && !filterBarEl.hasChildNodes()) filterBarEl.innerHTML = buildTAIFFilterBar('ecofy_ta', rows, section, 'renderTAIFView_ecofy_ta');
+  var filtered = applyTAIFFilters(rows, 'ecofy_ta', section);
+  var el = document.getElementById('taifView_ecofy_ta');
+  if (el) el.innerHTML = renderTAIFTable(filtered, rows, cols, badgeCols, section, 'ecofy_ta');
 }
+
 
 function renderTAIFView_hfcl_retail() {
-  var el = document.getElementById('taifView_hfcl_retail');
-  if (!el) return;
+  var filterBarEl = document.getElementById('taifFilterBar_hfcl_retail');
   var rows = TAIF_DATA['hfcl_retail'];
-  var cols = ["State", "City", "Dealer / COCO", "VF Spoc", "Remarks", "Disbursement Status", "HFCL SPOC"];
-  var badgeCols = ["Disbursement Status", "Remarks"];
-  var searchEl = document.getElementById('taifSearch_hfcl_retail');
-  var search = searchEl ? searchEl.value.toLowerCase() : '';
-  var filtered = rows.filter(function(r){
-    if (!search) return true;
-    return cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(search); });
-  });
-  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead><tr style="background:var(--surface2);color:var(--text-muted);">';
-  cols.forEach(function(c){ html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">'+c+'</th>'; });
-  html += '</tr></thead><tbody>';
-  filtered.forEach(function(r, i){
-    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--surface2);':'')+'">';
-    cols.forEach(function(c){
-      var v = String(r[c]||'');
-      if (badgeCols.indexOf(c) > -1 && v) {
-        var col = v.toLowerCase().match(/disbursed|approved|created|done|yes|complete/) ? '#4ade80' :
-                  v.toLowerCase().match(/pending|submitted|applied|processing|progress/) ? '#f59e0b' :
-                  v.toLowerCase().match(/rejected|not interested|no |declined/) ? '#f87171' : '#94a3b8';
-        v = '<span style="background:'+col+'22;color:'+col+';border:1px solid '+col+'44;border-radius:4px;padding:2px 8px;font-size:11px;white-space:nowrap;">'+v+'</span>';
-      }
-      html += '<td style="padding:7px 12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(r[c]||'').replace(/"/g,"'")+'">'+v+'</td>';
-    });
-    html += '</tr>';
-  });
-  html += '</tbody></table></div>';
-  html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">'+filtered.length+' of '+rows.length+' records</div>';
-  el.innerHTML = html;
+  var cols = ["Sr. No.", "State", "City", "Dealer Name", "VF SPOC", "Status", "Disbursement Status", "Remarks"];
+  var badgeCols = ["Status", "Disbursement Status"];
+  var section = 'retail';
+  if (filterBarEl && !filterBarEl.hasChildNodes()) filterBarEl.innerHTML = buildTAIFFilterBar('hfcl_retail', rows, section, 'renderTAIFView_hfcl_retail');
+  var filtered = applyTAIFFilters(rows, 'hfcl_retail', section);
+  var el = document.getElementById('taifView_hfcl_retail');
+  if (el) el.innerHTML = renderTAIFTable(filtered, rows, cols, badgeCols, section, 'hfcl_retail');
 }
+
 
 function renderTAIFView_amu_retail() {
-  var el = document.getElementById('taifView_amu_retail');
-  if (!el) return;
+  var filterBarEl = document.getElementById('taifFilterBar_amu_retail');
   var rows = TAIF_DATA['amu_retail'];
-  var cols = ["State", "City", "Dealer / COCO", "VF Spoc", "Remarks", "Disbursement Status", "RM"];
-  var badgeCols = ["Disbursement Status", "Remarks"];
-  var searchEl = document.getElementById('taifSearch_amu_retail');
-  var search = searchEl ? searchEl.value.toLowerCase() : '';
-  var filtered = rows.filter(function(r){
-    if (!search) return true;
-    return cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(search); });
-  });
-  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead><tr style="background:var(--surface2);color:var(--text-muted);">';
-  cols.forEach(function(c){ html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">'+c+'</th>'; });
-  html += '</tr></thead><tbody>';
-  filtered.forEach(function(r, i){
-    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--surface2);':'')+'">';
-    cols.forEach(function(c){
-      var v = String(r[c]||'');
-      if (badgeCols.indexOf(c) > -1 && v) {
-        var col = v.toLowerCase().match(/disbursed|approved|created|done|yes|complete/) ? '#4ade80' :
-                  v.toLowerCase().match(/pending|submitted|applied|processing|progress/) ? '#f59e0b' :
-                  v.toLowerCase().match(/rejected|not interested|no |declined/) ? '#f87171' : '#94a3b8';
-        v = '<span style="background:'+col+'22;color:'+col+';border:1px solid '+col+'44;border-radius:4px;padding:2px 8px;font-size:11px;white-space:nowrap;">'+v+'</span>';
-      }
-      html += '<td style="padding:7px 12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(r[c]||'').replace(/"/g,"'")+'">'+v+'</td>';
-    });
-    html += '</tr>';
-  });
-  html += '</tbody></table></div>';
-  html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">'+filtered.length+' of '+rows.length+' records</div>';
-  el.innerHTML = html;
+  var cols = ["Sr. No.", "State", "City", "Dealer Name", "VF SPOC", "Status", "Disbursement Status", "Remarks"];
+  var badgeCols = ["Status", "Disbursement Status"];
+  var section = 'retail';
+  if (filterBarEl && !filterBarEl.hasChildNodes()) filterBarEl.innerHTML = buildTAIFFilterBar('amu_retail', rows, section, 'renderTAIFView_amu_retail');
+  var filtered = applyTAIFFilters(rows, 'amu_retail', section);
+  var el = document.getElementById('taifView_amu_retail');
+  if (el) el.innerHTML = renderTAIFTable(filtered, rows, cols, badgeCols, section, 'amu_retail');
 }
 
+
 function renderTAIFView_annapurna_retail() {
-  var el = document.getElementById('taifView_annapurna_retail');
-  if (!el) return;
+  var filterBarEl = document.getElementById('taifFilterBar_annapurna_retail');
   var rows = TAIF_DATA['annapurna_retail'];
-  var cols = ["State", "City", "Dealer / COCO", "VF Spoc", "Status", "Disbursement Status", "Remarks"];
+  var cols = ["Sr. No.", "State", "City", "Dealer Name", "VF SPOC", "Status", "Disbursement Status", "Remarks"];
   var badgeCols = ["Status", "Disbursement Status"];
-  var searchEl = document.getElementById('taifSearch_annapurna_retail');
-  var search = searchEl ? searchEl.value.toLowerCase() : '';
-  var filtered = rows.filter(function(r){
-    if (!search) return true;
-    return cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(search); });
-  });
-  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead><tr style="background:var(--surface2);color:var(--text-muted);">';
-  cols.forEach(function(c){ html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">'+c+'</th>'; });
-  html += '</tr></thead><tbody>';
-  filtered.forEach(function(r, i){
-    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--surface2);':'')+'">';
-    cols.forEach(function(c){
-      var v = String(r[c]||'');
-      if (badgeCols.indexOf(c) > -1 && v) {
-        var col = v.toLowerCase().match(/disbursed|approved|created|done|yes|complete/) ? '#4ade80' :
-                  v.toLowerCase().match(/pending|submitted|applied|processing|progress/) ? '#f59e0b' :
-                  v.toLowerCase().match(/rejected|not interested|no |declined/) ? '#f87171' : '#94a3b8';
-        v = '<span style="background:'+col+'22;color:'+col+';border:1px solid '+col+'44;border-radius:4px;padding:2px 8px;font-size:11px;white-space:nowrap;">'+v+'</span>';
-      }
-      html += '<td style="padding:7px 12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(r[c]||'').replace(/"/g,"'")+'">'+v+'</td>';
-    });
-    html += '</tr>';
-  });
-  html += '</tbody></table></div>';
-  html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">'+filtered.length+' of '+rows.length+' records</div>';
-  el.innerHTML = html;
+  var section = 'retail';
+  if (filterBarEl && !filterBarEl.hasChildNodes()) filterBarEl.innerHTML = buildTAIFFilterBar('annapurna_retail', rows, section, 'renderTAIFView_annapurna_retail');
+  var filtered = applyTAIFFilters(rows, 'annapurna_retail', section);
+  var el = document.getElementById('taifView_annapurna_retail');
+  if (el) el.innerHTML = renderTAIFTable(filtered, rows, cols, badgeCols, section, 'annapurna_retail');
 }
+
 
 function initTAIFViews() {
   renderTAIFView_shriram_ta();
@@ -8477,6 +6282,9 @@ function initTAIFViews() {
   renderTAIFView_hfcl_retail();
   renderTAIFView_amu_retail();
   renderTAIFView_annapurna_retail();
+  // Ensure modals dismissible
+  (function(){ var o=document.getElementById('taifRowModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeTAIFRowModal(); }); })();
+  (function(){ var o=document.getElementById('addViewModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeAddViewModal(); }); })();
 }
 // ── TA/IF & Retail Code Sub-tabs ──
 var _taifFIs   = ['shriram','hfcl','ecofy'];
@@ -8495,25 +6303,20 @@ function switchTAIFSubTab(tab) {
 }
 
 function switchTAIFFI(fi) {
-  _taifFIs.forEach(function(f) {
-    var btn = document.getElementById('taifFI_'+f);
-    var con = document.getElementById('taifFI_'+f+'_content');
-    var active = f === fi;
-    if (btn) btn.className = active ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
-    if (btn) btn.style.fontSize = '12px';
-    if (con) con.style.display = active ? '' : 'none';
-  });
+  // Hide all taif content divs
+  document.querySelectorAll('[id^="taifFI_"][id$="_content"]').forEach(function(el){ el.style.display='none'; });
+  // Deactivate all taif buttons
+  document.querySelectorAll('[id^="taifFIBtn_taif_"]').forEach(function(b){ b.className='btn btn-secondary btn-sm'; b.style.fontSize='12px'; });
+  // Show selected
+  var con = document.getElementById('taifFI_'+fi+'_content'); if (con) con.style.display = '';
+  var btn = document.getElementById('taifFIBtn_taif_'+fi); if (btn) { btn.className='btn btn-primary btn-sm'; btn.style.fontSize='12px'; }
 }
 
 function switchRetailFI(fi) {
-  _retailFIs.forEach(function(f) {
-    var btn = document.getElementById('retailFI_'+f);
-    var con = document.getElementById('retailFI_'+f+'_content');
-    var active = f === fi;
-    if (btn) btn.className = active ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
-    if (btn) btn.style.fontSize = '12px';
-    if (con) con.style.display = active ? '' : 'none';
-  });
+  document.querySelectorAll('[id^="retailFI_"][id$="_content"]').forEach(function(el){ el.style.display='none'; });
+  document.querySelectorAll('[id^="taifFIBtn_retail_"]').forEach(function(b){ b.className='btn btn-secondary btn-sm'; b.style.fontSize='12px'; });
+  var con = document.getElementById('retailFI_'+fi+'_content'); if (con) con.style.display = '';
+  var btn = document.getElementById('taifFIBtn_retail_'+fi); if (btn) { btn.className='btn btn-primary btn-sm'; btn.style.fontSize='12px'; }
 }
 // ══════════════════════════════════════════════════════════════
 var _snapFilter = 0; // 0=all, 1=1M, 3=3M, 6=6M, 12=12M
