@@ -1,6 +1,9 @@
-credentials.json
 __pycache__/
 *.pyc
 *.pyo
 .env
 .DS_Store
+.vercel/
+.venv/
+venv/
+.pytest_cache/
