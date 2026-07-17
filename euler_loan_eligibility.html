@@ -826,7 +826,9 @@ var state = {
   financiers: [], financiersMeta: [], addedDealers: [],
   dealersMaster: [], mapping: {}, fiPolicy: {}, fiPolicyGeo: [], dealerHealth: {}
 };
-var RAILWAY_URL = 'https://web-production-43ecd.up.railway.app';
+// API requests resolve RELATIVE to the current document base (same origin as
+// this page), so the app works at the Vercel root and behind the Jarvis gateway.
+function _apiUrl(ep) { return new URL('api/' + ep, document.baseURI).toString(); }
 
 
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -1695,14 +1697,17 @@ async function standaloneInit() {
     }
 
     async function apiFetch(ep) {
+      // Reject every non-2xx so a failed read is surfaced (via the outer
+      // try/catch) rather than silently becoming an empty dataset.
+      var controller = new AbortController();
+      var timeout = setTimeout(function(){ controller.abort(); }, 15000);
       try {
-        var controller = new AbortController();
-        var timeout = setTimeout(function(){ controller.abort(); }, 15000);
-        var r = await fetch(RAILWAY_URL + '/api/' + ep, { signal: controller.signal });
-        clearTimeout(timeout);
-        if (!r.ok) return null;
+        var r = await fetch(_apiUrl(ep), { signal: controller.signal });
+        if (!r.ok) throw new Error('Request failed (' + r.status + ')');
         return await r.json();
-      } catch(e) { return null; }
+      } finally {
+        clearTimeout(timeout);
+      }
     }
 
     setMsg('Loading data...');
