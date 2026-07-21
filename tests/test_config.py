@@ -7,21 +7,19 @@ from vf_app.config import ConfigError, load_config
 MINIMAL = {
     "GOOGLE_SHEET_ID": "sid",
     "GOOGLE_CREDENTIALS": '{"type":"service_account","private_key":"a\\\\nb"}',
-    "JARVIS_PROXY_SECRET": "secret",
 }
 
 
 def test_valid_config_loads_with_defaults():
     cfg = load_config(dict(MINIMAL))
     assert cfg.sheet_id == "sid"
-    assert cfg.proxy_secret == "secret"
     assert cfg.max_request_bytes == 1048576
     assert cfg.google_timeout_seconds == 10
     # The \\n in the private key is normalised to a real newline.
     assert "\n" in cfg.credentials["private_key"]
 
 
-@pytest.mark.parametrize("missing", ["GOOGLE_SHEET_ID", "JARVIS_PROXY_SECRET"])
+@pytest.mark.parametrize("missing", ["GOOGLE_SHEET_ID"])
 def test_missing_required_raises(missing):
     env = dict(MINIMAL)
     del env[missing]

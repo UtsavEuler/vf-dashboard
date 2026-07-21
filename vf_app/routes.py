@@ -1,11 +1,10 @@
 """HTTP interface: explicit HTML and JSON routes.
 
 No generic filesystem serving. Only `/` and `/eligibility` expose HTML; every
-other path is a 404. All routes except `/health` require the Jarvis proxy
-credential.
+other path is a 404. Access is gated by Jarvis navigation during the temporary
+public-embed deployment.
 """
 
-import hmac
 import logging
 import os
 import time
@@ -27,12 +26,6 @@ log = logging.getLogger("vf_app")
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DASHBOARD_HTML = os.path.join(BASE_DIR, "euler_vf.html")
 ELIGIBILITY_HTML = os.path.join(BASE_DIR, "euler_loan_eligibility.html")
-
-PROXY_HEADER = "X-Jarvis-Proxy-Token"
-
-# Paths that require the proxy credential but are not under /api.
-_PROTECTED_NON_API = {"/", "/eligibility"}
-
 
 def _serve_html(path):
     with open(path, "r", encoding="utf-8") as fh:
@@ -61,26 +54,18 @@ def create_app(config=None, adapter=None):
     def _adapter():
         return adapter if adapter is not None else sheets.get_adapter(cfg)
 
-    # ── Auth ──────────────────────────────────────────────────────────────
-    @app.before_request
-    def _require_proxy_secret():
-        path = request.path
-        if path == "/health":
-            return None
-        if path.startswith("/api/") or path in _PROTECTED_NON_API:
-            supplied = request.headers.get(PROXY_HEADER, "")
-            if not (supplied and hmac.compare_digest(supplied, cfg.proxy_secret)):
-                # Generic 403; never reveal whether the header was missing,
-                # malformed or simply wrong, and never echo the secret.
-                return jsonify({"error": "Forbidden"}), 403
-        return None
-
     # ── Security headers ──────────────────────────────────────────────────
     @app.after_request
     def _security_headers(resp):
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-        resp.headers.setdefault("Referrer-Policy",
-                                "strict-origin-when-cross-origin")
+        resp.headers.setdefault(
+            "Referrer-Policy", "strict-origin-when-cross-origin"
+        )
+        resp.headers.setdefault(
+            "Content-Security-Policy",
+            "frame-ancestors https://jarvis.eulerlogistics.com "
+            "https://staging-jarvis.eulerlogistics.com",
+        )
         return resp
 
     # ── Body helpers ──────────────────────────────────────────────────────

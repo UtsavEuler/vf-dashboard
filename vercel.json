@@ -14,7 +14,8 @@
       "dest": "api/index.py",
       "headers": {
         "X-Content-Type-Options": "nosniff",
-        "Referrer-Policy": "strict-origin-when-cross-origin"
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Content-Security-Policy": "frame-ancestors https://jarvis.eulerlogistics.com https://staging-jarvis.eulerlogistics.com"
       }
     }
   ]

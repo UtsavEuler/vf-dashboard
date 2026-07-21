@@ -16,7 +16,6 @@ Copy `.env.example` to `.env` and fill in the values:
 | --- | --- | --- |
 | `GOOGLE_SHEET_ID` | yes | ID of the Google Sheet (from its URL) |
 | `GOOGLE_CREDENTIALS` | yes | Full service-account JSON as a single-line string |
-| `JARVIS_PROXY_SECRET` | yes | Shared secret sent by Jarvis as `X-Jarvis-Proxy-Token` |
 | `MAX_REQUEST_BYTES` | no | Max request body size (default `1048576`) |
 | `GOOGLE_REQUEST_TIMEOUT_SECONDS` | no | Google API timeout (default `10`) |
 
@@ -46,8 +45,8 @@ make test
 ## Endpoints
 
 - `GET /health` — health check, returns 200, no secrets.
-- `GET /` — serves the dashboard. Requires the `X-Jarvis-Proxy-Token` header
-  matching `JARVIS_PROXY_SECRET`; returns 403 otherwise.
+- `GET /` — serves the public dashboard for embedding in Jarvis.
+- `GET /eligibility` — serves the public loan eligibility page.
 
 ## Make targets
 

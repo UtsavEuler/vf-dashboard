@@ -12,7 +12,7 @@ from vf_app.errors import UpstreamError, UpstreamTimeoutError
 
 
 def make_config():
-    return Config("sid", {"type": "service_account"}, "secret", 1048576, 10)
+    return Config("sid", {"type": "service_account"}, 1048576, 10)
 
 
 # ── call_google: success + retry ─────────────────────────────────────────────

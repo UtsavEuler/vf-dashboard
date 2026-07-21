@@ -12,8 +12,6 @@ from vf_app import sheets  # noqa: E402
 from vf_app.config import Config  # noqa: E402
 from vf_app.routes import create_app  # noqa: E402
 
-PROXY_SECRET = "test-proxy-secret-abc123"
-
 
 class FakeAdapter:
     """In-memory stand-in for GoogleSheetsAdapter that records every call so
@@ -52,7 +50,6 @@ def make_config(max_request_bytes=1048576):
     return Config(
         sheet_id="fake-sheet-id",
         credentials={"type": "service_account", "private_key": "x"},
-        proxy_secret=PROXY_SECRET,
         max_request_bytes=max_request_bytes,
         google_timeout_seconds=10,
     )
@@ -80,8 +77,3 @@ def app(app_factory):
 @pytest.fixture
 def client(app):
     return app.test_client()
-
-
-@pytest.fixture
-def auth():
-    return {"X-Jarvis-Proxy-Token": PROXY_SECRET}

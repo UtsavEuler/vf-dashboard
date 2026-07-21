@@ -11,10 +11,10 @@ All notable changes to the VF dashboard are recorded here.
 
 ## [Unreleased] — Vercel + Jarvis migration
 
-Refactor to deploy this app on **Vercel** as a Flask function, fronted by the
-**Jarvis** external-app gateway. VF no longer has its own login; it trusts a
-per-environment proxy secret injected by Jarvis. Data store is unchanged
-(Google Sheets). Not yet committed/deployed — code + tests only.
+Refactor to deploy this app on **Vercel** as a public Flask function embedded
+inside Jarvis. VF no longer has its own login; Jarvis controls who can discover
+and open the dashboard. Data store is unchanged (Google Sheets). Not yet
+committed/deployed — code + tests only.
 
 Plans: `tmp/plans/01-vf-dashboard-vercel-deployment.md` (this repo),
 `02-jarvis-external-apps-gateway.md` and `03-vf-on-jarvis-rollout.md` (the
@@ -29,9 +29,8 @@ Jarvis side, implemented in the separate `jarvis` repo).
   - `errors.py` — stable outward error mapping (400/404/413/502/504), never leaks raw exceptions or secrets.
 - `GET /api/bootstrap` — returns all initial dashboard data in one response (was many parallel calls).
 - `GET /health` — unauthenticated readiness only; touches no Sheets, exposes no secrets.
-- Proxy authentication — every route except `/health` requires header
-  `X-Jarvis-Proxy-Token`, compared to `JARVIS_PROXY_SECRET` with a constant-time
-  check; missing/wrong → generic `403`.
+- Public Jarvis embed headers — every response includes a `frame-ancestors`
+  Content Security Policy allowing production and staging Jarvis origins.
 - `vercel.json` — routes to the Flask function, excludes `tests/`, `setup_sheets.py`,
   `credentials.json`, `tmp/`, and docs from the bundle; sets basic security headers.
 - `.gitignore` (real one), `.env.example` (names only), `requirements-dev.txt`, `pytest.ini`.
@@ -46,8 +45,11 @@ Jarvis side, implemented in the separate `jarvis` repo).
   that rejects non-2xx (no silent empty datasets); initial load uses `/api/bootstrap`.
 - `requirements.txt` — added `Flask`, `python-dotenv`; kept `gspread`, `google-auth`.
 - Sheet ID moved from hardcoded constant to `GOOGLE_SHEET_ID` env var.
+- `/`, `/eligibility`, and `/api/*` are now public routes; Jarvis controls
+  dashboard discovery and entry instead of forwarding requests through a proxy.
 
 ### Removed
+- Jarvis proxy-secret auth: `JARVIS_PROXY_SECRET` and `X-Jarvis-Proxy-Token`.
 - Local login/session system: `LOGIN_ID`/`LOGIN_PASS`, in-memory sessions,
   `/api/login`, `/api/logout`, `X-Session-Token`, `vf_token`, inactivity timer,
   login/logout UI. Auth is now Jarvis's responsibility.

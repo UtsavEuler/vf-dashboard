@@ -1,8 +1,8 @@
 """Validated environment configuration for the VF dashboard.
 
 Loads and validates settings at startup and fails fast with a clear error when a
-required setting is missing. Required: GOOGLE_SHEET_ID, GOOGLE_CREDENTIALS,
-JARVIS_PROXY_SECRET. Optional (with defaults): MAX_REQUEST_BYTES,
+required setting is missing. Required: GOOGLE_SHEET_ID, GOOGLE_CREDENTIALS.
+Optional (with defaults): MAX_REQUEST_BYTES,
 GOOGLE_REQUEST_TIMEOUT_SECONDS.
 
 GOOGLE_CREDENTIALS is the complete service-account JSON string. As a local-dev
@@ -75,11 +75,11 @@ def _parse_int(env, name, default):
 class Config:
     """Immutable resolved configuration."""
 
-    def __init__(self, sheet_id, credentials, proxy_secret,
-                 max_request_bytes, google_timeout_seconds):
+    def __init__(
+        self, sheet_id, credentials, max_request_bytes, google_timeout_seconds
+    ):
         self.sheet_id = sheet_id
         self.credentials = credentials
-        self.proxy_secret = proxy_secret
         self.max_request_bytes = max_request_bytes
         self.google_timeout_seconds = google_timeout_seconds
 
@@ -96,10 +96,6 @@ def load_config(env=None):
     if not sheet_id:
         missing.append("GOOGLE_SHEET_ID")
 
-    proxy_secret = env.get("JARVIS_PROXY_SECRET")
-    if not proxy_secret:
-        missing.append("JARVIS_PROXY_SECRET")
-
     credentials = _load_credentials(env)
     if credentials is None:
         # Required: either the env var or, locally, credentials.json.
@@ -115,11 +111,12 @@ def load_config(env=None):
     return Config(
         sheet_id=sheet_id,
         credentials=credentials,
-        proxy_secret=proxy_secret,
-        max_request_bytes=_parse_int(env, "MAX_REQUEST_BYTES",
-                                     DEFAULT_MAX_REQUEST_BYTES),
-        google_timeout_seconds=_parse_int(env, "GOOGLE_REQUEST_TIMEOUT_SECONDS",
-                                           DEFAULT_GOOGLE_TIMEOUT_SECONDS),
+        max_request_bytes=_parse_int(
+            env, "MAX_REQUEST_BYTES", DEFAULT_MAX_REQUEST_BYTES
+        ),
+        google_timeout_seconds=_parse_int(
+            env, "GOOGLE_REQUEST_TIMEOUT_SECONDS", DEFAULT_GOOGLE_TIMEOUT_SECONDS
+        ),
     )
 
 
