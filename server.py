@@ -3,9 +3,12 @@
 Euler Motors VF Dashboard — Server with Google Sheets Backend
 Local:   python server.py
 Railway: auto-started via Procfile
+
+Note: Authentication has been removed — this server is intended to run on a
+secured internal network only. Do not expose it directly to the public internet.
 """
 
-import json, os, threading, traceback, secrets, time, random
+import json, os, threading, traceback, time, random
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -13,40 +16,6 @@ from urllib.parse import urlparse, parse_qs
 SHEET_ID   = "1jWmwJJZJzLX0oCSeRm24bCNNQ29pn0jAOl9Y9pUlU-4"
 CREDS_FILE = "credentials.json"
 PORT       = int(os.environ.get("PORT", 9000))  # Railway sets PORT env var
-
-# ── AUTH ── (set LOGIN_ID and LOGIN_PASS in Railway env variables)
-LOGIN_ID      = os.environ.get("LOGIN_ID",   "admin")
-LOGIN_PASS    = os.environ.get("LOGIN_PASS", "euler@1234$")
-SESSION_TTL   = int(os.environ.get("SESSION_TTL", 3600))  # seconds, default 60 min
-
-# ── SESSION STORE ─────────────────────────────────────────────
-_sessions     = {}   # token -> expiry timestamp
-_session_lock = threading.Lock()
-
-def create_session():
-    token = secrets.token_hex(32)
-    with _session_lock:
-        # Clean expired sessions
-        now = time.time()
-        expired = [t for t, exp in _sessions.items() if exp < now]
-        for t in expired: del _sessions[t]
-        _sessions[token] = now + SESSION_TTL
-    return token
-
-def validate_session(token):
-    if SESSION_TTL == 0: return True  # dev mode: disable auth
-    if not token: return False
-    with _session_lock:
-        exp = _sessions.get(token)
-        if not exp or exp < time.time():
-            if token in _sessions: del _sessions[token]
-            return False
-        _sessions[token] = time.time() + SESSION_TTL  # refresh on activity
-        return True
-
-def invalidate_session(token):
-    with _session_lock:
-        _sessions.pop(token, None)
 
 # ── GOOGLE SHEETS CLIENT ──────────────────────────────────────
 _sh   = None
@@ -251,6 +220,21 @@ def api_save_dpirr_month(d):
 def api_save_dpirr_entry(d):
     upsert_row(ws_or_create("DPIRR_Entries", DPIRR_ENTRY_HEADERS), {"id": d["id"]}, d)
 
+def api_bulk_save_dpirr_entries(entries):
+    """
+    Append multiple new DP/IRR entries in a single Sheets API call — used when the
+    user creates several identical entries at once (e.g. a bulk order), so we don't
+    fire one write per entry.
+    entries: list of dicts, each already containing id/monthId/monthLabel/srNo + all DP_COLS fields.
+    """
+    ws_entries = ws_or_create("DPIRR_Entries", DPIRR_ENTRY_HEADERS)
+    def _do():
+        rows_data = [[str(e.get(h, "")) for h in DPIRR_ENTRY_HEADERS] for e in entries]
+        if rows_data:
+            ws_entries.append_rows(rows_data)
+        return {"added": len(rows_data)}
+    return with_retry(_do)
+
 def api_delete_dpirr_entry(entry_id):
     delete_row(ws_or_create("DPIRR_Entries", DPIRR_ENTRY_HEADERS), {"id": entry_id})
 
@@ -383,7 +367,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin",  "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Session-Token")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(body)
 
@@ -391,7 +375,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin",  "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Session-Token")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
     def read_body(self):
@@ -405,21 +389,11 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(204)
             self.end_headers()
             return
-        # ── API routes ──────────────────────────────────────
+        # ── API routes (no auth — internal network only) ─────
         if path.startswith("/api/"):
             try:
-                # Public read-only endpoints (no auth required) for Loan Eligibility standalone
-                PUBLIC_GET = {"/api/fi_master", "/api/dealer_master", "/api/added_dealers",
-                              "/api/onboarding", "/api/fi_policy", "/api/fi_policy_geo",
-                              "/api/dealer_health", "/api/ping", "/api/login", "/api/snapshots",
-                              "/api/dpirr_months", "/api/dpirr_entries", "/api/dpirr_products",
-                              "/api/dpirr_models", "/api/dpirr_variants"}
-                if path not in PUBLIC_GET:
-                    token = self.headers.get("X-Session-Token","")
-                    if not validate_session(token):
-                        self.send_json(401, {"error": "Unauthorized"}); return
                 if   path == "/api/ping":
-                    self.send_json(200, {"ok": True, "login_id_set": bool(os.environ.get("LOGIN_ID")), "sessions_active": len(_sessions)})
+                    self.send_json(200, {"ok": True})
                 elif path == "/api/fi_master":      self.send_json(200, api_get("FI_Master"))
                 elif path == "/api/dealer_master":  self.send_json(200, api_get("Dealer_Master"))
                 elif path == "/api/added_dealers":  self.send_json(200, api_get("Added_Dealers"))
@@ -451,22 +425,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_json(404, {"error": "Not found"}); return
         try:
             body = self.read_body()
-            if path not in ("/api/login",):
-                token = self.headers.get("X-Session-Token","")
-                if not validate_session(token):
-                    self.send_json(401, {"error": "Unauthorized"}); return
-            if   path == "/api/login":
-                ok = (body.get("id","") == LOGIN_ID and body.get("pass","") == LOGIN_PASS)
-                if ok:
-                    token = create_session()
-                    self.send_json(200, {"ok": True, "token": token})
-                else:
-                    self.send_json(200, {"ok": False})
-                return
-            elif path == "/api/logout":
-                invalidate_session(self.headers.get("X-Session-Token",""))
-                self.send_json(200, {"ok": True}); return
-            elif path == "/api/fi_master":     api_save_fi_master(body)
+            if   path == "/api/fi_master":     api_save_fi_master(body)
             elif path == "/api/dealer_master": api_save_dealer_master(body)
             elif path == "/api/added_dealers": api_save_added_dealer(body)
             elif path == "/api/onboarding":    api_save_onboarding(body)
@@ -475,6 +434,9 @@ class Handler(SimpleHTTPRequestHandler):
             elif path == "/api/fi_policy_geo":   api_save_fi_policy_geo(body)
             elif path == "/api/dpirr_months":         api_save_dpirr_month(body)
             elif path == "/api/dpirr_entries":        api_save_dpirr_entry(body)
+            elif path == "/api/dpirr_entries_bulk":
+                result = api_bulk_save_dpirr_entries(body["entries"])
+                self.send_json(200, {"ok": True, "result": result}); return
             elif path == "/api/dpirr_products":       api_save_dpirr_product(body)
             elif path == "/api/dpirr_products_rename": api_rename_dpirr_product(body.get("oldName",""), body.get("newName",""))
             elif path == "/api/dpirr_models":         api_save_dpirr_model(body)
@@ -495,9 +457,6 @@ class Handler(SimpleHTTPRequestHandler):
         qs   = parse_qs(urlparse(self.path).query)
         q    = lambda k: qs.get(k, [""])[0]
         try:
-            token = self.headers.get("X-Session-Token","")
-            if not validate_session(token):
-                self.send_json(401, {"error": "Unauthorized"}); return
             if   path == "/api/fi_master":     api_delete_fi_master(q("name"))
             elif path == "/api/dealer_master": api_delete_dealer_master(q("dealerName"), q("location"))
             elif path == "/api/added_dealers": api_delete_added_dealer(q("dealer"), q("location"))
