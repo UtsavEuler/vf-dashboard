@@ -1899,7 +1899,25 @@ let gapView = 'product';
 let productFilter = '';
 
 // ── API HELPERS ───────────────────────────────────────────────
+// Derive the path this page is actually mounted under, so /api/ calls stay
+// correctly prefixed even when served through an internal gateway (e.g. Jarvis
+// serving this app at https://host/vehicle-finance-dashboard) instead of at
+// the domain root. Falls back to "" (no prefix) for normal root-hosted setups.
+var APP_BASE_PATH = (function() {
+  var path = window.location.pathname; // excludes query string / hash automatically
+  if (path === '/' || path === '') return '';
+  if (path.charAt(path.length - 1) === '/') path = path.slice(0, -1);
+  var lastSlash = path.lastIndexOf('/');
+  var lastSegment = path.slice(lastSlash + 1);
+  // If the URL ends in an actual filename (e.g. euler_vf.html), the base path
+  // is everything before it. Otherwise (e.g. "/vehicle-finance-dashboard" with
+  // no extension) the whole path IS the mount prefix — keep it as-is.
+  if (lastSegment.indexOf('.') > -1) return path.slice(0, lastSlash);
+  return path;
+})();
+
 const API = {
+  _url: function(path) { return APP_BASE_PATH + path; },
   _headers: function(extra) {
     return Object.assign({'Content-Type':'application/json'}, extra||{});
   },
@@ -1910,15 +1928,15 @@ const API = {
   },
   get: function(path) {
     var self = this;
-    return fetch(path, { headers: self._headers() }).then(function(r){ return self._handle(r); });
+    return fetch(self._url(path), { headers: self._headers() }).then(function(r){ return self._handle(r); });
   },
   post: function(path, data) {
     var self = this;
-    return fetch(path, { method:'POST', headers: self._headers(), body: JSON.stringify(data) }).then(function(r){ return self._handle(r); });
+    return fetch(self._url(path), { method:'POST', headers: self._headers(), body: JSON.stringify(data) }).then(function(r){ return self._handle(r); });
   },
   delete: function(path) {
     var self = this;
-    return fetch(path, { method:'DELETE', headers: self._headers() }).then(function(r){ return self._handle(r); });
+    return fetch(self._url(path), { method:'DELETE', headers: self._headers() }).then(function(r){ return self._handle(r); });
   }
 };
 
