@@ -30,6 +30,38 @@ WORKSHEETS = {
     "fi_policy_geo": "FI_Policy_Geo",
     "dealer_health": "Dealer_Health",
     "snapshots": "Monthly_Snapshots",
+    # DP/IRR tracker. These worksheets are created on first use (see
+    # AUTO_CREATE_HEADERS) because they were introduced after the workbook.
+    "dpirr_months": "DPIRR_Months",
+    "dpirr_entries": "DPIRR_Entries",
+    "dpirr_products": "DPIRR_Products",
+    "dpirr_models": "DPIRR_Models",
+    "dpirr_variants": "DPIRR_Variants",
+}
+
+# DP/IRR column orders. Order matters: it is the on-sheet column order and the
+# order rows are written in, so these lists are part of the frozen contract.
+DPIRR_MONTH_HEADERS = ["id", "label"]
+DPIRR_ENTRY_HEADERS = [
+    "id", "monthId", "monthLabel", "srNo", "customerName", "cibil",
+    "creditRemarks", "product", "model", "variant", "dealerName", "state",
+    "city", "salesRm", "vfRm", "financier", "cocoDodo", "vfStatus", "remarks",
+    "fundingType", "irr", "esp", "orp", "ltv", "downPayment", "discount",
+    "effectiveDp",
+]
+DPIRR_PRODUCT_HEADERS = ["name"]
+DPIRR_MODEL_HEADERS = ["product", "name"]
+DPIRR_VARIANT_HEADERS = ["product", "model", "variant", "esp"]
+
+# Aliases whose worksheet is auto-created (with this header row) when missing.
+# The original 8 worksheets are guaranteed to exist; a missing one is a real
+# fault and must keep raising rather than being silently conjured up.
+AUTO_CREATE_HEADERS = {
+    "dpirr_months": DPIRR_MONTH_HEADERS,
+    "dpirr_entries": DPIRR_ENTRY_HEADERS,
+    "dpirr_products": DPIRR_PRODUCT_HEADERS,
+    "dpirr_models": DPIRR_MODEL_HEADERS,
+    "dpirr_variants": DPIRR_VARIANT_HEADERS,
 }
 
 # Composite match keys per resource, exactly as the original server.py used them.
@@ -41,14 +73,33 @@ MATCH_KEYS = {
     "fi_policy": ["financier", "productKey"],
     "dealer_health": ["dealer", "location"],
     "fi_policy_geo": ["financier", "productKey", "seg", "state", "city"],
+    "dpirr_months": ["id"],
+    "dpirr_entries": ["id"],
+    "dpirr_products": ["name"],
+    "dpirr_models": ["product", "name"],
+    "dpirr_variants": ["product", "model", "variant"],
 }
 
 # Aliases that support each verb (mirrors server.py exactly).
 READ_ALIASES = list(WORKSHEETS.keys())
+# dpirr_variants is deliberately absent: its POST needs oldVariant matching so it
+# can rename in place, so routes.py owns an explicit handler for it.
 UPSERT_ALIASES = ["fi_master", "dealer_master", "added_dealers", "onboarding",
-                  "fi_policy", "dealer_health", "fi_policy_geo"]
+                  "fi_policy", "dealer_health", "fi_policy_geo",
+                  "dpirr_months", "dpirr_entries", "dpirr_products",
+                  "dpirr_models"]
+# dpirr_products / dpirr_models are deliberately absent: their DELETEs cascade
+# into child rows, so routes.py owns explicit handlers for them.
 DELETE_ALIASES = ["fi_master", "dealer_master", "added_dealers", "onboarding",
-                  "fi_policy_geo"]
+                  "fi_policy_geo", "dpirr_entries", "dpirr_variants"]
+
+# /api/bootstrap reads every listed sheet in ONE request. With 13 worksheets that
+# is 13+ sequential Google round-trips, which risks blowing the Vercel function
+# timeout, so bootstrap stays pinned to the original 8. The DP/IRR section loads
+# through its own per-alias reads.
+BOOTSTRAP_ALIASES = ["fi_master", "dealer_master", "added_dealers",
+                     "onboarding", "fi_policy", "fi_policy_geo",
+                     "dealer_health", "snapshots"]
 
 SNAPSHOT_HEADERS = [
     "snapshot_date", "snapshot_month", "snapshot_year", "fi_total", "fi_active",
@@ -147,6 +198,30 @@ class GoogleSheetsAdapter:
     def _ws(self, title):
         return call_google(lambda: self._spreadsheet().worksheet(title))
 
+    def _ws_or_create(self, title, headers):
+        """Like _ws, but creates the worksheet with a header row if absent."""
+        def _do():
+            sh = self._spreadsheet()
+            try:
+                return sh.worksheet(title)
+            except Exception:  # noqa: BLE001 - any lookup failure means "create"
+                created = sh.add_worksheet(
+                    title=title, rows=500, cols=max(10, len(headers) + 2))
+                created.append_row(headers)
+                return created
+
+        return call_google(_do)
+
+    def _ws_for(self, alias):
+        """Resolve an alias to a worksheet, auto-creating the DP/IRR sheets."""
+        headers = AUTO_CREATE_HEADERS.get(alias)
+        if headers is not None:
+            return self._ws_or_create(WORKSHEETS[alias], headers)
+        return self._ws(WORKSHEETS[alias])
+
+    def _headers_for(self, alias, worksheet):
+        return AUTO_CREATE_HEADERS.get(alias) or worksheet.row_values(1)
+
     # -- reads --------------------------------------------------------------
     def _rows_to_dicts(self, worksheet):
         """Read all rows as dicts. Preserves the original duplicate-header
@@ -191,11 +266,11 @@ class GoogleSheetsAdapter:
         return result
 
     def read(self, alias):
-        return self._rows_to_dicts(self._ws(WORKSHEETS[alias]))
+        return self._rows_to_dicts(self._ws_for(alias))
 
     # -- writes -------------------------------------------------------------
     def upsert(self, alias, match_keys, data_dict):
-        worksheet = self._ws(WORKSHEETS[alias])
+        worksheet = self._ws_for(alias)
 
         def _do():
             headers = worksheet.row_values(1)
@@ -219,7 +294,7 @@ class GoogleSheetsAdapter:
         call_google(_do)
 
     def delete(self, alias, match_keys):
-        worksheet = self._ws(WORKSHEETS[alias])
+        worksheet = self._ws_for(alias)
 
         def _do():
             headers = worksheet.row_values(1)
@@ -238,7 +313,7 @@ class GoogleSheetsAdapter:
         return call_google(_do)
 
     def append_snapshot(self, snap_dict):
-        worksheet = self._ws(WORKSHEETS["snapshots"])
+        worksheet = self._ws_for("snapshots")
 
         def _do():
             existing = worksheet.row_values(1)
@@ -247,6 +322,186 @@ class GoogleSheetsAdapter:
             worksheet.append_row([snap_dict.get(h, "") for h in SNAPSHOT_HEADERS])
 
         call_google(_do)
+
+    # -- bulk primitives (DP/IRR) -------------------------------------------
+    # Both of these MUST issue a fixed, small number of Sheets calls regardless
+    # of how many rows match. The original server.py wrote once per matching row,
+    # which was survivable on a long-lived server but is a data-loss bug on
+    # Vercel: a cascade over ~130 rows is ~130 sequential writes, so the function
+    # is killed (or Google 429s) part-way through and the cascade is left half
+    # applied — orphaned child rows the dashboard then renders as invisible.
+    def bulk_update(self, alias, match_keys, data_dict):
+        """Update EVERY row matching match_keys, applying only the fields present
+        in data_dict. Returns the number of rows updated.
+
+        Two reads plus ONE batched write, whatever the match count.
+        """
+        worksheet = self._ws_for(alias)
+
+        def _do():
+            headers = worksheet.row_values(1)
+            all_vals = worksheet.get_all_values()
+            updated = {}
+            for i, row in enumerate(all_vals[1:], start=2):
+                if not _row_matches(row, headers, match_keys):
+                    continue
+                # Always write exactly len(headers) columns — never depend on the
+                # sheet's provisioned column count, which is often wider.
+                new_row = [(row[j] if j < len(row) else "")
+                           for j in range(len(headers))]
+                for j, header in enumerate(headers):
+                    if header in data_dict:
+                        new_row[j] = str(data_dict[header])
+                updated[i] = new_row
+            if updated:
+                # Coalesce contiguous rows so a cascade (which usually matches a
+                # block) becomes one range; batch_update sends the lot in a
+                # single HTTP request either way.
+                data = [{"range": f"A{start}",
+                         "values": [updated[r] for r in range(start, end + 1)]}
+                        for start, end in _contiguous_runs(sorted(updated))]
+                worksheet.batch_update(data)
+            return len(updated)
+
+        return call_google(_do)
+
+    def bulk_delete(self, alias, match_keys):
+        """Delete EVERY row matching match_keys. Returns the number deleted.
+
+        Two reads plus ONE batched spreadsheet request, whatever the match count.
+        """
+        worksheet = self._ws_for(alias)
+
+        def _do():
+            headers = worksheet.row_values(1)
+            all_vals = worksheet.get_all_values()
+            to_delete = [i for i, row in enumerate(all_vals[1:], start=2)
+                         if _row_matches(row, headers, match_keys)]
+            if to_delete:
+                # Descending order: Google applies the requests in sequence, so
+                # deleting from the bottom keeps every later index valid.
+                requests = [
+                    {"deleteDimension": {"range": {
+                        "sheetId": worksheet.id,
+                        "dimension": "ROWS",
+                        # Sheets row indexes are 0-based and end-exclusive.
+                        "startIndex": start - 1,
+                        "endIndex": end,
+                    }}}
+                    for start, end in reversed(_contiguous_runs(to_delete))
+                ]
+                self._spreadsheet().batch_update({"requests": requests})
+            return len(to_delete)
+
+        return call_google(_do)
+
+    def append_rows(self, alias, rows):
+        """Append many rows in a SINGLE Sheets call. Returns the count appended."""
+        worksheet = self._ws_for(alias)
+
+        def _do():
+            headers = self._headers_for(alias, worksheet)
+            grid = [[str(r.get(h, "")) for h in headers] for r in rows]
+            if grid:
+                worksheet.append_rows(grid)
+            return len(grid)
+
+        return call_google(_do)
+
+    def replace_all(self, alias, rows):
+        """Replace the whole worksheet with a header row plus rows, in two calls.
+        Used by the bulk upload so row count never drives API call count."""
+        worksheet = self._ws_for(alias)
+
+        def _do():
+            headers = self._headers_for(alias, worksheet)
+            grid = [list(headers)] + [[str(r.get(h, "")) for h in headers]
+                                      for r in rows]
+            worksheet.clear()
+            worksheet.update(range_name="A1", values=grid)
+            return len(rows)
+
+        return call_google(_do)
+
+
+def _contiguous_runs(rows):
+    """Collapse a sorted list of row numbers into (start, end) inclusive runs."""
+    runs = []
+    for row in rows:
+        if runs and row == runs[-1][1] + 1:
+            runs[-1][1] = row
+        else:
+            runs.append([row, row])
+    return [(start, end) for start, end in runs]
+
+
+def _row_matches(row, headers, match_keys):
+    """True when every match key's cell in `row` equals the wanted value."""
+    return all(
+        (row[headers.index(k)]
+         if k in headers and headers.index(k) < len(row) else "") == str(v)
+        for k, v in match_keys.items()
+    )
+
+
+# ── DP/IRR bulk-upload planning (pure) ───────────────────────────────────────
+def plan_variant_bulk(product, rows, existing_models, existing_variants):
+    """Work out what a variants bulk upload should write — no Sheets access.
+
+    Matching on model and variant is case-insensitive, mirroring the original
+    server.py. Rows missing a model, a variant or an ESP are skipped. Variants
+    belonging to other products are carried through untouched, because the caller
+    rewrites the whole worksheet in one call.
+
+    Returns (new_model_rows, all_variants_out, stats) where new_model_rows is a
+    list of {"product","name"} dicts and stats counts what happened.
+    """
+    model_names_lower = {str(m.get("name", "")).lower()
+                         for m in existing_models
+                         if m.get("product") == product}
+
+    variant_lookup = {}
+    all_variants_out = [dict(v) for v in existing_variants]
+    for v in all_variants_out:
+        if v.get("product") == product:
+            key = (str(v.get("model", "")).lower(),
+                   str(v.get("variant", "")).lower())
+            variant_lookup[key] = v
+
+    models_added = variants_added = variants_updated = skipped = 0
+    new_model_rows = []
+    seen_new_models = set()
+
+    for row in rows:
+        model_name = str(row.get("model", "") or "").strip()
+        variant_name = str(row.get("variant", "") or "").strip()
+        esp = str(row.get("esp", "") or "").strip()
+        if not model_name or not variant_name or esp == "":
+            skipped += 1
+            continue
+
+        model_key = model_name.lower()
+        if model_key not in model_names_lower and model_key not in seen_new_models:
+            new_model_rows.append({"product": product, "name": model_name})
+            seen_new_models.add(model_key)
+            models_added += 1
+
+        vkey = (model_key, variant_name.lower())
+        existing = variant_lookup.get(vkey)
+        if existing:
+            if existing.get("esp") != esp:
+                existing["esp"] = esp
+            variants_updated += 1
+        else:
+            new_rec = {"product": product, "model": model_name,
+                       "variant": variant_name, "esp": esp}
+            all_variants_out.append(new_rec)
+            variant_lookup[vkey] = new_rec
+            variants_added += 1
+
+    stats = {"modelsAdded": models_added, "variantsAdded": variants_added,
+             "variantsUpdated": variants_updated, "skipped": skipped}
+    return new_model_rows, all_variants_out, stats
 
 
 # ── Adapter accessor (dependency-injection seam for tests) ───────────────────

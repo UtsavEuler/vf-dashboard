@@ -94,6 +94,22 @@ def create_app(config=None, adapter=None):
         if missing:
             raise ValidationError("Missing required field(s)")
 
+    def _require(source, *names):
+        """Return the named fields, rejecting any that are absent or blank.
+
+        Values are stringified without an `or ""` fallback so a JSON `0` (a legal
+        ESP) survives as "0" rather than collapsing to blank. Returned values are
+        whitespace-stripped.
+        """
+        values = []
+        for name in names:
+            raw = source.get(name, "")
+            value = "" if raw is None else str(raw).strip()
+            if not value:
+                raise ValidationError("Missing required field(s)")
+            values.append(value)
+        return values
+
     # ── Pages ─────────────────────────────────────────────────────────────
     @app.route("/")
     def index():
@@ -115,7 +131,7 @@ def create_app(config=None, adapter=None):
         started = time.monotonic()
         try:
             ad = _adapter()
-            model = {alias: ad.read(alias) for alias in sheets.READ_ALIASES}
+            model = {alias: ad.read(alias) for alias in sheets.BOOTSTRAP_ALIASES}
             _structured_log("/api/bootstrap", "read", "*", "ok", started)
             return jsonify(model)
         except Exception:
@@ -172,6 +188,162 @@ def create_app(config=None, adapter=None):
             return jsonify({"ok": True})
         except Exception:
             _structured_log(f"/api/{alias}", "delete", alias, "error", started)
+            raise
+
+    # ── DP/IRR: the shapes the generic alias routes cannot express ────────
+    # Werkzeug prefers static rules over converter rules, so every route below
+    # wins over /api/<alias> for its exact path.
+
+    @app.route("/api/dpirr_entries_bulk", methods=["POST"])
+    def dpirr_entries_bulk():
+        """Append many entries in one Sheets call (bulk order creation)."""
+        started = time.monotonic()
+        body = _json_body()
+        entries = body.get("entries")
+        if (not isinstance(entries, list) or not entries
+                or not all(isinstance(e, dict) for e in entries)):
+            raise ValidationError("entries must be a non-empty list of objects")
+        try:
+            added = _adapter().append_rows("dpirr_entries", entries)
+            _structured_log("/api/dpirr_entries_bulk", "write", "dpirr_entries",
+                            "ok", started)
+            return jsonify({"ok": True, "result": {"added": added}})
+        except Exception:
+            _structured_log("/api/dpirr_entries_bulk", "write", "dpirr_entries",
+                            "error", started)
+            raise
+
+    @app.route("/api/dpirr_variants_bulk", methods=["POST"])
+    def dpirr_variants_bulk():
+        """Bulk upsert a product's models + variants in a fixed number of Sheets
+        calls, so an uploaded spreadsheet of any size cannot trip write limits."""
+        started = time.monotonic()
+        body = _json_body()
+        (product,) = _require(body, "product")
+        rows = body.get("rows")
+        if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+            raise ValidationError("rows must be a list of objects")
+        try:
+            ad = _adapter()
+            new_models, all_variants, stats = sheets.plan_variant_bulk(
+                product, rows, ad.read("dpirr_models"), ad.read("dpirr_variants"))
+            if new_models:
+                ad.append_rows("dpirr_models", new_models)
+            ad.replace_all("dpirr_variants", all_variants)
+            _structured_log("/api/dpirr_variants_bulk", "write",
+                            "dpirr_variants", "ok", started)
+            return jsonify({"ok": True, "result": stats})
+        except Exception:
+            _structured_log("/api/dpirr_variants_bulk", "write",
+                            "dpirr_variants", "error", started)
+            raise
+
+    @app.route("/api/dpirr_products_rename", methods=["POST"])
+    def dpirr_products_rename():
+        """Rename a product and cascade the rename to its models and variants."""
+        started = time.monotonic()
+        body = _json_body()
+        old_name, new_name = _require(body, "oldName", "newName")
+        try:
+            ad = _adapter()
+            ad.upsert("dpirr_products", {"name": old_name}, {"name": new_name})
+            ad.bulk_update("dpirr_models", {"product": old_name},
+                           {"product": new_name})
+            ad.bulk_update("dpirr_variants", {"product": old_name},
+                           {"product": new_name})
+            _structured_log("/api/dpirr_products_rename", "write",
+                            "dpirr_products", "ok", started)
+            return jsonify({"ok": True})
+        except Exception:
+            _structured_log("/api/dpirr_products_rename", "write",
+                            "dpirr_products", "error", started)
+            raise
+
+    @app.route("/api/dpirr_models_rename", methods=["POST"])
+    def dpirr_models_rename():
+        """Rename a model and cascade the rename to its variants."""
+        started = time.monotonic()
+        body = _json_body()
+        product, old_name, new_name = _require(body, "product", "oldName",
+                                               "newName")
+        try:
+            ad = _adapter()
+            ad.upsert("dpirr_models", {"product": product, "name": old_name},
+                      {"product": product, "name": new_name})
+            ad.bulk_update("dpirr_variants",
+                           {"product": product, "model": old_name},
+                           {"model": new_name})
+            _structured_log("/api/dpirr_models_rename", "write", "dpirr_models",
+                            "ok", started)
+            return jsonify({"ok": True})
+        except Exception:
+            _structured_log("/api/dpirr_models_rename", "write", "dpirr_models",
+                            "error", started)
+            raise
+
+    @app.route("/api/dpirr_variants", methods=["POST"])
+    def dpirr_variants_save():
+        """Add or update a variant. Matching on oldVariant (when supplied) is what
+        makes a rename land on the existing row instead of creating a new one.
+
+        esp is REQUIRED: upsert rewrites the whole row, so accepting a missing esp
+        would blank an existing variant's price on a rename.
+        """
+        started = time.monotonic()
+        body = _json_body()
+        product, model, variant, esp = _require(body, "product", "model",
+                                                "variant", "esp")
+        raw_old = body.get("oldVariant", "")
+        old_variant = str(raw_old).strip() if raw_old is not None else ""
+        old_variant = old_variant or variant
+        try:
+            _adapter().upsert(
+                "dpirr_variants",
+                {"product": product, "model": model, "variant": old_variant},
+                {"product": product, "model": model, "variant": variant,
+                 "esp": esp},
+            )
+            _structured_log("/api/dpirr_variants", "write", "dpirr_variants",
+                            "ok", started)
+            return jsonify({"ok": True})
+        except Exception:
+            _structured_log("/api/dpirr_variants", "write", "dpirr_variants",
+                            "error", started)
+            raise
+
+    @app.route("/api/dpirr_products", methods=["DELETE"])
+    def dpirr_products_delete():
+        """Delete a product and cascade-delete all its models and variants."""
+        started = time.monotonic()
+        (name,) = _require(request.args, "name")
+        try:
+            ad = _adapter()
+            ad.delete("dpirr_products", {"name": name})
+            ad.bulk_delete("dpirr_models", {"product": name})
+            ad.bulk_delete("dpirr_variants", {"product": name})
+            _structured_log("/api/dpirr_products", "delete", "dpirr_products",
+                            "ok", started)
+            return jsonify({"ok": True})
+        except Exception:
+            _structured_log("/api/dpirr_products", "delete", "dpirr_products",
+                            "error", started)
+            raise
+
+    @app.route("/api/dpirr_models", methods=["DELETE"])
+    def dpirr_models_delete():
+        """Delete a model and cascade-delete all its variants."""
+        started = time.monotonic()
+        product, name = _require(request.args, "product", "name")
+        try:
+            ad = _adapter()
+            ad.delete("dpirr_models", {"product": product, "name": name})
+            ad.bulk_delete("dpirr_variants", {"product": product, "model": name})
+            _structured_log("/api/dpirr_models", "delete", "dpirr_models", "ok",
+                            started)
+            return jsonify({"ok": True})
+        except Exception:
+            _structured_log("/api/dpirr_models", "delete", "dpirr_models",
+                            "error", started)
             raise
 
     return app
