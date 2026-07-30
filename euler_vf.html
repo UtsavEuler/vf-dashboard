@@ -1890,7 +1890,7 @@ const PRODUCTS = [
 const CATS = ["A","B","C","D"];
 const CAT_COLORS = { A:'var(--cat-a)', B:'var(--cat-b)', C:'var(--cat-c)', D:'var(--cat-d)' };
 
-let state = { dealers: [], financiers: [], financiersMeta: [], mapping: {}, addedDealers: [], dealersMaster: [], fiPolicy: {}, fiPolicyGeo: [], dealerHealth: {}, snapshots: [] };
+let state = { dealers: [], financiers: [], financiersMeta: [], mapping: {}, addedDealers: [], dealersMaster: [], fiPolicy: {}, fiPolicyGeo: [], dealerHealth: {}, snapshots: [], failedReads: [] };
 let modalContext = null;
 let openDealerCards = new Set();
 let openGapCards = new Set();
@@ -1922,8 +1922,13 @@ const API = {
     return Object.assign({'Content-Type':'application/json'}, extra||{});
   },
   _handle: function(r) {
+    // Reject every non-2xx so a failed read is never silently converted into an
+    // empty dataset and a failed write is never presented as success.
+    if (!r.ok) return Promise.reject(new Error('Request failed (' + r.status + ')'));
     return r.text().then(function(text) {
-      try { return JSON.parse(text); } catch(e) { console.error('JSON parse error:', text.slice(0,100)); return []; }
+      if (!text) return null;
+      try { return JSON.parse(text); }
+      catch(e) { return Promise.reject(new Error('Malformed response from server')); }
     });
   },
   get: function(path) {
@@ -1956,22 +1961,35 @@ async function loadState() {
   if (loader) loader.style.display = 'flex';
   setSaveStatus('saving');
   try {
+    // allSettled, not all: one failing read must degrade ONE section, not blank
+    // the whole dashboard. API._handle rejects non-2xx (so a failure is never a
+    // silently empty dataset), and each rejected read becomes null here, which
+    // toArr() below turns into an empty section. The failures are listed to the
+    // user rather than swallowed, and everything failing is still a hard error.
+    const READ_PATHS = [
+      '/api/fi_master',
+      '/api/dealer_master',
+      '/api/added_dealers',
+      '/api/onboarding',
+      '/api/fi_policy',
+      '/api/dealer_health',
+      '/api/fi_policy_geo',
+      '/api/snapshots',
+      '/api/dpirr_months',
+      '/api/dpirr_entries',
+      '/api/dpirr_products',
+      '/api/dpirr_models',
+      '/api/dpirr_variants'
+    ];
+    const settled = await Promise.allSettled(READ_PATHS.map(function(p){ return API.get(p); }));
+    const failedReads = READ_PATHS.filter(function(p, i){ return settled[i].status === 'rejected'; });
+    if (failedReads.length === READ_PATHS.length) {
+      throw new Error('Every dashboard read failed');
+    }
+    state.failedReads = failedReads;
+    const settledValues = settled.map(function(s){ return s.status === 'fulfilled' ? s.value : null; });
     const [fiMaster, dealerMaster, addedDealers, onboarding, fiPolicy, dealerHealth, fiPolicyGeo, snapshots,
-           dpirrMonths, dpirrEntries, dpirrProducts, dpirrModels, dpirrVariants] = await Promise.all([
-      API.get('/api/fi_master'),
-      API.get('/api/dealer_master'),
-      API.get('/api/added_dealers'),
-      API.get('/api/onboarding'),
-      API.get('/api/fi_policy'),
-      API.get('/api/dealer_health'),
-      API.get('/api/fi_policy_geo'),
-      API.get('/api/snapshots'),
-      API.get('/api/dpirr_months'),
-      API.get('/api/dpirr_entries'),
-      API.get('/api/dpirr_products'),
-      API.get('/api/dpirr_models'),
-      API.get('/api/dpirr_variants')
-    ]);
+           dpirrMonths, dpirrEntries, dpirrProducts, dpirrModels, dpirrVariants] = settledValues;
 
     // Ensure all responses are arrays
     const toArr = v => Array.isArray(v) ? v : [];
@@ -2121,7 +2139,16 @@ async function loadState() {
       }
     })();
 
-    setSaveStatus('saved');
+    if (failedReads.length) {
+      // Partial load: the rest of the dashboard is usable, but say so loudly so
+      // an empty section is never mistaken for "no data".
+      setSaveStatus('error');
+      toast('⚠ ' + failedReads.length + ' of ' + READ_PATHS.length +
+            ' sections failed to load and are showing empty: ' +
+            failedReads.map(function(p){ return p.replace('/api/', ''); }).join(', '));
+    } else {
+      setSaveStatus('saved');
+    }
     if (loader) { loader.classList.add('hide'); setTimeout(() => { loader.style.display = 'none'; }, 350); }
     // Init matcher buttons as disabled
     setTimeout(function(){
