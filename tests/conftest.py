@@ -45,6 +45,35 @@ class FakeAdapter:
         self.calls.append(("append_snapshot", "snapshots", None))
         self.data["snapshots"].append(dict(snap_dict))
 
+    # -- bulk primitives (DP/IRR) -------------------------------------------
+    def bulk_update(self, alias, match_keys, data_dict):
+        self.calls.append(("bulk_update", alias, dict(match_keys)))
+        count = 0
+        for row in self.data[alias]:
+            if all(str(row.get(k, "")) == str(v) for k, v in match_keys.items()):
+                row.update(data_dict)
+                count += 1
+        return count
+
+    def bulk_delete(self, alias, match_keys):
+        self.calls.append(("bulk_delete", alias, dict(match_keys)))
+        kept = [r for r in self.data[alias]
+                if not all(str(r.get(k, "")) == str(v)
+                           for k, v in match_keys.items())]
+        removed = len(self.data[alias]) - len(kept)
+        self.data[alias] = kept
+        return removed
+
+    def append_rows(self, alias, rows):
+        self.calls.append(("append_rows", alias, None))
+        self.data[alias].extend(dict(r) for r in rows)
+        return len(rows)
+
+    def replace_all(self, alias, rows):
+        self.calls.append(("replace_all", alias, None))
+        self.data[alias] = [dict(r) for r in rows]
+        return len(rows)
+
 
 def make_config(max_request_bytes=1048576):
     return Config(

@@ -521,32 +521,6 @@
   .loader-text { font-size: 13px; color: var(--text-muted); }
 
 
-  /* ── Login Screen ── */
-  #loginScreen {
-    position: fixed; inset: 0; z-index: 10000;
-    background: var(--bg);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    padding: 24px;
-  }
-  #loginScreen.hide { display: none; }
-  .login-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 40px 36px;
-    width: 100%;
-    max-width: 380px;
-    box-shadow: var(--shadow-md);
-  }
-  .login-logo { text-align: center; margin-bottom: 28px; }
-  .login-logo-text { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
-  .login-logo-text span { background: #f59e0b; color: #0d0f18; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
-  .login-subtitle { font-size: 13px; color: var(--text-muted); text-align: center; margin-top: 4px; }
-  .login-error { background: var(--cat-d-bg); color: var(--cat-d); border: 1px solid var(--cat-d-border); border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; display: none; text-align: center; }
-  .login-error.show { display: block; }
-
-
   /* ── Geo Override ── */
   .geo-row { background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-bottom:10px; overflow:hidden; }
   .geo-row-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; cursor:pointer; }
@@ -577,8 +551,6 @@
 <!-- ── HEADER ── -->
 
 
-<!-- Login overlay removed: authentication is handled by the Jarvis proxy. -->
-
 <div id="appLoader">
   <div class="loader-logo">Euler Motors <span>VF</span></div>
   <div class="loader-spinner"></div>
@@ -597,6 +569,7 @@
       <button class="nav-btn" id="navFIPolicy" onclick="switchPage('fipolicy')">FI Policy</button>
       <button class="nav-btn" id="navCoverage" style="opacity:0.4;cursor:not-allowed;" title="Coming soon" onclick="event.preventDefault();">Coverage Gaps</button>
       <button class="nav-btn" id="navTAIF" onclick="switchPage('taif')">📋 TA/IF & Retail Code</button>
+      <button class="nav-btn" id="navDPIRR" onclick="switchPage('dpirr')">📊 DP/IRR</button>
       <button class="nav-btn" id="navSnapshots" onclick="switchPage('snapshots')">📸 Snapshots</button>
     </nav>
   </div>
@@ -679,6 +652,7 @@
     <button class="btn btn-secondary btn-sm" onclick="clearDealerFilters()">✕ Clear</button>
     <button class="btn btn-secondary btn-sm" onclick="exportDealerDashboard()">⬇ Export Excel</button>
     <button class="btn btn-primary btn-sm" onclick="openStatsModal()">📊 Stats</button>
+    <button class="btn btn-secondary btn-sm" onclick="exportDealerFICount()">⬇ FI Count</button>
   </div>
   <div class="dealer-grid" id="dealerGrid"></div>
 </div>
@@ -1028,7 +1002,7 @@
         <div class="form-group" style="margin:0;"><label class="form-label">Dealer Email ID</label><input type="text" class="form-select" id="dm_dealerEmail" placeholder=""></div>
         <div class="form-group" style="margin:0;"><label class="form-label">Dealer Phone No</label><input type="text" class="form-select" id="dm_dealerPhone" placeholder=""></div>
         <div class="form-group" style="margin:0;"><label class="form-label">DODO / COCO</label><select class="form-select" id="dm_dodoCocoType"><option value="">— Select —</option><option>DODO</option><option>COCO</option></select></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Status</label><select class="form-select" id="dm_dealerStatus"><option value="">— Select —</option><option>Retailing</option><option>Onboarded</option><option>Active</option><option>Inactive</option><option>Closed</option></select></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Status</label><select class="form-select" id="dm_dealerStatus"><option value="">— Select —</option><option>Retailing</option><option>Onboarded</option><option>Retail Ready</option><option>Inactive</option><option>Suspended</option><option>Closed</option></select></div>
       </div>
 
       <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">VF POC</div>
@@ -1585,6 +1559,161 @@
 </div>
 </div>
 
+<div class="page" id="pageDPIRR">
+<div class="container">
+  <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    <div>
+      <div class="page-title">📊 DP/IRR Tracker</div>
+      <div class="page-sub">Track downpayment and IRR data by month</div>
+    </div>
+  </div>
+
+  <!-- Main view tab bar -->
+  <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;">
+    <button id="dpViewTabEntries" onclick="switchDPMainView('entries')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid var(--accent);margin-bottom:-2px;background:none;color:var(--accent);cursor:pointer;">📅 Monthly Entries</button>
+    <button id="dpViewTabManage" onclick="switchDPMainView('manage')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;color:var(--text-muted);cursor:pointer;">🛠 Manage Products</button>
+  </div>
+
+  <div id="dpEntriesSection">
+    <div id="dpContent_dp">
+      <div id="dpMonthBar_dp" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;align-items:center;"></div>
+      <div id="dpViewArea_dp"><div class="empty-state"><div class="empty-icon">📊</div><div>Add a month view to start tracking.</div></div></div>
+    </div>
+  </div>
+
+  <div id="dpManageSection" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+      <div style="font-size:13px;color:var(--text-muted);max-width:520px;">Manage products and their models here. New products and models are instantly available in the Add Entry dropdowns.</div>
+      <button class="btn btn-primary btn-sm" onclick="openDPProductModal(null)">＋ Add Product</button>
+    </div>
+    <div id="dpProductsList"></div>
+    <input type="file" id="dpModelUploadInput" accept=".xlsx,.xls" style="display:none;" onchange="handleDPModelExcelUpload(event)">
+  </div>
+
+</div>
+</div>
+
+<!-- DP/IRR Add Month Modal -->
+<div class="modal-overlay" id="dpAddMonthOverlay" style="display:none;">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-header"><div class="modal-title">＋ Add Month View</div><button class="modal-close" onclick="closeDPAddMonth()">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="dpAddMonthSegment">
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Select Month</label>
+        <select class="form-select" id="dpMonthSelect">
+          <option value="">— Select Month —</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDPAddMonth()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDPMonth()">Add View</button>
+    </div>
+  </div>
+</div>
+
+<!-- DP/IRR Entry Modal -->
+<div class="modal-overlay" id="dpEntryOverlay" style="display:none;">
+  <div class="modal" style="max-width:860px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-header"><div class="modal-title" id="dpEntryTitle">Add Entry</div><button class="modal-close" onclick="closeDPEntry()">✕</button></div>
+    <div class="modal-body" id="dpEntryBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDPEntry()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDPEntry()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DP/IRR Delete Confirm -->
+<div class="modal-overlay" id="dpDeleteOverlay" style="display:none;">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header"><div class="modal-title">⚠ Confirm Delete</div><button class="modal-close" onclick="closeDPDelete()">✕</button></div>
+    <div class="modal-body"><p style="color:var(--text);margin:0;">Are you sure you want to delete this entry? This action cannot be undone.</p></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDPDelete()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDPDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- DP/IRR Product Modal -->
+<div class="modal-overlay" id="dpProductModalOverlay" style="display:none;">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header"><div class="modal-title" id="dpProductModalTitle">Add Product</div><button class="modal-close" onclick="closeDPProductModal()">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="dpProductEditIdx">
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Product Name <span style="color:var(--flag);">*</span></label>
+        <input type="text" class="form-select" id="dpProductNameInput" placeholder="e.g. Storm" onkeydown="if(event.key==='Enter') saveDPProduct()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDPProductModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDPProduct()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DP/IRR Model Modal -->
+<div class="modal-overlay" id="dpModelModalOverlay" style="display:none;">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><div class="modal-title" id="dpModelModalTitle">Add Model</div><button class="modal-close" onclick="closeDPModelModal()">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="dpModelProduct">
+      <input type="hidden" id="dpModelEditIdx">
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Model Name <span style="color:var(--flag);">*</span></label>
+        <input type="text" class="form-select" id="dpModelNameInput" placeholder="e.g. City" onkeydown="if(event.key==='Enter') saveDPModel()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDPModelModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDPModel()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DP/IRR Variant Modal -->
+<div class="modal-overlay" id="dpVariantModalOverlay" style="display:none;">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><div class="modal-title" id="dpVariantModalTitle">Add Variant</div><button class="modal-close" onclick="closeDPVariantModal()">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="dpVariantProduct">
+      <input type="hidden" id="dpVariantModelIdx">
+      <input type="hidden" id="dpVariantEditIdx">
+      <div style="display:grid;gap:12px;">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Variant Name <span style="color:var(--flag);">*</span></label>
+          <input type="text" class="form-select" id="dpVariantNameInput" placeholder="e.g. DAC">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">ESP (₹) <span style="color:var(--flag);">*</span></label>
+          <input type="number" class="form-select" id="dpVariantEspInput" step="any" placeholder="e.g. 599999">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDPVariantModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDPVariant()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DP/IRR Generic Confirm Modal (product/model delete) -->
+<div class="modal-overlay" id="dpConfirmOverlay" style="display:none;">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header"><div class="modal-title">⚠ Confirm</div><button class="modal-close" onclick="closeDPConfirm()">✕</button></div>
+
+    <div class="modal-body"><p id="dpConfirmMessage" style="color:var(--text);margin:0;"></p></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDPConfirm()">Cancel</button>
+      <button class="btn btn-danger" onclick="runDPConfirm()">Delete</button>
+    </div>
+  </div>
+</div>
+
+
 <!-- TA/IF Row Edit Modal -->
 <div class="modal-overlay" id="taifRowModalOverlay" style="display:none;">
   <div class="modal" style="max-width:640px;">
@@ -1761,7 +1890,7 @@ const PRODUCTS = [
 const CATS = ["A","B","C","D"];
 const CAT_COLORS = { A:'var(--cat-a)', B:'var(--cat-b)', C:'var(--cat-c)', D:'var(--cat-d)' };
 
-let state = { dealers: [], financiers: [], financiersMeta: [], mapping: {}, addedDealers: [], dealersMaster: [], fiPolicy: {}, fiPolicyGeo: [], dealerHealth: {}, snapshots: [] };
+let state = { dealers: [], financiers: [], financiersMeta: [], mapping: {}, addedDealers: [], dealersMaster: [], fiPolicy: {}, fiPolicyGeo: [], dealerHealth: {}, snapshots: [], failedReads: [] };
 let modalContext = null;
 let openDealerCards = new Set();
 let openGapCards = new Set();
@@ -1770,14 +1899,25 @@ let gapView = 'product';
 let productFilter = '';
 
 // ── API HELPERS ───────────────────────────────────────────────
-// Single request helper. All URLs are resolved RELATIVE to the current document
-// base so the app works at the Vercel root and behind the Jarvis gateway with no
-// URL rewriting. Auth is handled entirely by the Jarvis proxy (which injects the
-// X-Jarvis-Proxy-Token header upstream); the browser never sees or sends a secret.
+// Derive the path this page is actually mounted under, so /api/ calls stay
+// correctly prefixed even when served through an internal gateway (e.g. Jarvis
+// serving this app at https://host/vehicle-finance-dashboard) instead of at
+// the domain root. Falls back to "" (no prefix) for normal root-hosted setups.
+var APP_BASE_PATH = (function() {
+  var path = window.location.pathname; // excludes query string / hash automatically
+  if (path === '/' || path === '') return '';
+  if (path.charAt(path.length - 1) === '/') path = path.slice(0, -1);
+  var lastSlash = path.lastIndexOf('/');
+  var lastSegment = path.slice(lastSlash + 1);
+  // If the URL ends in an actual filename (e.g. euler_vf.html), the base path
+  // is everything before it. Otherwise (e.g. "/vehicle-finance-dashboard" with
+  // no extension) the whole path IS the mount prefix — keep it as-is.
+  if (lastSegment.indexOf('.') > -1) return path.slice(0, lastSlash);
+  return path;
+})();
+
 const API = {
-  _url: function(path) {
-    return new URL(String(path).replace(/^\//, ''), document.baseURI).toString();
-  },
+  _url: function(path) { return APP_BASE_PATH + path; },
   _headers: function(extra) {
     return Object.assign({'Content-Type':'application/json'}, extra||{});
   },
@@ -1821,16 +1961,35 @@ async function loadState() {
   if (loader) loader.style.display = 'flex';
   setSaveStatus('saving');
   try {
-    // Single bootstrap request returns the whole initial read model.
-    const boot = await API.get('api/bootstrap');
-    const fiMaster     = boot.fi_master;
-    const dealerMaster = boot.dealer_master;
-    const addedDealers = boot.added_dealers;
-    const onboarding   = boot.onboarding;
-    const fiPolicy     = boot.fi_policy;
-    const dealerHealth = boot.dealer_health;
-    const fiPolicyGeo  = boot.fi_policy_geo;
-    const snapshots    = boot.snapshots;
+    // allSettled, not all: one failing read must degrade ONE section, not blank
+    // the whole dashboard. API._handle rejects non-2xx (so a failure is never a
+    // silently empty dataset), and each rejected read becomes null here, which
+    // toArr() below turns into an empty section. The failures are listed to the
+    // user rather than swallowed, and everything failing is still a hard error.
+    const READ_PATHS = [
+      '/api/fi_master',
+      '/api/dealer_master',
+      '/api/added_dealers',
+      '/api/onboarding',
+      '/api/fi_policy',
+      '/api/dealer_health',
+      '/api/fi_policy_geo',
+      '/api/snapshots',
+      '/api/dpirr_months',
+      '/api/dpirr_entries',
+      '/api/dpirr_products',
+      '/api/dpirr_models',
+      '/api/dpirr_variants'
+    ];
+    const settled = await Promise.allSettled(READ_PATHS.map(function(p){ return API.get(p); }));
+    const failedReads = READ_PATHS.filter(function(p, i){ return settled[i].status === 'rejected'; });
+    if (failedReads.length === READ_PATHS.length) {
+      throw new Error('Every dashboard read failed');
+    }
+    state.failedReads = failedReads;
+    const settledValues = settled.map(function(s){ return s.status === 'fulfilled' ? s.value : null; });
+    const [fiMaster, dealerMaster, addedDealers, onboarding, fiPolicy, dealerHealth, fiPolicyGeo, snapshots,
+           dpirrMonths, dpirrEntries, dpirrProducts, dpirrModels, dpirrVariants] = settledValues;
 
     // Ensure all responses are arrays
     const toArr = v => Array.isArray(v) ? v : [];
@@ -1930,7 +2089,66 @@ async function loadState() {
         '4wc_storm': row['4wc_storm']||'', '4wc_turbo': row['4wc_turbo']||''
       };
     });
-    setSaveStatus('saved');
+
+    // ── DP/IRR: hydrate from Google Sheets ──
+    (function hydrateDPIRR() {
+      var months   = toArr(dpirrMonths);
+      var entries  = toArr(dpirrEntries);
+      var products = toArr(dpirrProducts);
+      var models   = toArr(dpirrModels);
+      var variants = toArr(dpirrVariants);
+
+      // Months
+      _dpMonths.dp = months.filter(m => m && m.id).map(m => ({ id: m.id, label: m.label }));
+
+      // Entries, grouped by monthId
+      _dpData.dp = {};
+      entries.forEach(function(e) {
+        if (!e || !e.id || !e.monthId) return;
+        if (!_dpData.dp[e.monthId]) _dpData.dp[e.monthId] = [];
+        var row = { '_id': e.id, 'Sr. No.': e.srNo || (_dpData.dp[e.monthId].length + 1) };
+        DP_COLS.forEach(function(c) { row[c.key] = e[c.key] || ''; });
+        _dpData.dp[e.monthId].push(row);
+      });
+      Object.keys(_dpData.dp).forEach(function(mid) {
+        _dpData.dp[mid].sort(function(a,b){ return (parseInt(a['Sr. No.'])||0) - (parseInt(b['Sr. No.'])||0); });
+      });
+
+      // Products / Models / Variants hierarchy
+      if (products.length) {
+        _dpProducts = products.filter(p => p && p.name).map(p => p.name);
+        _dpProductModels = {};
+        _dpProducts.forEach(function(p){ _dpProductModels[p] = []; });
+        models.forEach(function(m) {
+          if (!m || !m.product || !m.name) return;
+          if (!_dpProductModels[m.product]) _dpProductModels[m.product] = [];
+          _dpProductModels[m.product].push({ name: m.name, variants: [] });
+        });
+        variants.forEach(function(v) {
+          if (!v || !v.product || !v.model || !v.variant) return;
+          var modelList = _dpProductModels[v.product] || [];
+          var modelObj = modelList.find(function(mm){ return mm.name === v.model; });
+          if (modelObj) {
+            if (!modelObj.variants) modelObj.variants = [];
+            modelObj.variants.push({ variant: v.variant, esp: v.esp });
+          }
+        });
+      } else {
+        // First-ever run — sheet is empty, seed with the default product set
+        _dpProducts.forEach(function(p) { saveDPIRRProductToSheet(p); });
+      }
+    })();
+
+    if (failedReads.length) {
+      // Partial load: the rest of the dashboard is usable, but say so loudly so
+      // an empty section is never mistaken for "no data".
+      setSaveStatus('error');
+      toast('⚠ ' + failedReads.length + ' of ' + READ_PATHS.length +
+            ' sections failed to load and are showing empty: ' +
+            failedReads.map(function(p){ return p.replace('/api/', ''); }).join(', '));
+    } else {
+      setSaveStatus('saved');
+    }
     if (loader) { loader.classList.add('hide'); setTimeout(() => { loader.style.display = 'none'; }, 350); }
     // Init matcher buttons as disabled
     setTimeout(function(){
@@ -1942,22 +2160,22 @@ async function loadState() {
   } catch(e) {
     setSaveStatus('error');
     console.error('Load error:', e);
-    if (loaderText) loaderText.textContent = '⚠ Could not load data. Please refresh or contact support.';
+    if (loaderText) loaderText.textContent = '⚠ Could not connect to server. Is server.py running?';
     if (loader) loader.style.background = 'var(--bg)';
     setTimeout(() => { if (loader) { loader.classList.add('hide'); setTimeout(() => { loader.style.display = 'none'; }, 350); } }, 2500);
-    toast("⚠ Could not load data. Please refresh or contact support.");
+    toast("⚠ Could not connect to server. Is server.py running?");
   }
 }
 
 // ── SAVE FUNCTIONS (individual operations) ────────────────────
 async function saveAddedDealer(dealerObj) {
   setSaveStatus('saving');
-  try { await API.post('api/added_dealers', dealerObj); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.post('/api/added_dealers', dealerObj); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
 async function deleteAddedDealer(dealer, location) {
   setSaveStatus('saving');
-  try { await API.delete(`api/added_dealers?dealer=${encodeURIComponent(dealer)}&location=${encodeURIComponent(location)}`); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.delete(`/api/added_dealers?dealer=${encodeURIComponent(dealer)}&location=${encodeURIComponent(location)}`); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
 async function saveOnboarding(dealer, location, financier) {
@@ -1975,12 +2193,12 @@ async function saveOnboarding(dealer, location, financier) {
     '4wc_turbo_category': fdata.products['4wc_turbo']?.category||''
   };
   setSaveStatus('saving');
-  try { await API.post('api/onboarding', row); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.post('/api/onboarding', row); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
 async function deleteOnboarding(dealer, location, financier) {
   setSaveStatus('saving');
-  try { await API.delete(`api/onboarding?dealer=${encodeURIComponent(dealer)}&location=${encodeURIComponent(location)}&financier=${encodeURIComponent(financier)}`); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.delete(`/api/onboarding?dealer=${encodeURIComponent(dealer)}&location=${encodeURIComponent(location)}&financier=${encodeURIComponent(financier)}`); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
 async function saveFIPolicyToSheet(fiName, productKey) {
@@ -1992,7 +2210,7 @@ async function saveFIPolicyToSheet(fiName, productKey) {
   // Save tiers as JSON string
   row['co_tiers'] = JSON.stringify((pol.co||{}).tiers||[]);
   setSaveStatus('saving');
-  try { await API.post('api/fi_policy', row); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.post('/api/fi_policy', row); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
 async function saveDealerHealthToSheet(dealer, location) {
@@ -2000,27 +2218,27 @@ async function saveDealerHealthToSheet(dealer, location) {
   const h = state.dealerHealth[hk] || state.dealerHealth[dealer] || {};
   const row = { dealer, location, '3wc': h['3wc']||'', '3wp': h['3wp']||'', '4wc_storm': h['4wc_storm']||'', '4wc_turbo': h['4wc_turbo']||'' };
   setSaveStatus('saving');
-  try { await API.post('api/dealer_health', row); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.post('/api/dealer_health', row); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
 async function saveFIMasterToSheet(data) {
   setSaveStatus('saving');
-  try { await API.post('api/fi_master', data); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.post('/api/fi_master', data); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
 async function deleteFIMasterFromSheet(name) {
   setSaveStatus('saving');
-  try { await API.delete(`api/fi_master?name=${encodeURIComponent(name)}`); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.delete(`/api/fi_master?name=${encodeURIComponent(name)}`); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
 async function saveDealerMasterToSheet(data) {
   setSaveStatus('saving');
-  try { await API.post('api/dealer_master', data); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.post('/api/dealer_master', data); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
 async function deleteDealerMasterFromSheet(dealerName, location) {
   setSaveStatus('saving');
-  try { await API.delete(`api/dealer_master?dealerName=${encodeURIComponent(dealerName)}&location=${encodeURIComponent(location)}`); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.delete(`/api/dealer_master?dealerName=${encodeURIComponent(dealerName)}&location=${encodeURIComponent(location)}`); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
 // Legacy saveState — no-op (all saves are now granular above)
@@ -2051,6 +2269,7 @@ function switchPage(page) {
   document.getElementById("pageDealerMaster").classList.toggle("active", page === 'dealermaster');
   document.getElementById("pageFIPolicy").classList.toggle("active", page === 'fipolicy');
   document.getElementById("pageTAIF").classList.toggle("active", page === 'taif');
+  var pdpEl = document.getElementById("pageDPIRR"); if (pdpEl) pdpEl.classList.toggle("active", page === 'dpirr');
   var pmEl = document.getElementById("pageMatcher"); if (pmEl) pmEl.classList.toggle("active", page === 'matcher');
   var psEl = document.getElementById("pageSnapshots"); if (psEl) psEl.classList.toggle("active", page === 'snapshots');
   document.getElementById("navDealer").classList.toggle("active", page === 'dealer');
@@ -2059,11 +2278,13 @@ function switchPage(page) {
   document.getElementById("navDealerMaster").classList.toggle("active", page === 'dealermaster');
   document.getElementById("navFIPolicy").classList.toggle("active", page === 'fipolicy');
   document.getElementById("navTAIF").classList.toggle("active", page === 'taif');
+  var ndpEl = document.getElementById("navDPIRR"); if (ndpEl) ndpEl.classList.toggle("active", page === 'dpirr');
   var nmEl = document.getElementById("navMatcher"); if (nmEl) nmEl.classList.toggle("active", page === 'matcher');
   var nsEl = document.getElementById("navSnapshots"); if (nsEl) nsEl.classList.toggle("active", page === 'snapshots');
   if (page === 'matcher') { if (typeof initMatcher === 'function') initMatcher(); }
   if (page === 'snapshots') { renderSnapshots(); }
   if (page === 'taif') { initTAIFViews(); }
+  if (page === 'dpirr') { initDPIRR(); }
   if (page === 'coverage') { renderSummary(); renderGap(); }
   if (page === 'financier') { renderFinancierMaster(); }
   if (page === 'dealermaster') { renderDealerMaster(); }
@@ -2670,20 +2891,18 @@ function exportHealthStats() {
   });
   var total = retailExport.length;
 
-  // ── Table 1: Summary ──
+  var t1 = [['Overall Health (Retailing Dealers)','Dealers','%']];
   var dealerHealthCount = { star:0, green:0, amber:0, red:0, na:0, 'null':0 };
   retailExport.forEach(function(d) {
     var oh = computeOverallHealth(d.dealerName||d.dealer||'', d.location||'');
     dealerHealthCount[oh||'null']++;
   });
-  var t1 = [['Overall Health (Retailing Dealers)','Dealers','%']];
   HEALTH_KEYS.forEach(function(h) {
     var cnt = dealerHealthCount[h]||0;
     t1.push([HEALTH_LABELS[h], cnt, total ? Math.round(cnt/total*100)+'%' : '0%']);
   });
   t1.push(['Total', total, '100%']);
 
-  // ── Table 2: Product Health Summary ──
   var prodHealth = {};
   PRODUCTS.forEach(function(p) { prodHealth[p.key] = {star:0,green:0,amber:0,red:0,na:0,'null':0}; });
   retailExport.forEach(function(d) {
@@ -2701,46 +2920,85 @@ function exportHealthStats() {
     t2.push([p.label, ph.star||0, ph.green||0, ph.amber||0, ph.red||0, ph.na||0, ph['null']||0, total]);
   });
 
-  // ── Table 3: Dealer-wise details sorted by health ──
   var dealerRows = retailExport.map(function(d) {
-    var dn  = d.dealerName||d.dealer||'';
-    var loc = d.location||'';
-    var st  = d.state||'';
-    var zone= d.zone||'';
-    var poc = d.vfPoc||'';
-    var oh  = computeOverallHealth(dn, loc) || 'null';
-    var hk  = dealerKey(dn, loc);
-    var h   = state.dealerHealth[hk] || {};
-    return {
-      name: dn, location: loc, state: st, zone: zone, poc: poc,
-      overall: oh,
-      h3wc:  h['3wc']||'—', h3wp: h['3wp']||'—',
-      h4wcs: h['4wc_storm']||'—', h4wct: h['4wc_turbo']||'—'
-    };
+    var dn = d.dealerName||d.dealer||''; var loc = d.location||'';
+    var oh = computeOverallHealth(dn, loc)||'null';
+    var hk = dealerKey(dn, loc); var h = state.dealerHealth[hk]||{};
+    return { name:dn, location:loc, state:d.state||'', zone:d.zone||'', poc:d.vfPoc||'', overall:oh,
+             h3wc:h['3wc']||'—', h3wp:h['3wp']||'—', h4wcs:h['4wc_storm']||'—', h4wct:h['4wc_turbo']||'—' };
   });
-  // Sort by overall health
-  dealerRows.sort(function(a,b){
-    var sa = HEALTH_SORT[a.overall]||5, sb = HEALTH_SORT[b.overall]||5;
-    if (sa !== sb) return sa - sb;
-    return (a.name||'').localeCompare(b.name||'');
-  });
-
+  dealerRows.sort(function(a,b){ return (HEALTH_SORT[a.overall]||5)-(HEALTH_SORT[b.overall]||5)||a.name.localeCompare(b.name); });
   var t3 = [['#','Dealer Name','Location','State','Zone','VF POC','Overall Health','3WC Health','3WP Health','4WCS Health','4WCT Health']];
-  dealerRows.forEach(function(r, i) {
-    t3.push([
-      i+1, r.name, r.location, r.state, r.zone, r.poc,
-      HEALTH_LABELS[r.overall]||r.overall,
-      r.h3wc, r.h3wp, r.h4wcs, r.h4wct
-    ]);
-  });
+  dealerRows.forEach(function(r,i){ t3.push([i+1,r.name,r.location,r.state,r.zone,r.poc,HEALTH_LABELS[r.overall]||r.overall,r.h3wc,r.h3wp,r.h4wcs,r.h4wct]); });
 
-  // ── Build workbook ──
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(t1), 'Overall Summary');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(t2), 'Product Summary');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(t3), 'Dealer-wise Health');
   XLSX.writeFile(wb, 'Euler_Dealer_Health_' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
+
+function exportDealerFICount() {
+  // Use addedDealers — same source as state.mapping keys
+  var dealers = state.addedDealers;
+  var masterMap = {};
+  getDealerMasterList().forEach(function(m) {
+    masterMap[dealerKey(m.dealerName||m.dealer||'', m.location||'')] = m;
+  });
+
+  var header = ['#', 'Dealer Name', 'Location', 'State', 'Zone', 'VF POC', 'Dealer Type', 'Status',
+                 '3WC FIs', '3WP FIs', '4WCS FIs', '4WCT FIs', 'Total FIs'];
+  var rows = [header];
+
+  dealers.forEach(function(d, i) {
+    var name  = d.dealer || '';
+    var loc   = d.location || '';
+    var dk    = dealerKey(name, loc);
+    var fiMap = state.mapping[dk] || {};
+    var fiNames = Object.keys(fiMap);
+    var master = masterMap[dk] || {};
+
+    var counts = { '3wc':0, '3wp':0, '4wc_storm':0, '4wc_turbo':0 };
+    var totalSet = new Set();
+    fiNames.forEach(function(fi) {
+      var prods = (fiMap[fi].products || fiMap[fi] || {});
+      var hasAny = false;
+      PRODUCTS.forEach(function(p) {
+        var enabled = prods[p.key] && (prods[p.key].enabled === true || prods[p.key].enabled === 'true' || prods[p.key] === true);
+        if (enabled) { counts[p.key]++; hasAny = true; }
+      });
+      if (hasAny) totalSet.add(fi);
+    });
+
+    rows.push([
+      i + 1,
+      name,
+      loc,
+      master.state || d.state || '',
+      master.zone  || d.zone  || '',
+      master.vfPoc || d.vfPoc || '',
+      master.dodoCocoType || d.dodoCocoType || '',
+      master.dealerStatus || d.dealerStatus || '',
+      counts['3wc'],
+      counts['3wp'],
+      counts['4wc_storm'],
+      counts['4wc_turbo'],
+      totalSet.size
+    ]);
+  });
+
+  // Sort by dealer name
+  var dataRows = rows.slice(1).sort(function(a,b){ return String(a[1]).localeCompare(String(b[1])); });
+  dataRows.forEach(function(r,i){ r[0] = i+1; });
+  rows = [header].concat(dataRows);
+
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Dealer FI Count');
+  XLSX.writeFile(wb, 'Euler_Dealer_FI_Count_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  toast('✅ Export ready');
+}
+
+
 
 
 function setStatsTab(tab, btn) {
@@ -3010,8 +3268,8 @@ function renderFinancierMaster(skipDropdowns) {
     .map(function(name) { return { name: name, meta: state.financiersMeta.find(function(m){ return m.name === name; }) || { name: name } }; })
     .filter(function(f) {
       if (search && !f.name.toLowerCase().includes(search)) return false;
-      if (filterStatus   && (f.meta.status     || "") !== filterStatus)   return false;
-      if (filterCategory && (f.meta.category   || "") !== filterCategory) return false;
+      if (_finStatusFilter.length && _finStatusFilter.indexOf(f.meta.status||'')   === -1) return false;
+      if (_finCatFilter.length   && _finCatFilter.indexOf(f.meta.category||'')     === -1) return false;
       if (filterInstrument && (f.meta.instruments || "") !== filterInstrument) return false;
       if (filterLinked) {
         var isLinked = state.addedDealers.some(function(d){
@@ -5115,14 +5373,19 @@ function exportDealerDashboard() {
 function exportFIMaster() {
   const headers = ["FI Name","Category","Instruments","3WC","3WP","4WCS","4WCT",
     "Status","MoU Status","MOU Signed Month","FI Onboarding Month","Ever Financed Euler",
-    "Priority","TTL","Help Required","Sourced By","SPOC","Secondary POC","Contact","Comments"];
+    "Priority","TTL","Help Required","Sourced By","SPOC","Secondary POC","Contact","Comments",
+    "Dealer Linked"];
   const rows = [headers, ...state.financiers.map(name => {
     const m = state.financiersMeta.find(x => x.name === name) || {};
+    const isLinked = state.addedDealers.some(function(d) {
+      return getDealerFinanciers(d.dealer, d.location||'')[name];
+    });
     return [name, m.category||"", m.instruments||"",
       m["3wc"]||"", m["3wp"]||"", m["4wc"]||"", m["4wct"]||"",
       m.status||"", m.mouStatus||"", m.mouSignedMonth||"", m.onboardingDate||"", m.everFinancedEuler||"",
       m.priority||"", m.ttl||"", m.helpRequired||"",
-      m.sourcedBy||"", m.spoc||"", m.secondaryPoc||"", m.contactDetails||"", m.comments||""
+      m.sourcedBy||"", m.spoc||"", m.secondaryPoc||"", m.contactDetails||"", m.comments||"",
+      isLinked ? "Yes" : "No"
     ];
   })];
   xlsxDownload(rows, "FI Master", "Euler_FI_Master.xlsx");
@@ -5255,21 +5518,17 @@ function saveTAIFEdit() {
     var el = document.getElementById("taif_" + f);
     if (el) state.taifData[_taifEditIdx][f] = el.value;
   });
-  // TA/IF persistence is DISABLED (Phase 0 decision): the backend has no
-  // /api/taif route and there is no TA/IF worksheet, so this edit is not
-  // written to Google Sheets. The change is kept in-memory for this session
-  // only. See tmp/phase0-contract.md.
+  setSaveStatus('saving');
+  API.post('/api/taif', state.taifData[_taifEditIdx])
+    .then(function() { setSaveStatus('saved'); })
+    .catch(function() { setSaveStatus('error'); });
   closeTAIFEditModal();
   renderTAIF();
-  toast("TA/IF edits are view-only in this build and are not saved.");
+  toast("Record updated.");
 }
 
 
 
-
-// ── AUTH ──────────────────────────────────────────────────────
-// Authentication is handled entirely by the Jarvis proxy. There is no VF login,
-// session, inactivity timer or logout in the browser anymore.
 
 // ══════════════════════════════════════════════════════════════
 // GEO OVERRIDE — per segment (ind / co)
@@ -5438,7 +5697,7 @@ function deleteGeoRow(seg, st, ci) {
   var ctx = fiPolicyContext;
   state.fiPolicyGeo.splice(idx, 1);
   setSaveStatus('saving');
-  API.delete('api/fi_policy_geo?financier='+encodeURIComponent(ctx.fiName)+
+  API.delete('/api/fi_policy_geo?financier='+encodeURIComponent(ctx.fiName)+
     '&productKey='+encodeURIComponent(ctx.productKey)+
     '&seg='+encodeURIComponent(seg)+
     '&state='+encodeURIComponent(st)+'&city='+encodeURIComponent(ci))
@@ -5655,7 +5914,7 @@ function saveGeoRow(seg, st, ci) {
   }
 
   setSaveStatus('saving');
-  API.post('api/fi_policy_geo', r)
+  API.post('/api/fi_policy_geo', r)
     .then(function(){ setSaveStatus('saved'); toast('✅ Override saved: '+st+' / '+ci); })
     .catch(function(){ setSaveStatus('error'); });
 }
@@ -5710,8 +5969,7 @@ document.addEventListener("click", e => {
   if (wrap && !wrap.contains(e.target)) document.getElementById("dealerPickerDropdown").classList.remove("open");
 });
 
-// Load application data on page load. The Jarvis proxy has already
-// authenticated the request; there is no VF login step.
+// Load the dashboard directly — no login required (internal network only)
 (async () => { await loadState(); renderAll(); })();
 
 var TAIF_DATA = {"shriram_ta": [{"Sr. No.": 1, "State": "Tamilnadu", "City": "Trichy", "Dealer Name": "AJ Electric", "VF RM": "Praveen", "Sales RM": "", "Type": "TA", "Status": "Docs shared pending From Credit", "Remarks": "6/7 : Docs submitted by the dealer. File in credit with Shriram Finance\n9/7 : Approved for 25 Lakhs, Need dealer consent for this amount"}, {"Sr. No.": 2, "State": "Tamilnadu", "City": "Salem", "Dealer Name": "Bharani Motors", "VF RM": "Praveen", "Sales RM": "", "Type": "TA", "Status": "", "Remarks": "7/7 : Dosc shared by the dealer. To be reviewed by Shriram"}, {"Sr. No.": 3, "State": "MH", "City": "CSB Nagar", "Dealer Name": "Eco Wheels", "VF RM": "Rohit", "Sales RM": "", "Type": "TA", "Status": "Docs pending", "Remarks": "09/09 ITR Pending"}, {"Sr. No.": 4, "State": "MP", "City": "Jabalpur", "Dealer Name": "Elite", "VF RM": "Harsh", "Sales RM": "Sidharatha", "Type": "TA", "Status": "Docs Shared to Shriram Approval pending", "Remarks": "07 July - Case with GMCC , revert awaited \n08 July - 10 July-Credit revert awaited"}, {"Sr. No.": 5, "State": "Haryana", "City": "Faridabad", "Dealer Name": "HKS", "VF RM": "Harsh", "Sales RM": "Amit", "Type": "TA", "Status": "Docs pending", "Remarks": "06 July- Query raised from Credit team , List shared to dealer // Provide today\n07 July - Few docs pending, email done to dealer , aranging  \n08 July - BR, PG Pending\n09 July- Sales data of 6 months,BR,PG Pending \n10 July - Docs Pending"}, {"Sr. No.": 6, "State": "CG", "City": "Bilaspur", "Dealer Name": "Infrafields", "VF RM": "Harsh", "Sales RM": "Sidharatha", "Type": "TA", "Status": "Docs shared pending From Credit", "Remarks": "06 July - Checklist shared with Dealer, Documents submission Pending \n08 July - Docs received, email done \n10 July -  Hard copy docs shared vai post, will start the process after Raipur RO receives the docs."}, {"Sr. No.": 7, "State": "Tamilnadu", "City": "Chennai", "Dealer Name": "MSJ Motors", "VF RM": "Praveen", "Sales RM": "", "Type": "TA", "Status": "Pending from Dealer end", "Remarks": "7/7 : Latest 6 months Sales Data to be provided. Dealer yet to provide"}, {"Sr. No.": 8, "State": "Odisha", "City": "BBSR", "Dealer Name": "Multire Venture", "VF RM": "Rohit", "Sales RM": "", "Type": "TA", "Status": "Docs shared pending From Credit", "Remarks": "from 18th-june appproval is pending\n7 July Sanction Pending"}, {"Sr. No.": 9, "State": "Assam", "City": "Dhubri", "Dealer Name": "New SNT Motors", "VF RM": "Adil", "Sales RM": "", "Type": "TA", "Status": "Docs Shared to Shriram Approval pending", "Remarks": "7/7 State Head approval Pending"}, {"Sr. No.": 10, "State": "Telangana", "City": "Hyderbad", "Dealer Name": "Pragathi Commercials", "VF RM": "Praveen", "Sales RM": "", "Type": "TA", "Status": "Pending from Dealer end", "Remarks": "7/7 -10/7: Docs submitted ealier are not clear. Clear self attested docs to be submitted"}, {"Sr. No.": 11, "State": "Rajasthan", "City": "Jaipur", "Dealer Name": "Rahat", "VF RM": "Shubham", "Sales RM": "Sidharatha", "Type": "TA", "Status": "Disbursment received", "Remarks": "Disbursment Received"}, {"Sr. No.": 12, "State": "Haryana", "City": "Rewari", "Dealer Name": "Retro", "VF RM": "Harsh", "Sales RM": "Rachit", "Type": "TA", "Status": "Docs shared pending From Credit", "Remarks": "06 July- Query raised from Credit team , List shared to dealer // Provide today \n07 July - Docs forwarded to STFC RBH(Mohan) // He forwarded to credit \n08 July -10 July- Case with Credit all docs shared"}, {"Sr. No.": 13, "State": "WB", "City": "Howrah", "Dealer Name": "RNS Green", "VF RM": "Rohit", "Sales RM": "", "Type": "TA", "Status": "Docs shared pending From Credit", "Remarks": "Docs shared To Shriram RBH Revert pending, also need to discuss sales regrading for confirmation"}, {"Sr. No.": 14, "State": "Rajasthan", "City": "Bikaner", "Dealer Name": "Roshan Agency", "VF RM": "Shubham", "Sales RM": "Sidharatha", "Type": "TA", "Status": "Pending from Dealer end", "Remarks": "26-06 Checklist shared with Dealer, Documents submission Pending\n09-07 Reminder given to dealer, documentation still pending"}, {"Sr. No.": 15, "State": "MP", "City": "Indore", "Dealer Name": "Royal Automotive", "VF RM": "Harsh", "Sales RM": "Sidharatha", "Type": "TA", "Status": "Docs Shared to Shriram Approval pending", "Remarks": "07 July - Case with GMCC , revert awaited \n08 July  -10 July- Credit revert awaited"}, {"Sr. No.": 16, "State": "MH", "City": "Nagpur", "Dealer Name": "Sahni Infracon", "VF RM": "Rohit", "Sales RM": "Vinay", "Type": "", "Status": "Discussion Initiated", "Remarks": "Proposal sent, Login by monday"}, {"Sr. No.": 17, "State": "Andhra Pradesh", "City": "Vijayawada", "Dealer Name": "Shree Vrinda Automobiles", "VF RM": "Praveen", "Sales RM": "", "Type": "TA", "Status": "Pending from Dealer end", "Remarks": "4/7 - 9/7 : Pending docs list shared with the dealer - TA Request Letter in Letterhead, Udhyam Ceritificate, CRIF Report, GSTR 3B Last 6 Months, Latest 6 months Business account statement, Personal Guarantee Details, Company Profile\n10/7:Complete Docs given to Sriram,they Sanction 25 lacs TA"}, {"Sr. No.": 18, "State": "UP", "City": "Noida", "Dealer Name": "Smart", "VF RM": "Harsh", "Sales RM": "Vikas", "Type": "TA", "Status": "SL Pending", "Remarks": "06 July - Case soft approved \n07 July-  SL expected today\n08 July - Loan Agreement Today\n10 July - File sign done, case with branch for final signoff"}, {"Sr. No.": 19, "State": "MH", "City": "Yavatmal", "Dealer Name": "Varma Enterprises", "VF RM": "Rohit", "Sales RM": "Vinay", "Type": "", "Status": "Discussion Initiated", "Remarks": "Proposal sent, Login by monday"}, {"Sr. No.": 20, "State": "MH", "City": "Prabhani", "Dealer Name": "Vatsalya Motors", "VF RM": "Rohit", "Sales RM": "", "Type": "TA", "Status": "Docs Shared Disbursment Pending", "Remarks": "Disbusrment pending"}], "hfcl_if": [{"Sr. No.": 1, "State": "Assam", "City": "Guwahati", "Dealer Name": "Adhinath Carriers", "VF RM": "Adil Noush", "Sales RM": "Subesh", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Not interested"}, {"Sr. No.": 2, "State": "Maharashtra", "City": "Nagpur", "Dealer Name": "AK Sahni Infracon", "VF RM": "Rohit Singh", "Sales RM": "Vinay", "Type": "IF", "Status": "Docs Shared HFCL", "Remarks": "06/07 List of documents shared with Dealer, Documents Pending for Process                                          07/07 ( Follow to be sent by rohit 08/09 loan application form is pending rest is completed\nDocuments shared with HFCL 09/09 All docs submited pending from HFCL"}, {"Sr. No.": 3, "State": "Jammu and Kashmir", "City": "Srinagar", "Dealer Name": "Autowings EV", "VF RM": "Shubham", "Sales RM": "Rachit", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Discussed with Sales RM, he mentioned that TA is not needed"}, {"Sr. No.": 4, "State": "Uttar Pradesh", "City": "G. Noida", "Dealer Name": "Bhutani AutoCorp", "VF RM": "Raj Dwivedi", "Sales RM": "Vikas", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "DP has IF from SBI"}, {"Sr. No.": 5, "State": "Uttrakhand", "City": "Dehradun", "Dealer Name": "Doon Motors", "VF RM": "Shubham", "Sales RM": "Rachit", "Type": "IF", "Status": "Discussion Initiated", "Remarks": "Discussed with Sales RM, he mentioned that TA is not needed"}, {"Sr. No.": 6, "State": "Delhi", "City": "W. Delhi", "Dealer Name": "Ecoedge Enterprises", "VF RM": "Raj Dwivedi", "Sales RM": "vikas", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Not interested"}, {"Sr. No.": 7, "State": "Uttar Pradesh", "City": "Lucknow", "Dealer Name": "Ecoedge Enterprises", "VF RM": "Adil Noush", "Sales RM": "Subesh", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Not interested"}, {"Sr. No.": 8, "State": "Kerala", "City": "Kochi", "Dealer Name": "EVM", "VF RM": "Praveen Kumar", "Sales RM": "Amitabh", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Dlr yet to confirm"}, {"Sr. No.": 9, "State": "Haryana", "City": "Faridabad", "Dealer Name": "HKS Automobiles", "VF RM": "Raj Dwivedi", "Sales RM": "Amit Vishwkarma", "Type": "IF", "Status": "SL Received but Disbursment pending", "Remarks": "06/07 Disbursement Pending \n07July-10 July- Disbursement Pending"}, {"Sr. No.": 10, "State": "Karnataka", "City": "Bangalore", "Dealer Name": "Indhu India Motors", "VF RM": "Praveen Kumar", "Sales RM": "Amitabh", "Type": "IF", "Status": "Docs Pending", "Remarks": "Dlr not willing to avail CF"}, {"Sr. No.": 11, "State": "Uttar Pradesh", "City": "Varanasi", "Dealer Name": "Krishna Auto Sales", "VF RM": "Adil Noush", "Sales RM": "Subesh", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Not interested"}, {"Sr. No.": 12, "State": "Chhattisgarh", "City": "Raipur", "Dealer Name": "Maple Drive Pvt Ltd", "VF RM": "Raj Dwivedi", "Sales RM": "Siddharth", "Type": "IF", "Status": "Docs Pending", "Remarks": "06/07-Docs Pending                                                                                                                            07/07-Confirmation received today Docs Awaited Mail to be shared to dealer \n08/07-Docs pending \n09/07- Docs Pending \n10/07- Docs pending"}, {"Sr. No.": 13, "State": "Tamil Nadu", "City": "Chennai", "Dealer Name": "MSJ Motors", "VF RM": "Praveen Kumar", "Sales RM": "Arup", "Type": "IF", "Status": "Docs Pending", "Remarks": "06/07 Dealer Networth Ceritifcate, Tax Audit Report FY 24 pending                                                                07/07 Follow up mail Sent by praveen 08/09 still docs not received, 10/07 - Still docs pending CA is not well con call done with the dealer along with the RM"}, {"Sr. No.": 14, "State": "Odisha", "City": "Bhubaneshwar", "Dealer Name": "Multire Ventures", "VF RM": "Rohit Singh", "Sales RM": "Subesh", "Type": "IF", "Status": "Docs Shared HFCL", "Remarks": "06/07 We have received sanction confirmation on 15 lakhs, dealer will confirm 07/07 ( As per the discussion with RM and dealer They will confirm once they will get the clarity, 09/07 \nDealer will confirm for 15 lakhs sanction, 10/-7 Will take the final decision"}, {"Sr. No.": 15, "State": "Telangana", "City": "Hyderabad", "Dealer Name": "Pragati Commercials", "VF RM": "Praveen Kumar", "Sales RM": "No RM Available", "Type": "IF", "Status": "Docs Pending", "Remarks": "06/07 Dlr yet to submit the documents - Filled Application form, Masked Aadhar Card, Existing loan details, Networth Certficate of Shravani Reddy, Aksheta Reddy, Sucharitha Reddy all the Partners, Latest Partnership Deed, Partners Profit Sharing ratio on Letterhead, ITR - FY 25, Provisional Financials - FY 26, Monthwise Sales Data, Details of all Credit facilities availed, Latest Udhyam Ceritificate, Bank Statment from 1st Dec 2025 till 31 May 2026\n07/07 Still document pending Follow up mail Sent By praveen 08/07 - 09/07 Still docs not received mail sent on 7th , 10/07 Follow up call will be done today"}, {"Sr. No.": 16, "State": "Rajasthan", "City": "Jaipur", "Dealer Name": "Rahat Automotive", "VF RM": "Shubham", "Sales RM": "Siddharth", "Type": "IF", "Status": "Docs Pending", "Remarks": "06/07 Discussion done with Dealer Along with the TM,07/07 - Shubham will share the docs list (via email) to the Dealer\n09-07 - Reminded again to DP for Documentation he confirmed to complete by tommorow EOD\n10/07 Still docs pending"}, {"Sr. No.": 17, "State": "Madhya Pradesh", "City": "Bhopal", "Dealer Name": "RND Electrik", "VF RM": "Raj Dwivedi", "Sales RM": "Siddharth", "Type": "IF", "Status": "Discussion Initiated", "Remarks": "08/07- Intro email done, Docs awaited \n10/07 - Docs awaited"}, {"Sr. No.": 18, "State": "West Bengal", "City": "Kolkata (Howrah)", "Dealer Name": "RNS Green", "VF RM": "Rohit Singh", "Sales RM": "Arup", "Type": "IF", "Status": "Hold,DL Closed or RM Deny", "Remarks": "Under Discussion with Sales"}, {"Sr. No.": 19, "State": "Madhya Pradesh", "City": "Indore", "Dealer Name": "Shilaka Enterprises", "VF RM": "Raj Dwivedi", "Sales RM": "Siddharth", "Type": "IF", "Status": "Hold,DL Closed or RM Deny", "Remarks": "Dealer Closed"}, {"Sr. No.": 20, "State": "Uttar Pradesh", "City": "Agra 2", "Dealer Name": "Shree Balaji Automobiles", "VF RM": "Raj Dwivedi", "Sales RM": "Rachit", "Type": "IF", "Status": "Discussion Initiated", "Remarks": "(Rachit Sent a mail to dealer on 22nd June and then on 27th June and latest email was done by Raj on 7th July)  \n07/07 Docs Pending                                                                       08/07 Reminder email done to dealer, docs awaited, \n10/07 will be confirm today"}, {"Sr. No.": 21, "State": "Andhra Pradesh", "City": "Vijayawada", "Dealer Name": "Shree Vrinda Automobiles", "VF RM": "Praveen Kumar", "Sales RM": "Amitabh", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Dealer need time to decide, Since he is going to avail TA in Shriram and recently got CF funding from Ecofy"}, {"Sr. No.": 22, "State": "Delhi", "City": "S. Delhi - Okhla", "Dealer Name": "Sincere Marketing", "VF RM": "Raj Dwivedi", "Sales RM": "vikas", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "ROi Is too high , interested in Bank only"}, {"Sr. No.": 23, "State": "Andhra Pradesh", "City": "Vizag", "Dealer Name": "Siva Sai PVR Motors", "VF RM": "Praveen Kumar", "Sales RM": "No RM Available", "Type": "IF", "Status": "Rejected", "Remarks": "06/07 Rejected since Dealer do not have business vintage. Rental income wont be considered"}, {"Sr. No.": 24, "State": "Uttar Pradesh", "City": "Ghaziabad", "Dealer Name": "Smart Solution", "VF RM": "Raj Dwivedi", "Sales RM": "vikas", "Type": "IF", "Status": "Disbursed", "Remarks": "Disbursment done on 07 July 79,20,000"}, {"Sr. No.": 25, "State": "Uttar Pradesh", "City": "Noida", "Dealer Name": "Smart Solution - Noida", "VF RM": "Raj Dwivedi", "Sales RM": "Vikas", "Type": "IF", "Status": "Disbursed", "Remarks": "Disbursment done on 07 July 79,20,000"}, {"Sr. No.": 26, "State": "Delhi", "City": "E. Delhi", "Dealer Name": "Smart Solution -ED", "VF RM": "Raj Dwivedi", "Sales RM": "vikas", "Type": "IF", "Status": "Disbursed", "Remarks": "Disbursment done on 07 July 79,20,000"}, {"Sr. No.": 27, "State": "Tamil Nadu", "City": "Coimbatore 2", "Dealer Name": "SS Motors", "VF RM": "Praveen Kumar", "Sales RM": "Arup", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "DEALER NOT INTERESTED IN CF SINCE THE INTEREST RATE IS HIGH"}, {"Sr. No.": 28, "State": "Haryana", "City": "Gurgaon", "Dealer Name": "Techup Consulting", "VF RM": "Raj Dwivedi", "Sales RM": "Vikas", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "DP has IF from SBI"}, {"Sr. No.": 29, "State": "Tamil Nadu", "City": "Chennai 2", "Dealer Name": "The Empire", "VF RM": "Praveen Kumar", "Sales RM": "Arup", "Type": "IF", "Status": "Docs Pending", "Remarks": "06/07 Only KYC Documents sent rest is pending \n07/07 Reminder mail sent to dealer - Discussed with RM : Dealer has sufficient funds"}, {"Sr. No.": 30, "State": "Tamil Nadu", "City": "Tirupur", "Dealer Name": "Ultimate Vehicles", "VF RM": "Praveen Kumar", "Sales RM": "Arup", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "DEALER NOT INTERESTED IN CF SINCE THE INTEREST RATE IS HIGH"}, {"Sr. No.": 31, "State": "Uttar Pradesh", "City": "Agra", "Dealer Name": "Vishal Agencies", "VF RM": "Raj Dwivedi", "Sales RM": "Rachit", "Type": "IF", "Status": "Eligible But Not Interested", "Remarks": "Not interested"}], "ecofy_ta": [{"Sr. No.": 1, "State": "", "City": "", "Dealer Name": "ECO WHEELS AUTOMOTIVE", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32602103086 | Limit: ₹4008756 | POS: ₹3078296 | Avail: ₹930460 | Exp: 28 Feb 2027"}, {"Sr. No.": 2, "State": "", "City": "", "Dealer Name": "ECOEDGE ENTERPRISES PRIVATE LIMITED", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32601102881 | Limit: ₹10000000 | POS: ₹- | Avail: ₹10000000 | Exp: 24 Jan 2027"}, {"Sr. No.": 3, "State": "", "City": "", "Dealer Name": "HKS AUTOMOBILES PRIVATE LIMITED", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32601102859 | Limit: ₹5013772 | POS: ₹4978068 | Avail: ₹35704 | Exp: 21 Jan 2027"}, {"Sr. No.": 4, "State": "", "City": "", "Dealer Name": "Infra Field", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Pending", "Remarks": "LAN:  | Limit: ₹ | POS: ₹ | Avail: ₹ | Exp: "}, {"Sr. No.": 5, "State": "", "City": "", "Dealer Name": "M S J Motors", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32601102913 | Limit: ₹4516446 | POS: ₹4129984 | Avail: ₹386462 | Exp: 30 Jan 2027"}, {"Sr. No.": 6, "State": "", "City": "", "Dealer Name": "SHREE VRINDA AUTOMOBILES", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Sanctioned", "Remarks": "LAN: - | Limit: ₹3500000 | POS: ₹- | Avail: ₹- | Exp: "}, {"Sr. No.": 7, "State": "", "City": "", "Dealer Name": "Shrey Enterprises", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Sanctioned", "Remarks": "LAN: Hold | Limit: ₹3000000 | POS: ₹ | Avail: ₹ | Exp: "}, {"Sr. No.": 8, "State": "", "City": "", "Dealer Name": "SKRB AUTOMOBILITY PRIVATE LIMITED", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32602102992 | Limit: ₹4512951 | POS: ₹4467141 | Avail: ₹45810 | Exp: 14 Feb 2027"}, {"Sr. No.": 9, "State": "", "City": "", "Dealer Name": "SKYJUMP SOLUTIONS PRIVATE LIMITED", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32603103331 | Limit: ₹3012698 | POS: ₹2729599 | Avail: ₹283099 | Exp: 31 Mar 2027"}, {"Sr. No.": 10, "State": "", "City": "", "Dealer Name": "SMART SOLUTION", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32510102497 | Limit: ₹4995000 | POS: ₹4775050 | Avail: ₹219950 | Exp: 30 Oct 2026"}, {"Sr. No.": 11, "State": "", "City": "", "Dealer Name": "THE EMPIRE", "VF RM": "", "Sales RM": "", "Type": "TA", "Status": "Disbursed", "Remarks": "LAN: 32603103105 | Limit: ₹1503155 | POS: ₹1491282 | Avail: ₹11873 | Exp: 05 Mar 2027"}], "hfcl_retail": [{"Sr. No.": 1, "State": "TN", "City": "Trichy", "Dealer Name": "AJ Electric", "VF SPOC": "Sharan", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 2, "State": "TN", "City": "Tenkasi", "Dealer Name": "AJ Electric", "VF SPOC": "Sharan", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 3, "State": "Rajasthan", "City": "Jaipur", "Dealer Name": "Akar Fourwheels", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 4, "State": "Madhya Pradesh", "City": "Rajgarh", "Dealer Name": "Anand Green Biotech Energy Pvt Ltd", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 5, "State": "Uttar Pradesh", "City": "Bareilly", "Dealer Name": "Aneja Transport", "VF SPOC": "Harsh", "Status": "27 June - Docs sent to HFCL over email \n01 - 10 July  - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 6, "State": "AP", "City": "Kurnool", "Dealer Name": "Anirudh Automobiles", "VF SPOC": "Durgaprasad", "Status": "Code created as per HFLC", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 7, "State": "Rajasthan", "City": "Bharatpur", "Dealer Name": "Arya Enterprises", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 8, "State": "MH", "City": "Baramati", "Dealer Name": "Ashwamedh Automotive", "VF SPOC": "Rohit", "Status": "Documents shared, Dealer code in Process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 9, "State": "J&K", "City": "Srinagar", "Dealer Name": "Auto Wings", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 10, "State": "TN", "City": "Kallakuruchi", "Dealer Name": "Bharani Motors", "VF SPOC": "Sharan", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 11, "State": "TN", "City": "Salem", "Dealer Name": "Bharani Motors", "VF SPOC": "Sharan", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 12, "State": "BR", "City": "Purnea", "Dealer Name": "Bharat Auto", "VF SPOC": "Adil", "Status": "Docs shared to HFCL on 9 June\n7/7-10/7 Expecting code within this week", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 13, "State": "Uttar Pradesh", "City": "Greater Noida", "Dealer Name": "Bhutani Autocorp", "VF SPOC": "Harsh", "Status": "07 July - Partners authority letter, Dealer Empanelment form pending from dealer end \n08 July -10 July- Partner sign pending on authority letter, Patner lives in Ludhiana, he will share by post by Monday 13July", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 14, "State": "AS", "City": "Goalpara", "Dealer Name": "Brave Riders", "VF SPOC": "Adil", "Status": "7/7-10/7 TC Awaited", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 15, "State": "BR", "City": "Patna", "Dealer Name": "COCO", "VF SPOC": "Adil", "Status": "7/7-10/7 MH code is in process- Post that other COCO will also get live- With reference to that", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 16, "State": "Chandigarh", "City": "Chandigarh", "Dealer Name": "COCO", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 17, "State": "JH", "City": "Ranchi", "Dealer Name": "COCO", "VF SPOC": "Adil", "Status": "7/7-10/7  MH code is in process- Post that other COCO will also get live- With reference to that", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 18, "State": "Delhi", "City": "Delhi", "Dealer Name": "COCO_Delhi", "VF SPOC": "Harsh", "Status": "Docs pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 19, "State": "Punjab", "City": "Ludiana", "Dealer Name": "DC Energies", "VF SPOC": "Shubham", "Status": "07-07-HFCL Manpower alligned, Documents collection pending \n09-07 HFCL Executive Visit alligned for today to complete the documetation", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 20, "State": "MH", "City": "akola", "Dealer Name": "Deepintel Globle Ventures", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 21, "State": "Dehradun", "City": "Dehradun", "Dealer Name": "Doon Motors", "VF SPOC": "Shubham", "Status": "07-07 E-Sign Pending at dealer end\n09-07 E-sign Sign Complete, Code will be created in 48 Hours confirmed by HFCl TM", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 22, "State": "BR", "City": "Dharbhanga", "Dealer Name": "Eco electric", "VF SPOC": "Adil", "Status": "7/7-10/7  HFCL not operational- Still pushing to open dealer code", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 23, "State": "MH", "City": "CSB Nagar", "Dealer Name": "Eco Wheels", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 24, "State": "UP", "City": "Lucknow", "Dealer Name": "Ecoedge", "VF SPOC": "Adil", "Status": "7/7-10/7  BR pending from 27 June", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 25, "State": "Delhi", "City": "W. Delhi", "Dealer Name": "Ecoedge Enterprises", "VF SPOC": "Harsh", "Status": "07 July - Email Done Docs pending from Dealer End \n08 July - Docs Still pending \n10 July - Email Done,docs still Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 26, "State": "Haryana", "City": "Sonipat", "Dealer Name": "Ecoedge Enterprises", "VF SPOC": "Harsh", "Status": "07 July - Email Done Docs pending from Dealer End \n08 July - Docs Still pending \n10 July - Email Done,docs still Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 27, "State": "TN", "City": "Tiruvanamalai", "Dealer Name": "Elektro Orbit", "VF SPOC": "Sharan", "Status": "7/7 ;Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 28, "State": "TN", "City": "Vellore", "Dealer Name": "Elektro Orbit", "VF SPOC": "Sharan", "Status": "7/7 ;Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 29, "State": "Madhya Pradesh", "City": "Jabalpur", "Dealer Name": "Elite Motors", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 30, "State": "KL", "City": "Trivandrum", "Dealer Name": "EVM Automobiles", "VF SPOC": "Anil", "Status": "HFCL do not have manpower", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 31, "State": "KL", "City": "Cochin", "Dealer Name": "EVM Automobiles", "VF SPOC": "Anil", "Status": "HFCL do not have manpower", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 32, "State": "KL", "City": "Calicut", "Dealer Name": "EVM Automobiles", "VF SPOC": "Anil", "Status": "HFCL do not have manpower", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 33, "State": "JH", "City": "Ranchi", "Dealer Name": "Evtria", "VF SPOC": "Adil", "Status": "Docs shared on 15 June\n7/7 Still impanelment in process. Docs Shared again\n9/7 - Mail Topup given", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 34, "State": "AP", "City": "Tirupathi", "Dealer Name": "Garuda EV", "VF SPOC": "Durgaprasad", "Status": "Code created as per HFLC", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 35, "State": "TN", "City": "Madurai", "Dealer Name": "Gee Motors", "VF SPOC": "Sharan", "Status": "9/7 : All docx pending from dealer, mail sent", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 36, "State": "Delhi", "City": "North Delhi", "Dealer Name": "Green Stone", "VF SPOC": "Harsh", "Status": "29 June - Docs sent to HFCL over email \n01 - 10 July  - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 37, "State": "UP", "City": "Gorakhpur", "Dealer Name": "Hanumant\n Enterprises", "VF SPOC": "Adil", "Status": "Impanelment form pending from 25th June\n7/7-10/7  Still impanelment in process", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 38, "State": "Rajasthan", "City": "Jodhpur", "Dealer Name": "Himmat Jai Automotive", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 39, "State": "Haryana", "City": "Faridabad", "Dealer Name": "HKS Automobiles", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 40, "State": "KA", "City": "Hubballi", "Dealer Name": "Indhu India Motors Pvt. ltd.", "VF SPOC": "Anil", "Status": "June : All docs Submitted, Code creation under process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 41, "State": "KA", "City": "Bengaluru", "Dealer Name": "Indu India", "VF SPOC": "Anil", "Status": "June : All docs Submitted, Code creation under process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 42, "State": "Chhattisgarh", "City": "Bilaspur", "Dealer Name": "Infrafield Services", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 43, "State": "AS", "City": "GHY", "Dealer Name": "Kothari Euler", "VF SPOC": "Adil", "Status": "Docs shared to HFCL on 11 June\n7/7-10/7 Assam spoc needed in HFCL", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 44, "State": "UP", "City": "Varanasi", "Dealer Name": "Krishna Auto", "VF SPOC": "Adil", "Status": "DAR10032", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 45, "State": "KA", "City": "Bengaluru", "Dealer Name": "KVR Constructions", "VF SPOC": "Anil", "Status": "June : All docs Submitted, Code creation under process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 46, "State": "GJ", "City": "Bharuch", "Dealer Name": "Madhav Vehicles", "VF SPOC": "Rohit", "Status": "On hold", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 47, "State": "Madhya Pradesh", "City": "Katni", "Dealer Name": "Manvik Enterprises", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 48, "State": "Chhattisgarh", "City": "Raipur", "Dealer Name": "Maple Drive Pvt Ltd", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 49, "State": "UP", "City": "Lucknow", "Dealer Name": "MG Road Link", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 50, "State": "Uttar Pradesh", "City": "Etawah", "Dealer Name": "Mishra Commercials", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 51, "State": "GJ", "City": "Somnath", "Dealer Name": "Moddeshwary Motors", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 52, "State": "UP", "City": "Lakhimpur", "Dealer Name": "Momentum Point", "VF SPOC": "Adil", "Status": "8/7 Code expecting by EOD\n8/7 Code created", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 53, "State": "TN", "City": "Chennai", "Dealer Name": "MSJ Motors", "VF SPOC": "Sharan", "Status": "7/7 : Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 54, "State": "OD", "City": "BBSR", "Dealer Name": "Multire Venture", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 55, "State": "TR", "City": "Agartala", "Dealer Name": "Nag Automobiles", "VF SPOC": "Adil", "Status": "7/7-10/7 TC Awaited", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 56, "State": "Rajasthan", "City": "Sikar", "Dealer Name": "NRK Motors", "VF SPOC": "Shubham", "Status": "02-07 Docs shared to HFCL\n10-07 E-sign Mail initiation pending from HFCL End", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 57, "State": "AS", "City": "Golaghat", "Dealer Name": "OP Motors", "VF SPOC": "Adil", "Status": "Docs collected on 5 July\n7/7 Verifying the docs will share tomorrow\n8/7 docs shared\n9/7- 10/7 team said 2 wheeler team will revert", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 58, "State": "Haryana", "City": "Jhajjar", "Dealer Name": "Param Automobiles", "VF SPOC": "Harsh", "Status": "25 June - Docs sent to HFCL over email \n01 - 10 July  - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 59, "State": "Uttar Pradesh", "City": "Aligarh", "Dealer Name": "Plan Bee", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 60, "State": "TS", "City": "Hyderabad", "Dealer Name": "Pragathi commercial", "VF SPOC": "Anil", "Status": "9/7 : All docs Submitted, Code creation under process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 61, "State": "Rajasthan", "City": "Jaipur", "Dealer Name": "Rahat Automotive", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 62, "State": "Uttar Pradesh", "City": "Moradabad", "Dealer Name": "Rajpoot Automobiles", "VF SPOC": "Harsh", "Status": "07 July - Dealer partner authority letter signature pending, partner out of station\n08 July - Dealer will come back by 14th, Patner sign on authority letter pending \n10 July - Docs Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 63, "State": "Haryana", "City": "Kosli (Rewari)", "Dealer Name": "Retro Automobiles LLP", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 64, "State": "GJ", "City": "Gandhidham", "Dealer Name": "Rising Ladders", "VF SPOC": "Rohit", "Status": "KYC, GST, MSME received, remaining pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 65, "State": "Madhya Pradesh", "City": "Bhopal", "Dealer Name": "RND Electrik", "VF SPOC": "Harsh", "Status": "06 July - All docs complete, shared with HFCL\n07 - 10 July - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 66, "State": "WB", "City": "Howrah", "Dealer Name": "RNS Green", "VF SPOC": "Rohit", "Status": "Documents shared with HFCL, HCL manpower not there", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 67, "State": "Rajasthan", "City": "Bikaner", "Dealer Name": "Roshan Motora", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 68, "State": "Madhya Pradesh", "City": "Indore", "Dealer Name": "Royal Automobile", "VF SPOC": "Harsh", "Status": "9 - 10 July - Documents shared , Dealer code in Process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 69, "State": "Rajasthan", "City": "Udaipur", "Dealer Name": "Rudra Motors", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 70, "State": "MH", "City": "Nagpur", "Dealer Name": "Sahni Infracon", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 71, "State": "MH", "City": "Chandrapur", "Dealer Name": "Sahni Infracon", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 72, "State": "Uttar Pradesh", "City": "Meerut", "Dealer Name": "Satinpod Global Service", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 73, "State": "BR", "City": "Muzaffarpur", "Dealer Name": "Saumya Motors", "VF SPOC": "Adil", "Status": "Docs shared to HFCL on 9 June\n7/7-10/7 Expecting code within this week", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 74, "State": "AP", "City": "Ongole", "Dealer Name": "SHAAKTII ELITE POWER\n SOLUTIONS PVT. LTD.", "VF SPOC": "Durgaprasad", "Status": "HFCL is not operational", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 75, "State": "Uttar Pradesh", "City": "Agra 2", "Dealer Name": "Shree Balaji Automobiles", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 76, "State": "J&K", "City": "Jammu", "Dealer Name": "Shree Motors", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 77, "State": "AP", "City": "Nellore", "Dealer Name": "Shree Vrinda Automobiles", "VF SPOC": "Durgaprasad", "Status": "8/7 : All docs shared, Code pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 78, "State": "AP", "City": "Vijayawada", "Dealer Name": "Shree Vrinda Automobiles", "VF SPOC": "Durgaprasad", "Status": "8/7 : All docs shared, Code pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 79, "State": "Uttar Pradesh", "City": "Mathura", "Dealer Name": "Shreya Enterprises", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 80, "State": "Delhi", "City": "Okhla", "Dealer Name": "Sincere Marketing", "VF SPOC": "Harsh", "Status": "07 July - Docs Pending, list shared \n08 July - Docs received today, shared with HFCL\n10 July - Docs shared with Sameer", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 81, "State": "Rajasthan", "City": "Chittorgarh", "Dealer Name": "Sisodia Automobile Pvt Ltd", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 82, "State": "AP", "City": "Vizag", "Dealer Name": "Siva Sai P V R Motors", "VF SPOC": "Durgaprasad", "Status": "8/7 : Passport size photo and PAL is pending\n9/7 : All docs submitted", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 83, "State": "UP", "City": "Kanpur", "Dealer Name": "SKRB", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 84, "State": "MH", "City": "Dhule & Jalgon", "Dealer Name": "Sky Jump Solutions", "VF SPOC": "Rohit", "Status": "Documents shared, Dealer code in Process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 85, "State": "Delhi", "City": "Jhagirpuri", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 86, "State": "Delhi", "City": "E. Delhi", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 87, "State": "Uttar Pradesh", "City": "Ghaziabad", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 88, "State": "Uttar Pradesh", "City": "Noida", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 89, "State": "AS", "City": "Dhubri", "Dealer Name": "SNT Motors", "VF SPOC": "Adil", "Status": "Docs shared to HFCL on 26 June\n7/7-10/7  Assam spoc needed in HFCL", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 90, "State": "TN", "City": "Hosur", "Dealer Name": "Sri Mahalaxmee Agri and Construction Equipment", "VF SPOC": "Anil", "Status": "10/7 : Dealership inaguration is scheduled on 13/07", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 91, "State": "WB", "City": "Siliguri", "Dealer Name": "Sri RS Vistar Ventures", "VF SPOC": "Rohit", "Status": "Documents shared with HFCL, HCL manpower not there", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 92, "State": "UP", "City": "Prayagraj", "Dealer Name": "SS Enterprises", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 93, "State": "TN", "City": "Coimbatore", "Dealer Name": "SS Motors", "VF SPOC": "Sharan", "Status": "7/7 ;Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 94, "State": "TS", "City": "Nizamabad", "Dealer Name": "SSM Motors", "VF SPOC": "Anil", "Status": "Dealer Code issued, HFCL Manpower not present", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 95, "State": "Chhattisgarh", "City": "Ambikapur", "Dealer Name": "Sulaxmi Automobiles", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 96, "State": "Madhya Pradesh", "City": "Ujjain", "Dealer Name": "Swastik Enterprises", "VF SPOC": "Harsh", "Status": "9 - 10 July - EKYC pending from Dealer end (Dealer is out of India)", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 97, "State": "Rajasthan", "City": "Banswara", "Dealer Name": "Taiyyab Motors", "VF SPOC": "Shubham", "Status": "07-07 Masked Aadhar pending, Rest documents have been completed\n08-07 Visited Banswara met DP asked to share Masked Aadhar will be following up for the same", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 98, "State": "Haryana", "City": "Gurgaon", "Dealer Name": "Techup Consulting", "VF SPOC": "Harsh", "Status": "26 June - Docs sent to HFCL over email \n01 - 10July  - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 99, "State": "TN", "City": "Chennai", "Dealer Name": "The Empire", "VF SPOC": "Sharan", "Status": "7/7 ;Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 100, "State": "JH", "City": "Dumka", "Dealer Name": "TKG", "VF SPOC": "Adil", "Status": "HFCL not operational- Still pushing to open dealer code\n7/7-10/7 Same status", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 101, "State": "TN", "City": "Tiruppur", "Dealer Name": "Ultimate Vehicles", "VF SPOC": "Sharan", "Status": "7/7 ;Complete docs shared, Code Pending", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 102, "State": "MH", "City": "Yavatmal", "Dealer Name": "Varma Emterprises", "VF SPOC": "Rohit", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 103, "State": "MH", "City": "Daund", "Dealer Name": "Varsha Motors", "VF SPOC": "Rohit", "Status": "Documents shared, Dealer code in Process", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 104, "State": "MH", "City": "Prabhani", "Dealer Name": "Vatsalya Motors", "VF SPOC": "Rohit", "Status": "Sign stamp Pending on documents", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 105, "State": "KA", "City": "Bijapur", "Dealer Name": "Vijay Business Ventures LLP", "VF SPOC": "Anil", "Status": "10/7 : Dealership yet to start business operations", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 106, "State": "Uttar Pradesh", "City": "Agra", "Dealer Name": "Vishal Agencies", "VF SPOC": "Harsh", "Status": "", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 107, "State": "WB", "City": "Durgapur", "Dealer Name": "Volt Wheels", "VF SPOC": "Rohit", "Status": "Documents shared with HFCL, HCL manpower not there", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 108, "State": "Haryana", "City": "Kurukshetra", "Dealer Name": "VPS Motors", "VF SPOC": "Harsh", "Status": "24 June - Docs sent over email \n01 - 10 July  - Retail code opening in process", "Disbursement Status": "", "Remarks": ""}], "amu_retail": [{"Sr. No.": 1, "State": "Bihar", "City": "Patna", "Dealer Name": "Anand Automobiles", "VF SPOC": "Adil", "Status": "10/7 RBH  will visit the dealer - Today.", "Disbursement Status": "No", "Remarks": "10/7 RBH  will visit the dealer - Today."}, {"Sr. No.": 2, "State": "Madhya Pradesh", "City": "Gwalior", "Dealer Name": "Art of Awadh", "VF SPOC": "Raj", "Status": "Dealer closed", "Disbursement Status": "No", "Remarks": "Dealer closed"}, {"Sr. No.": 3, "State": "Uttar Pradesh", "City": "Lucknow", "Dealer Name": "COCO_Lucknow", "VF SPOC": "Adil", "Status": "7/7-10/7 The financier also requires Saurabh \nSir's mother's KYC documents to open the code.", "Disbursement Status": "No", "Remarks": "7/7-10/7 The financier also requires Saurabh \nSir's mother's KYC documents to open the code."}, {"Sr. No.": 4, "State": "Bihar", "City": "Patna", "Dealer Name": "COCO_Patna", "VF SPOC": "Adil", "Status": "7/7-8/7  Waiting- RBH response for code\n9/7 RBH saying- Give me some time for COCO code.", "Disbursement Status": "No", "Remarks": "7/7-8/7  Waiting- RBH response for code\n9/7 RBH saying- Give me some time for COCO code."}, {"Sr. No.": 5, "State": "Uttrakhand", "City": "Dehradun", "Dealer Name": "Doon Motors", "VF SPOC": "Shubham", "Status": "", "Disbursement Status": "No", "Remarks": ""}, {"Sr. No.": 6, "State": "Uttar Pradesh", "City": "Lucknow", "Dealer Name": "Ecoedge Enterprises", "VF SPOC": "Adil", "Status": "7/7-10/7  Autorisation letter pending. Dealer end.", "Disbursement Status": "No", "Remarks": "7/7-10/7  Autorisation letter pending. Dealer end."}, {"Sr. No.": 7, "State": "Madhya Pradesh", "City": "Jabalpur", "Dealer Name": "Elite Motors", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 8, "State": "Uttar Pradesh", "City": "Gorakhpur", "Dealer Name": "Hanumant Entprises", "VF SPOC": "Adil", "Status": "7/7-8/7  Docs pending. Dealer end\n10/7- The dealer said they will provide all the documents within two days.", "Disbursement Status": "No", "Remarks": "7/7-8/7  Docs pending. Dealer end\n10/7- The dealer said they will provide all the documents within two days."}, {"Sr. No.": 9, "State": "Uttar Pradesh", "City": "Varanasi", "Dealer Name": "Krishna Auto Sales", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": "Code Created"}, {"Sr. No.": 10, "State": "Madhya Pradesh", "City": "Katni", "Dealer Name": "Manvik Enterprises", "VF SPOC": "Raj", "Status": "Docs shared to ASM of AMU // Manpower is not available", "Disbursement Status": "No", "Remarks": "Docs shared to ASM of AMU // Manpower is not available"}, {"Sr. No.": 11, "State": "Uttar Pradesh", "City": "Lucknow", "Dealer Name": "MG Road Link", "VF SPOC": "Adil", "Status": "7/7-8/7  Docs pending. Dealer end\n9/7 - Financier- Alok  will visit the dealer -  Tomorrow\n10/7  Financier- Alok  will visit the dealer- Today \nafter that , he will collect the docs.", "Disbursement Status": "No", "Remarks": "7/7-8/7  Docs pending. Dealer end\n9/7 - Financier- Alok  will visit the dealer -  Tomorrow\n10/7  Financier- Alok  will visit the dealer- Today \nafter that , he will collect the docs."}, {"Sr. No.": 12, "State": "Uttar Pradesh", "City": "Etawah", "Dealer Name": "Mishra Commercials", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 13, "State": "Odisha", "City": "Bhubaneswar", "Dealer Name": "Multire Ventures", "VF SPOC": "Rohit Singh", "Status": "", "Disbursement Status": "Yes", "Remarks": ""}, {"Sr. No.": 14, "State": "Uttar Pradesh", "City": "Aligarh", "Dealer Name": "Plan Bee", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 15, "State": "Madhya Pradesh", "City": "Bhopal", "Dealer Name": "RND Electrik", "VF SPOC": "Raj", "Status": "Docs shared to ASM of AMU // Manpower is not available", "Disbursement Status": "No", "Remarks": "Docs shared to ASM of AMU // Manpower is not available"}, {"Sr. No.": 16, "State": "Madhya Pradesh", "City": "Indore", "Dealer Name": "Royal Automobile", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 17, "State": "Bihar", "City": "Muzaffarpur", "Dealer Name": "Saumya Motors", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": "Code Created"}, {"Sr. No.": 18, "State": "Uttar Pradesh", "City": "New Agra", "Dealer Name": "Shree Balaji Automobiles", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 19, "State": "Uttar Pradesh", "City": "Mathura", "Dealer Name": "Shreya Enterprises", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}, {"Sr. No.": 20, "State": "Odisha", "City": "Balasore", "Dealer Name": "Shubham Motors", "VF SPOC": "Rohit Singh", "Status": "TC Pending", "Disbursement Status": "No", "Remarks": "TC Pending"}, {"Sr. No.": 21, "State": "Uttar Pradesh", "City": "Kanpur", "Dealer Name": "SKRB Automobiles", "VF SPOC": "Adil", "Status": "7/7-10/7  Authorisation letter pending. Financier end", "Disbursement Status": "No", "Remarks": "7/7-10/7  Authorisation letter pending. Financier end"}, {"Sr. No.": 22, "State": "Uttar Pradesh", "City": "Noida", "Dealer Name": "Smart Solution", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "No", "Remarks": "Code Created"}, {"Sr. No.": 23, "State": "Uttar Pradesh", "City": "Prayagraj", "Dealer Name": "SS Enterprises", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "No", "Remarks": "Code Created"}, {"Sr. No.": 24, "State": "Madhya Pradesh", "City": "Ujjain", "Dealer Name": "Swastik Enterprises", "VF SPOC": "Raj", "Status": "Manpower is not available", "Disbursement Status": "No", "Remarks": "Manpower is not available"}, {"Sr. No.": 25, "State": "Uttar Pradesh", "City": "Agra", "Dealer Name": "Vishal Agencies", "VF SPOC": "Raj", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Code Created"}], "annapurna_retail": [{"Sr. No.": 1, "State": "RJ", "City": "Jaipur", "Dealer Name": "Akar Fourwheels", "VF SPOC": "Shubham", "Status": "Docs shared to Annapurna", "Disbursement Status": "", "Remarks": "07-07 - Documentation Completed, Agreement pending from annapurana\n09-07 - Agreement pending from annapurna end"}, {"Sr. No.": 2, "State": "Uttar Pradesh", "City": "Bareilly", "Dealer Name": "Aneja Transport", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Notarised agreement Pending"}, {"Sr. No.": 3, "State": "Bihar", "City": "Purnea", "Dealer Name": "Bharat Auto", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": ""}, {"Sr. No.": 4, "State": "Uttar Pradesh", "City": "Greater Noida", "Dealer Name": "Bhutani Autocorp", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Docs pending"}, {"Sr. No.": 5, "State": "Bihar", "City": "Patna", "Dealer Name": "COCO", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": ""}, {"Sr. No.": 6, "State": "Bihar", "City": "Dharbhanga", "Dealer Name": "Eco electric", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 7, "State": "UP", "City": "Lucknow", "Dealer Name": "Ecoedge", "VF SPOC": "Adil", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "9/7- 10/7  Agreement pending dealer end."}, {"Sr. No.": 8, "State": "Madhya Pradesh", "City": "Jabalpur", "Dealer Name": "Elite Motors", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": "No Manpower"}, {"Sr. No.": 9, "State": "RJ", "City": "Jodhpur", "Dealer Name": "Himmat Jai Automotives", "VF SPOC": "Shubham", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Manpower Not Available"}, {"Sr. No.": 10, "State": "Chhattisgarh", "City": "Bilaspur", "Dealer Name": "Infrafield Services", "VF SPOC": "Harsh", "Status": "Dealer Not intrested", "Disbursement Status": "", "Remarks": "Not ready for 6 month EMI guarantee"}, {"Sr. No.": 11, "State": "Chhattisgarh", "City": "Raipur", "Dealer Name": "Maple Drive Pvt Ltd", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "No", "Remarks": "Notarised agreement Pending"}, {"Sr. No.": 12, "State": "UP", "City": "Lucknow", "Dealer Name": "MG Road Link", "VF SPOC": "Adil", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "9/7- 10/7  Agreement pending- Financier end.  it will come by Tomorrow"}, {"Sr. No.": 13, "State": "Odisha", "City": "Bhubaneswar", "Dealer Name": "Multire Ventures", "VF SPOC": "Rohit Singh", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "Disbursement Received"}, {"Sr. No.": 14, "State": "RJ", "City": "Sikar", "Dealer Name": "NRK Motors", "VF SPOC": "Shubham", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Manpower Not Available"}, {"Sr. No.": 15, "State": "RJ", "City": "Jaipur", "Dealer Name": "Rahat Automotives", "VF SPOC": "Shubham", "Status": "Code Created", "Disbursement Status": "", "Remarks": "code opened"}, {"Sr. No.": 16, "State": "Uttar Pradesh", "City": "Moradabad", "Dealer Name": "Rajpoot Automobiles", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": "Docs Shared, No Manpower"}, {"Sr. No.": 17, "State": "Madhya Pradesh", "City": "Bhopal", "Dealer Name": "RND Electric", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Docs list shared to dealer"}, {"Sr. No.": 18, "State": "RJ", "City": "Bikaner", "Dealer Name": "Roshan Motors", "VF SPOC": "Shubham", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Manpower Not Available"}, {"Sr. No.": 19, "State": "Madhya Pradesh", "City": "Indore", "Dealer Name": "Royal Automotive", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": "No Manpower"}, {"Sr. No.": 20, "State": "Bihar", "City": "Muzaffarpur", "Dealer Name": "Saumya Motors", "VF SPOC": "Adil", "Status": "Code Created", "Disbursement Status": "", "Remarks": ""}, {"Sr. No.": 21, "State": "Madhya Pradesh", "City": "Gwalior", "Dealer Name": "Shivam Motors", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "New Dealer TC Pending"}, {"Sr. No.": 22, "State": "Uttar Pradesh", "City": "Agra 2", "Dealer Name": "Shree Balaji Automobiles", "VF SPOC": "Harsh", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "code opened"}, {"Sr. No.": 23, "State": "Uttar Pradesh", "City": "Mathura", "Dealer Name": "Shreya Enterprises", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": "Docs Shared, No Manpower"}, {"Sr. No.": 24, "State": "Uttar Pradesh", "City": "Ghaziabad", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Docs pending"}, {"Sr. No.": 25, "State": "Uttar Pradesh", "City": "Noida", "Dealer Name": "Smart Solution", "VF SPOC": "Harsh", "Status": "Docs Pending", "Disbursement Status": "", "Remarks": "Docs pending"}, {"Sr. No.": 26, "State": "UP", "City": "Prayagraj", "Dealer Name": "SS Enterprises", "VF SPOC": "Adil", "Status": "Docs shared to Annapurna", "Disbursement Status": "", "Remarks": "9/7- 10/7  Docs shared to Annapurna"}, {"Sr. No.": 27, "State": "Madhya Pradesh", "City": "Ujjain", "Dealer Name": "Swastik Enterprises", "VF SPOC": "Harsh", "Status": "No Manpower", "Disbursement Status": "", "Remarks": "No Manpower"}, {"Sr. No.": 28, "State": "Uttar Pradesh", "City": "Agra", "Dealer Name": "Vishal Agencies", "VF SPOC": "Harsh", "Status": "Code Created", "Disbursement Status": "Yes", "Remarks": "code opened"}]};
@@ -6177,6 +6435,1194 @@ function initTAIFViews() {
   (function(){ var o=document.getElementById('taifRowModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeTAIFRowModal(); }); })();
   (function(){ var o=document.getElementById('addViewModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeAddViewModal(); }); })();
 }
+
+// ══════════════════════════════════════════════════════════════
+// DP / IRR TRACKER
+// ══════════════════════════════════════════════════════════════
+var _dpMonths      = { 'dp': [] };   // [{id, label}]
+var _dpData        = { 'dp': {} };   // monthId -> [entries]
+var _dpFilters     = {};             // monthId -> {dealer:[],product:[],model:[],financier:[],salesRm:[],vfRm:[],vfStatus:[]}
+var _dpActiveMonth = { 'dp': null };
+var _dpEditTarget  = null; // {seg, monthId, idx}
+var _dpDeleteTarget= null; // {seg, monthId, idx}
+
+var DP_PRODUCT_OPTS = ['Storm','Turbo','3WC','3WP'];
+var _dpProducts      = DP_PRODUCT_OPTS.slice(); // mutable, managed via Manage Products view
+var _dpProductModels = {};                       // productName -> [{name, esp}]
+_dpProducts.forEach(function(p){ _dpProductModels[p] = []; });
+var _dpConfirmFn     = null;                     // pending confirm callback for product/model delete
+var _dpUploadTargetProduct = null;               // product currently targeted for bulk Excel upload
+var _dpManageExpanded = {};                      // productName -> boolean, tracks collapse state (default collapsed)
+
+var DP_VF_STATUS_OPTS = ['Disbursement Pending','Initial Docs Received','Partial Docs Received','Docs Pending',
+  'Financier Feedback Pending','FI Initiated','FI Pending','SL Pending','Push Back SL','DP Pending',
+  'Acknowledgement Pending','Push Back DO','DO Pending','DO Received','Dropped','Rejected','Self Finance','Hold','Next Month'];
+var DP_FUNDING_OPTS = ['ESP','ORP'];
+
+var DP_COLS = [
+  { key:'customerName',  label:'Customer Name',       type:'text',   numeric:false, required:true  },
+  { key:'cibil',         label:'CIBIL/Credit Score',  type:'number', numeric:true,  required:false },
+  { key:'creditRemarks', label:'Credit Remarks',      type:'text',   numeric:false, required:false },
+  { key:'product',       label:'Product',             type:'select-product', numeric:false, required:true },
+  { key:'model',         label:'Model',               type:'select-model', numeric:false, required:true  },
+  { key:'variant',       label:'Variant',             type:'select-variant', numeric:false, required:true },
+  { key:'dealerName',    label:'Dealer Name',         type:'select-dealer',  numeric:false, required:true },
+  { key:'state',         label:'State',               type:'auto',   numeric:false, required:false },
+  { key:'city',          label:'City',                type:'auto',   numeric:false, required:false },
+  { key:'salesRm',       label:'Sales RM',            type:'auto',   numeric:false, required:false },
+  { key:'vfRm',          label:'VF RM',               type:'auto',   numeric:false, required:false },
+  { key:'financier',     label:'Financier',           type:'select-financier', numeric:false, required:true },
+  { key:'cocoDodo',      label:'COCO/DODO',           type:'auto',   numeric:false, required:false },
+  { key:'vfStatus',      label:'VF Status',           type:'select-status',    numeric:false, required:true },
+  { key:'remarks',       label:'Remarks',             type:'text',   numeric:false, required:false },
+  { key:'fundingType',   label:'Type of Funding',     type:'select-funding',   numeric:false, required:true },
+  { key:'irr',           label:'IRR (%)',             type:'number', numeric:true, required:true },
+  { key:'esp',           label:'ESP',                 type:'auto',   numeric:true, required:true },
+  { key:'orp',           label:'ORP',                 type:'number', numeric:true, required:true },
+  { key:'ltv',           label:'LTV',                 type:'number', numeric:true, required:true },
+  { key:'downPayment',   label:'Down Payment',        type:'calc',   numeric:true, required:true },
+  { key:'discount',      label:'Discount',            type:'number', numeric:true, required:true },
+  { key:'effectiveDp',   label:'Effective DP',        type:'calc',   numeric:true, required:true }
+];
+
+// ── DP/IRR backend persistence (Google Sheets) ──
+function genDPId() { return 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8); }
+
+async function saveDPIRRMonthToSheet(monthObj) {
+  setSaveStatus('saving');
+  try { await API.post('/api/dpirr_months', monthObj); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+async function saveDPIRREntryToSheet(entryObj) {
+  setSaveStatus('saving');
+  try { await API.post('/api/dpirr_entries', entryObj); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+async function saveDPIRREntriesBulkToSheet(entries) {
+  setSaveStatus('saving');
+  try {
+    var res = await API.post('/api/dpirr_entries_bulk', { entries: entries });
+    setSaveStatus('saved');
+    return res;
+  } catch (e) {
+    setSaveStatus('error');
+    throw e;
+  }
+}
+async function deleteDPIRREntryFromSheet(id) {
+  setSaveStatus('saving');
+  try { await API.delete('/api/dpirr_entries?id=' + encodeURIComponent(id)); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+async function saveDPIRRProductToSheet(name) {
+  setSaveStatus('saving');
+  try { await API.post('/api/dpirr_products', { name: name }); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+async function renameDPIRRProductToSheet(oldName, newName) {
+  setSaveStatus('saving');
+  try { await API.post('/api/dpirr_products_rename', { oldName: oldName, newName: newName }); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+async function deleteDPIRRProductFromSheet(name) {
+  setSaveStatus('saving');
+  try { await API.delete('/api/dpirr_products?name=' + encodeURIComponent(name)); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+async function saveDPIRRModelToSheet(product, name) {
+  setSaveStatus('saving');
+  try { await API.post('/api/dpirr_models', { product: product, name: name }); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+async function renameDPIRRModelToSheet(product, oldName, newName) {
+  setSaveStatus('saving');
+  try { await API.post('/api/dpirr_models_rename', { product: product, oldName: oldName, newName: newName }); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+async function deleteDPIRRModelFromSheet(product, name) {
+  setSaveStatus('saving');
+  try { await API.delete('/api/dpirr_models?product=' + encodeURIComponent(product) + '&name=' + encodeURIComponent(name)); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+async function saveDPIRRVariantToSheet(product, model, variant, esp, oldVariant) {
+  setSaveStatus('saving');
+  try { await API.post('/api/dpirr_variants', { product: product, model: model, variant: variant, esp: esp, oldVariant: oldVariant || variant }); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+async function deleteDPIRRVariantFromSheet(product, model, variant) {
+  setSaveStatus('saving');
+  try { await API.delete('/api/dpirr_variants?product=' + encodeURIComponent(product) + '&model=' + encodeURIComponent(model) + '&variant=' + encodeURIComponent(variant)); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+
+function initDPIRR() {
+  renderDPMonthBar('dp');
+  (function(){ var o=document.getElementById('dpAddMonthOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPAddMonth(); }); })();
+  (function(){ var o=document.getElementById('dpEntryOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPEntry(); }); })();
+  (function(){ var o=document.getElementById('dpDeleteOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPDelete(); }); })();
+  (function(){ var o=document.getElementById('dpProductModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPProductModal(); }); })();
+  (function(){ var o=document.getElementById('dpModelModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPModelModal(); }); })();
+  (function(){ var o=document.getElementById('dpVariantModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPVariantModal(); }); })();
+  (function(){ var o=document.getElementById('dpConfirmOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPConfirm(); }); })();
+}
+
+function switchDPMainView(view) {
+  var isEntries = view === 'entries';
+  document.getElementById('dpEntriesSection').style.display = isEntries ? '' : 'none';
+  document.getElementById('dpManageSection').style.display  = isEntries ? 'none' : '';
+  var te = document.getElementById('dpViewTabEntries'), tm = document.getElementById('dpViewTabManage');
+  te.style.color = isEntries ? 'var(--accent)' : 'var(--text-muted)';
+  te.style.borderBottomColor = isEntries ? 'var(--accent)' : 'transparent';
+  tm.style.color = isEntries ? 'var(--text-muted)' : 'var(--accent)';
+  tm.style.borderBottomColor = isEntries ? 'transparent' : 'var(--accent)';
+  if (!isEntries) renderDPManageView();
+}
+
+function renderDPMonthBar(seg) {
+  var bar = document.getElementById('dpMonthBar_'+seg);
+  if (!bar) return;
+  var months = _dpMonths[seg];
+  var active = _dpActiveMonth[seg];
+  var html = months.map(function(m) {
+    var isActive = m.id === active;
+    return '<button onclick="switchDPMonth(\''+seg+'\',\''+m.id+'\')" class="btn '+(isActive?'btn-primary':'btn-secondary')+' btn-sm" style="font-size:12px;">'+escHtml(m.label)+'</button>';
+  }).join('');
+  html += '<button onclick="openDPAddMonth(\''+seg+'\')" class="btn btn-secondary btn-sm" style="font-size:12px;border-style:dashed;">＋ Add Month View</button>';
+  bar.innerHTML = html;
+}
+
+function openDPAddMonth(seg) {
+  document.getElementById('dpAddMonthSegment').value = seg;
+  var sel = document.getElementById('dpMonthSelect');
+  var now = new Date();
+  var currentMonthIdx = now.getMonth(); // 0 = January
+  var MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var opts = '<option value="">— Select Month —</option>';
+  MONTHS.forEach(function(m, i) {
+    var isPast = i < currentMonthIdx;
+    opts += '<option value="'+m+'"'+(isPast ? ' disabled style="color:var(--text-hint);"' : '')+'>'+m+(isPast?' (past)':'')+'</option>';
+  });
+  sel.innerHTML = opts;
+  sel.value = '';
+  document.getElementById('dpAddMonthOverlay').style.display = 'flex';
+}
+function closeDPAddMonth() { document.getElementById('dpAddMonthOverlay').style.display = 'none'; }
+
+function saveDPMonth() {
+  var seg   = document.getElementById('dpAddMonthSegment').value;
+  var month = document.getElementById('dpMonthSelect').value;
+  if (!month) { toast('⚠ Select a month'); return; }
+  var MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var now = new Date();
+  var currentMonthIdx = now.getMonth();
+  var selectedIdx = MONTHS.indexOf(month);
+  if (selectedIdx < currentMonthIdx) {
+    toast('⚠ Cannot select a month that has already passed');
+    return;
+  }
+  var year = now.getFullYear();
+  var label = month + ' ' + year;
+  var id = seg + '_' + month.toLowerCase() + '_' + year;
+  if (_dpMonths[seg].some(function(m){ return m.id === id; })) {
+    toast('⚠ This month view already exists');
+    closeDPAddMonth();
+    switchDPMonth(seg, id);
+    return;
+  }
+  _dpMonths[seg].push({ id: id, label: label });
+  _dpData[seg][id] = [];
+  saveDPIRRMonthToSheet({ id: id, label: label });
+  closeDPAddMonth();
+  renderDPMonthBar(seg);
+  switchDPMonth(seg, id);
+  toast('✅ ' + label + ' view added');
+}
+
+function switchDPMonth(seg, monthId) {
+  _dpActiveMonth[seg] = monthId;
+  renderDPMonthBar(seg);
+  renderDPView(seg, monthId);
+}
+
+function getDPEntries(seg, monthId) {
+  if (!_dpData[seg][monthId]) _dpData[seg][monthId] = [];
+  return _dpData[seg][monthId];
+}
+
+function getDPFilters(monthId) {
+  if (!_dpFilters[monthId]) _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[] };
+  return _dpFilters[monthId];
+}
+
+function getRetailingDealerNames() {
+  return getDealerMasterList()
+    .filter(function(d){ return (d.dealerStatus||'').toLowerCase() === 'retailing'; })
+    .map(function(d){
+      var name = d.dealerName || d.dealer || '';
+      var loc  = d.location || '';
+      if (!name) return '';
+      return loc ? (name + ' (' + loc + ')') : name;
+    })
+    .filter(Boolean)
+    .sort();
+}
+
+function getEligibleFinancierNames() {
+  var ok = ['active','onboarded','discussion - active'];
+  return (state.financiersMeta||[])
+    .filter(function(m){ return ok.indexOf((m.status||'').toLowerCase()) > -1; })
+    .map(function(m){ return m.name; })
+    .filter(Boolean)
+    .sort();
+}
+
+function parseDPDealerLabel(label) {
+  label = String(label || '');
+  // Label is constructed as: name + ' (' + location + ')'
+  // Find the FIRST occurrence of the ' (' separator (location may itself contain parens)
+  var sepIdx = label.indexOf(' (');
+  if (sepIdx === -1 || !label.endsWith(')')) {
+    return { name: label.trim(), location: '' };
+  }
+  var name = label.slice(0, sepIdx).trim();
+  var location = label.slice(sepIdx + 2, label.length - 1).trim();
+  return { name: name, location: location };
+}
+
+function getDealerMasterRowByName(label) {
+  var parsed = parseDPDealerLabel(label);
+  var list = getDealerMasterList();
+  // Prefer exact name + location match
+  var match = list.find(function(d){
+    return (d.dealerName||d.dealer||'') === parsed.name && (d.location||'') === parsed.location;
+  });
+  if (match) return match;
+  // Fallback: match by name only (in case location was blank)
+  return list.find(function(d){ return (d.dealerName||d.dealer||'') === parsed.name; }) || {};
+}
+
+// ── Entry modal ──
+function openDPEntryModal(seg, monthId, idx) {
+  _dpEditTarget = { seg: seg, monthId: monthId, idx: idx };
+  var row = {};
+  if (idx !== null) {
+    var arr = getDPEntries(seg, monthId);
+    row = arr[idx] || {};
+  }
+  var dealers    = getRetailingDealerNames();
+  var financiers = getEligibleFinancierNames();
+  var productOpts = _dpProducts;
+
+  var body = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+  function reqLabel(col) { return col.label + (col.required ? ' <span style="color:var(--flag);">*</span>' : ''); }
+
+  DP_COLS.forEach(function(col) {
+    var val = row[col.key] || '';
+    var fieldId = 'dpModal_' + col.key;
+    if (col.type === 'text') {
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+        '<input type="text" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'"></div>';
+    } else if (col.type === 'number') {
+      var calcTrigger = (col.key === 'orp' || col.key === 'ltv' || col.key === 'discount') ? ' onchange="recalcDPFinancials()" oninput="recalcDPFinancials()"' : '';
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+        '<input type="number" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" step="any"'+calcTrigger+'></div>';
+    } else if (col.type === 'calc') {
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+col.label+' <span style="font-size:10px;color:var(--text-muted);">(calculated)</span></label>' +
+        '<input type="number" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" step="any" readonly style="opacity:0.75;cursor:not-allowed;"></div>';
+    } else if (col.type === 'select-product') {
+      var opts = ['<option value="">— Select —</option>'].concat(productOpts.map(function(o){
+        return '<option value="'+o+'"'+(val===o?' selected':'')+'>'+o+'</option>';
+      })).join('');
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+        '<select class="form-select" id="'+fieldId+'" onchange="onDPProductChange()">'+opts+'</select></div>';
+    } else if (col.type === 'select-model') {
+      var modelOpts = buildDPModelOptionsHtml(row.product || '', val);
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+        '<select class="form-select" id="'+fieldId+'" onchange="onDPModelChange()">'+modelOpts+'</select></div>';
+    } else if (col.type === 'select-variant') {
+      var variantOpts = buildDPVariantOptionsHtml(row.product || '', row.model || '', val);
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+        '<select class="form-select" id="'+fieldId+'" onchange="onDPVariantChange()">'+variantOpts+'</select></div>';
+    } else if (col.type === 'select-dealer') {
+      var dopts = ['<option value="">— Select Dealer —</option>'].concat(dealers.map(function(d){
+        return '<option value="'+escHtml(d)+'"'+(val===d?' selected':'')+'>'+escHtml(d)+'</option>';
+      })).join('');
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+        '<select class="form-select" id="'+fieldId+'" onchange="onDPDealerChange()">'+dopts+'</select></div>';
+    } else if (col.type === 'select-financier') {
+      var fopts = ['<option value="">— Select Financier —</option>'].concat(financiers.map(function(f){
+        return '<option value="'+escHtml(f)+'"'+(val===f?' selected':'')+'>'+escHtml(f)+'</option>';
+      })).join('');
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+        '<select class="form-select" id="'+fieldId+'">'+fopts+'</select></div>';
+    } else if (col.type === 'select-status') {
+      var sopts = ['<option value="">— Select Status —</option>'].concat(DP_VF_STATUS_OPTS.map(function(o){
+        return '<option value="'+o+'"'+(val===o?' selected':'')+'>'+o+'</option>';
+      })).join('');
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+        '<select class="form-select" id="'+fieldId+'">'+sopts+'</select></div>';
+    } else if (col.type === 'select-funding') {
+      var fnopts = ['<option value="">— Select —</option>'].concat(DP_FUNDING_OPTS.map(function(o){
+        return '<option value="'+o+'"'+(val===o?' selected':'')+'>'+o+'</option>';
+      })).join('');
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+        '<select class="form-select" id="'+fieldId+'">'+fnopts+'</select></div>';
+    } else if (col.type === 'auto') {
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+' <span style="font-size:10px;color:var(--text-muted);">(auto)</span></label>' +
+        '<input type="'+(col.numeric?'number':'text')+'" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" readonly style="opacity:0.75;cursor:not-allowed;"></div>';
+    }
+  });
+
+  body += '</div>';
+
+  if (idx === null) {
+    body += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;">' +
+        '<input type="checkbox" id="dpModal_createMultiple" onchange="onDPCreateMultipleToggle()"> ' +
+        'Create multiple entries with these same details' +
+      '</label>' +
+      '<div id="dpMultiCountWrap" style="display:none;margin-top:10px;max-width:200px;">' +
+        '<label class="form-label">Number of entries</label>' +
+        '<input type="number" class="form-select" id="dpModal_multiCount" value="2" min="2" max="50" step="1">' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">All entries will have identical details (auto Sr. No.). Duplicates are highlighted in the table.</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  document.getElementById('dpEntryTitle').textContent = idx !== null ? 'Edit Entry' : 'Add Entry';
+  document.getElementById('dpEntryBody').innerHTML = body;
+  document.getElementById('dpEntryOverlay').style.display = 'flex';
+  recalcDPFinancials();
+
+  // If editing and dealer already set, ensure auto fields populated (already are from row)
+}
+
+function onDPCreateMultipleToggle() {
+  var cb = document.getElementById('dpModal_createMultiple');
+  var wrap = document.getElementById('dpMultiCountWrap');
+  if (cb && wrap) wrap.style.display = cb.checked ? '' : 'none';
+}
+
+function onDPDealerChange() {
+  var sel = document.getElementById('dpModal_dealerName');
+  if (!sel) return;
+  var name = sel.value;
+  var d = getDealerMasterRowByName(name);
+  var stateEl  = document.getElementById('dpModal_state');
+  var cityEl   = document.getElementById('dpModal_city');
+  var salesEl  = document.getElementById('dpModal_salesRm');
+  var vfEl     = document.getElementById('dpModal_vfRm');
+  var cocoEl   = document.getElementById('dpModal_cocoDodo');
+  if (stateEl) stateEl.value = d.state || '';
+  if (cityEl)  cityEl.value  = d.location || '';
+  if (salesEl) salesEl.value = d.rmSales || '';
+  if (vfEl)    vfEl.value    = d.vfPoc || '';
+  if (cocoEl)  cocoEl.value  = d.dodoCocoType || '';
+}
+
+function buildDPModelOptionsHtml(product, selectedName) {
+  if (!product) return '<option value="">— Select Product First —</option>';
+  var models = _dpProductModels[product] || [];
+  if (!models.length) return '<option value="">— No Models (see Manage Products) —</option>';
+  var opts = '<option value="">— Select Model —</option>';
+  models.forEach(function(m) {
+    opts += '<option value="'+escHtml(m.name)+'"'+(selectedName===m.name?' selected':'')+'>'+escHtml(m.name)+'</option>';
+  });
+  return opts;
+}
+
+function getDPModelObj(product, modelName) {
+  var models = _dpProductModels[product] || [];
+  return models.find(function(m){ return m.name === modelName; }) || null;
+}
+
+function buildDPVariantOptionsHtml(product, modelName, selectedVariant) {
+  if (!product) return '<option value="">— Select Product First —</option>';
+  if (!modelName) return '<option value="">— Select Model First —</option>';
+  var model = getDPModelObj(product, modelName);
+  var variants = (model && model.variants) || [];
+  if (!variants.length) return '<option value="">— No Variants (see Manage Products) —</option>';
+  var opts = '<option value="">— Select Variant —</option>';
+  variants.forEach(function(v) {
+    var espFmt = isNaN(Number(v.esp)) ? v.esp : Number(v.esp).toLocaleString('en-IN');
+    opts += '<option value="'+escHtml(v.variant)+'"'+(selectedVariant===v.variant?' selected':'')+'>'+escHtml(v.variant)+' (ESP: ₹'+espFmt+')</option>';
+  });
+  return opts;
+}
+
+function onDPProductChange() {
+  var productEl = document.getElementById('dpModal_product');
+  var modelEl   = document.getElementById('dpModal_model');
+  var variantEl = document.getElementById('dpModal_variant');
+  var espEl     = document.getElementById('dpModal_esp');
+  if (!productEl || !modelEl) return;
+  modelEl.innerHTML = buildDPModelOptionsHtml(productEl.value, '');
+  if (variantEl) variantEl.innerHTML = buildDPVariantOptionsHtml(productEl.value, '', '');
+  if (espEl) espEl.value = '';
+  recalcDPFinancials();
+}
+
+function onDPModelChange() {
+  var productEl = document.getElementById('dpModal_product');
+  var modelEl   = document.getElementById('dpModal_model');
+  var variantEl = document.getElementById('dpModal_variant');
+  var espEl     = document.getElementById('dpModal_esp');
+  if (!productEl || !modelEl || !variantEl) return;
+  variantEl.innerHTML = buildDPVariantOptionsHtml(productEl.value, modelEl.value, '');
+  if (espEl) espEl.value = '';
+  recalcDPFinancials();
+}
+
+function onDPVariantChange() {
+  var productEl = document.getElementById('dpModal_product');
+  var modelEl   = document.getElementById('dpModal_model');
+  var variantEl = document.getElementById('dpModal_variant');
+  var espEl     = document.getElementById('dpModal_esp');
+  if (!productEl || !modelEl || !variantEl || !espEl) return;
+  var model = getDPModelObj(productEl.value, modelEl.value);
+  var variants = (model && model.variants) || [];
+  var v = variants.find(function(x){ return x.variant === variantEl.value; });
+  if (v) espEl.value = v.esp;
+}
+
+// Down Payment = ORP − LTV ; Effective DP = Down Payment − Discount
+function recalcDPFinancials() {
+  var orpEl      = document.getElementById('dpModal_orp');
+  var ltvEl      = document.getElementById('dpModal_ltv');
+  var discEl     = document.getElementById('dpModal_discount');
+  var dpEl       = document.getElementById('dpModal_downPayment');
+  var effDpEl    = document.getElementById('dpModal_effectiveDp');
+  if (!dpEl) return;
+
+  var orp = parseFloat(orpEl ? orpEl.value : '');
+  var ltv = parseFloat(ltvEl ? ltvEl.value : '');
+  var downPayment = null;
+  if (!isNaN(orp) && !isNaN(ltv)) {
+    downPayment = orp - ltv;
+    dpEl.value = downPayment;
+  } else {
+    dpEl.value = '';
+  }
+
+  if (effDpEl) {
+    var disc = parseFloat(discEl ? discEl.value : '');
+    if (downPayment !== null && !isNaN(disc)) {
+      effDpEl.value = downPayment - disc;
+    } else {
+      effDpEl.value = '';
+    }
+  }
+}
+
+function closeDPEntry() {
+  document.getElementById('dpEntryOverlay').style.display = 'none';
+  _dpEditTarget = null;
+}
+
+function saveDPEntry() {
+  if (!_dpEditTarget) return;
+  var row = {};
+  var missing = [];
+  DP_COLS.forEach(function(col) {
+    var el = document.getElementById('dpModal_' + col.key);
+    var v = el ? el.value.trim() : '';
+    row[col.key] = v;
+    if (col.required && !v) missing.push(col.label);
+  });
+  if (missing.length) {
+    toast('⚠ Required: ' + missing.join(', '));
+    return;
+  }
+
+  var seg = _dpEditTarget.seg, monthId = _dpEditTarget.monthId, idx = _dpEditTarget.idx;
+  var arr = getDPEntries(seg, monthId);
+  var monthObj = (_dpMonths[seg] || []).find(function(m){ return m.id === monthId; }) || {};
+
+  // Multi-entry option only applies when adding (never when editing)
+  var bulkCount = 1;
+  if (idx === null) {
+    var multiCb = document.getElementById('dpModal_createMultiple');
+    if (multiCb && multiCb.checked) {
+      var countEl = document.getElementById('dpModal_multiCount');
+      var count = parseInt(countEl ? countEl.value : '', 10);
+      if (isNaN(count) || count < 2) { toast('⚠ Enter a number of 2 or more'); return; }
+      if (count > 50) { toast('⚠ Maximum 50 entries at once'); return; }
+      bulkCount = count;
+    }
+  }
+  var wasBulk = bulkCount > 1;
+
+  if (idx !== null) {
+    // Edit existing single entry
+    row['Sr. No.'] = arr[idx]['Sr. No.'];
+    row['_id'] = arr[idx]['_id'] || genDPId();
+    arr[idx] = row;
+
+    var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'] };
+    DP_COLS.forEach(function(col) { payload[col.key] = row[col.key] || ''; });
+    saveDPIRREntryToSheet(payload);
+
+  } else if (wasBulk) {
+    // Create N identical entries in one shot
+    var newRows = [];
+    for (var i = 0; i < bulkCount; i++) {
+      var clone = Object.assign({}, row);
+      clone['Sr. No.'] = arr.length + 1;
+      clone['_id'] = genDPId();
+      arr.push(clone);
+      newRows.push(clone);
+    }
+    var bulkPayload = newRows.map(function(r) {
+      var p = { id: r['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: r['Sr. No.'] };
+      DP_COLS.forEach(function(col) { p[col.key] = r[col.key] || ''; });
+      return p;
+    });
+    saveDPIRREntriesBulkToSheet(bulkPayload).catch(function() {
+      toast('⚠ Entries saved locally but failed to sync to Google Sheet — please retry.');
+    });
+
+  } else {
+    // Single new entry
+    row['Sr. No.'] = arr.length + 1;
+    row['_id'] = genDPId();
+    arr.push(row);
+
+    var payload2 = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'] };
+    DP_COLS.forEach(function(col) { payload2[col.key] = row[col.key] || ''; });
+    saveDPIRREntryToSheet(payload2);
+  }
+
+  closeDPEntry();
+  renderDPView(seg, monthId);
+  toast(wasBulk ? ('✅ ' + bulkCount + ' entries created') : '✅ Entry saved');
+}
+
+function deleteDPEntry(seg, monthId, idx) {
+  _dpDeleteTarget = { seg: seg, monthId: monthId, idx: idx };
+  document.getElementById('dpDeleteOverlay').style.display = 'flex';
+}
+function closeDPDelete() {
+  document.getElementById('dpDeleteOverlay').style.display = 'none';
+  _dpDeleteTarget = null;
+}
+function confirmDPDelete() {
+  if (!_dpDeleteTarget) return;
+  var seg = _dpDeleteTarget.seg, monthId = _dpDeleteTarget.monthId, idx = _dpDeleteTarget.idx;
+  var arr = getDPEntries(seg, monthId);
+  var removed = arr[idx];
+  arr.splice(idx, 1);
+  arr.forEach(function(r,i){ r['Sr. No.'] = i+1; });
+
+  if (removed && removed['_id']) deleteDPIRREntryFromSheet(removed['_id']);
+  var monthObj = (_dpMonths[seg] || []).find(function(m){ return m.id === monthId; }) || {};
+  arr.forEach(function(r) {
+    if (!r['_id']) return;
+    var payload = { id: r['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: r['Sr. No.'] };
+    DP_COLS.forEach(function(col) { payload[col.key] = r[col.key] || ''; });
+    saveDPIRREntryToSheet(payload);
+  });
+
+  closeDPDelete();
+  renderDPView(seg, monthId);
+  toast('🗑 Entry deleted');
+}
+
+// ── Filters ──
+function dpFilterDropdown(monthId, field, label, values, selectedArr) {
+  var id = 'dpMF_' + monthId + '_' + field;
+  var btnId = id + '_btn';
+  var ddId  = id + '_dd';
+  var selectedCount = selectedArr.length;
+  var btnLabel = selectedCount ? selectedCount + ' selected' : label;
+  var html = '<div class="multi-filter-wrap" style="position:relative;">' +
+    '<div class="multi-filter-btn" id="'+btnId+'" onclick="toggleDPFilter(\''+ddId+'\',\''+btnId+'\')" style="min-width:120px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+      escHtml(btnLabel) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>' +
+    '</div>' +
+    '<div class="multi-filter-dropdown" id="'+ddId+'" style="min-width:220px;max-height:260px;overflow:hidden;">' +
+      '<input type="text" placeholder="Search..." oninput="filterDPDropdown(this,\''+ddId+'\')" ' +
+        'style="margin:6px 8px 4px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;width:calc(100% - 16px);box-sizing:border-box;">' +
+      '<div id="'+ddId+'_items" style="overflow-y:auto;max-height:180px;">' +
+        values.map(function(v){
+          var checked = selectedArr.indexOf(v) > -1;
+          return '<label class="multi-filter-item"><input type="checkbox" value="'+escHtml(v)+'" '+(checked?'checked':'')+' onchange="onDPFilterChange(\''+monthId+'\',\''+field+'\',this)"><span>'+escHtml(v)+'</span></label>';
+        }).join('') +
+      '</div>' +
+      '<div class="multi-filter-clear" onclick="clearDPFilter(\''+monthId+'\',\''+field+'\',\''+btnId+'\',\''+label+'\')">✕ Clear</div>' +
+    '</div>' +
+  '</div>';
+  return html;
+}
+
+function toggleDPFilter(ddId, btnId) {
+  var dd = document.getElementById(ddId);
+  var btn = document.getElementById(btnId);
+  if (!dd) return;
+  var isOpen = dd.classList.contains('open');
+  document.querySelectorAll('.multi-filter-dropdown').forEach(function(d){ d.classList.remove('open'); });
+  document.querySelectorAll('.multi-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (!isOpen) { dd.classList.add('open'); if (btn) btn.classList.add('active'); }
+}
+
+function filterDPDropdown(input, ddId) {
+  var search = input.value.toLowerCase();
+  var items = document.getElementById(ddId + '_items');
+  if (!items) return;
+  items.querySelectorAll('label.multi-filter-item').forEach(function(lbl) {
+    lbl.style.display = lbl.textContent.toLowerCase().includes(search) ? '' : 'none';
+  });
+}
+
+function onDPFilterChange(monthId, field, cb) {
+  var filters = getDPFilters(monthId);
+  var val = cb.value;
+  if (cb.checked) { if (filters[field].indexOf(val) === -1) filters[field].push(val); }
+  else { var i = filters[field].indexOf(val); if (i > -1) filters[field].splice(i,1); }
+  var btnId = 'dpMF_'+monthId+'_'+field+'_btn';
+  var btn = document.getElementById(btnId);
+  var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status' };
+  if (btn) btn.innerHTML = (filters[field].length ? filters[field].length+' selected' : labels[field]||field) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
+  var seg = monthId.split('_')[0];
+  renderDPTable(seg, monthId);
+}
+
+function clearDPFilter(monthId, field, btnId, label) {
+  var filters = getDPFilters(monthId);
+  filters[field] = [];
+  var btn = document.getElementById(btnId);
+  if (btn) btn.innerHTML = escHtml(label) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
+  var dd = document.getElementById('dpMF_'+monthId+'_'+field+'_dd');
+  if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked=false; });
+  var seg = monthId.split('_')[0];
+  renderDPTable(seg, monthId);
+}
+
+function clearAllDPFilters(monthId) {
+  _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[] };
+  ['dealer','product','model','financier','salesRm','vfRm','vfStatus'].forEach(function(f) {
+    var dd = document.getElementById('dpMF_'+monthId+'_'+f+'_dd');
+    if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked=false; });
+    var btn = document.getElementById('dpMF_'+monthId+'_'+f+'_btn');
+    var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status' };
+    if (btn) btn.innerHTML = (labels[f]||f) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
+  });
+  var searchEl = document.getElementById('dpSearch_'+monthId);
+  if (searchEl) searchEl.value = '';
+  var seg = monthId.split('_')[0];
+  renderDPTable(seg, monthId);
+}
+
+function applyDPFilters(rows, monthId) {
+  var filters = getDPFilters(monthId);
+  var searchEl = document.getElementById('dpSearch_'+monthId);
+  var search = searchEl ? searchEl.value.toLowerCase() : '';
+  return rows.filter(function(r) {
+    if (search && !Object.values(r).some(function(v){ return String(v||'').toLowerCase().includes(search); })) return false;
+    if (filters.dealer.length    && filters.dealer.indexOf(String(r.dealerName||''))       === -1) return false;
+    if (filters.product.length   && filters.product.indexOf(String(r.product||''))         === -1) return false;
+    if (filters.model.length     && filters.model.indexOf(String(r.model||''))              === -1) return false;
+    if (filters.financier.length && filters.financier.indexOf(String(r.financier||''))     === -1) return false;
+    if (filters.salesRm.length   && filters.salesRm.indexOf(String(r.salesRm||''))          === -1) return false;
+    if (filters.vfRm.length      && filters.vfRm.indexOf(String(r.vfRm||''))                === -1) return false;
+    if (filters.vfStatus.length  && filters.vfStatus.indexOf(String(r.vfStatus||''))        === -1) return false;
+    return true;
+  });
+}
+
+// ── Main render ──
+function renderDPView(seg, monthId) {
+  var area = document.getElementById('dpViewArea_'+seg);
+  if (!area) return;
+  var rows = getDPEntries(seg, monthId);
+  function uniq(field) { return [...new Set(rows.map(function(r){ return String(r[field]||''); }).filter(Boolean))].sort(); }
+  var filters = getDPFilters(monthId);
+
+  var filterBarHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">' +
+    '<input type="text" class="search-box" id="dpSearch_'+monthId+'" placeholder="Search..." oninput="renderDPTable(\''+seg+'\',\''+monthId+'\')" style="width:160px;">' +
+    dpFilterDropdown(monthId, 'dealer',    'Dealer Name', uniq('dealerName'), filters.dealer) +
+    dpFilterDropdown(monthId, 'product',   'Product',     uniq('product'),   filters.product) +
+    dpFilterDropdown(monthId, 'model',     'Model',       uniq('model'),     filters.model) +
+    dpFilterDropdown(monthId, 'financier', 'Financier',   uniq('financier'), filters.financier) +
+    dpFilterDropdown(monthId, 'salesRm',   'RM Name',     uniq('salesRm'),   filters.salesRm) +
+    dpFilterDropdown(monthId, 'vfRm',      'VF Name',     uniq('vfRm'),      filters.vfRm) +
+    dpFilterDropdown(monthId, 'vfStatus',  'VF Status',   uniq('vfStatus'),  filters.vfStatus) +
+    '<button class="btn btn-secondary btn-sm" onclick="clearAllDPFilters(\''+monthId+'\')" style="font-size:11px;">✕ Clear</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="openDPEntryModal(\''+seg+'\',\''+monthId+'\',null)">＋ Add Entry</button>' +
+    '<button class="btn btn-secondary btn-sm" onclick="exportDPView(\''+seg+'\',\''+monthId+'\')" style="font-size:12px;">⬇ Export</button>' +
+  '</div>';
+
+  area.innerHTML = filterBarHtml + '<div id="dpTableArea_'+monthId+'"></div>';
+  renderDPTable(seg, monthId);
+}
+
+function getDPStatusColor(v) {
+  v = String(v||'').toLowerCase();
+  if (v.match(/disbursed|received|dp pending$/)) return '#4ade80';
+  if (v.match(/pending|initiated|hold|next month/)) return '#f59e0b';
+  if (v.match(/dropped|rejected|push back/)) return '#f87171';
+  return '#94a3b8';
+}
+
+function updateDPVfStatusInline(selectEl, seg, monthId, idx) {
+  var arr = getDPEntries(seg, monthId);
+  var row = arr[idx];
+  if (!row) return;
+  var newStatus = selectEl.value;
+  row.vfStatus = newStatus;
+
+  var col = getDPStatusColor(newStatus);
+  selectEl.style.color = col;
+  selectEl.style.borderColor = col + '44';
+  selectEl.style.background = col + '22';
+
+  var monthObj = (_dpMonths[seg] || []).find(function(m){ return m.id === monthId; }) || {};
+  var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'] };
+  DP_COLS.forEach(function(c) { payload[c.key] = row[c.key] || ''; });
+  saveDPIRREntryToSheet(payload);
+  toast('✅ VF Status updated');
+}
+
+function getDPDuplicateKey(row) {
+  return ['customerName','product','model','variant','dealerName'].map(function(k){
+    return String(row[k]||'').trim().toLowerCase();
+  }).join('|');
+}
+
+function renderDPTable(seg, monthId) {
+  var el = document.getElementById('dpTableArea_'+monthId);
+  if (!el) return;
+  var rows = getDPEntries(seg, monthId);
+  var filtered = applyDPFilters(rows, monthId);
+
+  // Count occurrences of each identity key across ALL entries in this month (not just filtered),
+  // so duplicates are flagged consistently regardless of active filters.
+  var dupCounts = {};
+  rows.forEach(function(r) {
+    var key = getDPDuplicateKey(r);
+    if (!key.replace(/\|/g,'')) return; // skip if all identity fields are empty
+    dupCounts[key] = (dupCounts[key]||0) + 1;
+  });
+
+  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr style="background:var(--surface2);color:var(--text-muted);">';
+  html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">Sr. No.</th>';
+  DP_COLS.forEach(function(c){ html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">'+c.label+'</th>'; });
+  html += '<th style="padding:8px 12px;width:70px;">Actions</th></tr></thead><tbody>';
+
+  filtered.forEach(function(r, i) {
+    var origIdx = rows.indexOf(r);
+    var dupKey = getDPDuplicateKey(r);
+    var isDup  = dupKey.replace(/\|/g,'') && dupCounts[dupKey] > 1;
+    var rowStyle = isDup
+      ? 'border-bottom:1px solid var(--border);background:rgba(251,191,36,0.14);border-left:3px solid #fbbf24;'
+      : 'border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--surface2);':'');
+    html += '<tr style="'+rowStyle+'">';
+    html += '<td style="padding:7px 12px;white-space:nowrap;">'+(r['Sr. No.']||origIdx+1)+
+      (isDup ? ' <span title="Possible duplicate — same Customer/Product/Model/Variant/Dealer as another row" style="font-size:10px;color:#fbbf24;">⚠</span>' : '') +
+      '</td>';
+    DP_COLS.forEach(function(c){
+      var v = String(r[c.key]||'');
+      if (c.key === 'vfStatus') {
+        var statusCol = getDPStatusColor(v);
+        var opts = DP_VF_STATUS_OPTS.map(function(o){
+          return '<option value="'+o+'"'+(v===o?' selected':'')+'>'+o+'</option>';
+        }).join('');
+        html += '<td style="padding:5px 8px;">' +
+          '<select onchange="updateDPVfStatusInline(this,\''+seg+'\',\''+monthId+'\','+origIdx+')" ' +
+          'style="background:'+statusCol+'22;color:'+statusCol+';border:1px solid '+statusCol+'44;border-radius:4px;padding:3px 6px;font-size:11px;white-space:nowrap;max-width:170px;">' +
+          opts + '</select></td>';
+      } else {
+        html += '<td style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(r[c.key]||'').replace(/"/g,"'")+'">'+v+'</td>';
+      }
+    });
+    html += '<td style="padding:7px 8px;white-space:nowrap;">' +
+      '<button class="btn btn-secondary btn-sm" onclick="openDPEntryModal(\''+seg+'\',\''+monthId+'\','+origIdx+')" style="padding:2px 8px;font-size:11px;">✏️</button> ' +
+      '<button class="btn btn-danger btn-sm" onclick="deleteDPEntry(\''+seg+'\',\''+monthId+'\','+origIdx+')" style="padding:2px 8px;font-size:11px;">🗑</button>' +
+      '</td></tr>';
+  });
+
+  var dupRowCount = filtered.filter(function(r){ var k=getDPDuplicateKey(r); return k.replace(/\|/g,'') && dupCounts[k] > 1; }).length;
+  html += '</tbody></table></div>';
+  html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">'+filtered.length+' of '+rows.length+' records' +
+    (dupRowCount ? ' &nbsp;·&nbsp; <span style="color:#fbbf24;">⚠ '+dupRowCount+' possible duplicate'+(dupRowCount===1?'':'s')+'</span>' : '') +
+    '</div>';
+  el.innerHTML = html;
+}
+
+// ── Manage Products & Models ──
+function toggleDPProductExpand(product) {
+  _dpManageExpanded[product] = !_dpManageExpanded[product];
+  renderDPManageView();
+}
+
+function renderDPManageView() {
+  var listEl = document.getElementById('dpProductsList');
+  if (!listEl) return;
+  if (!_dpProducts.length) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🛠</div><div>No products yet. Add your first product.</div></div>';
+    return;
+  }
+  var html = '';
+  _dpProducts.forEach(function(product, i) {
+    var models = _dpProductModels[product] || [];
+    var isExpanded = !!_dpManageExpanded[product];
+    var totalVariants = models.reduce(function(sum, m){ return sum + ((m.variants||[]).length); }, 0);
+
+    html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:14px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;'+(isExpanded?'margin-bottom:12px;':'')+'">' +
+        '<div onclick="toggleDPProductExpand(\''+escHtml(product)+'\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;">' +
+          '<span style="font-size:11px;color:var(--text-muted);display:inline-block;transition:transform 0.15s;transform:rotate('+(isExpanded?'90deg':'0deg')+');">▸</span>' +
+          '<span style="font-size:14px;font-weight:700;color:var(--accent);">'+escHtml(product)+'</span>' +
+          '<span style="font-size:11px;font-weight:400;color:var(--text-muted);">('+models.length+' model'+(models.length===1?'':'s')+', '+totalVariants+' variant'+(totalVariants===1?'':'s')+')</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary btn-sm" onclick="openDPProductModal('+i+')" style="font-size:11px;">✏️ Rename</button>' +
+          '<button class="btn btn-danger btn-sm" onclick="deleteDPProduct('+i+')" style="font-size:11px;">🗑 Delete</button>' +
+          '<button class="btn btn-primary btn-sm" onclick="openDPModelModal(\''+escHtml(product)+'\',null)" style="font-size:11px;">＋ Add Model</button>' +
+          '<button class="btn btn-secondary btn-sm" onclick="triggerDPModelUpload(\''+escHtml(product)+'\')" style="font-size:11px;">⬆ Upload Excel</button>' +
+        '</div>' +
+      '</div>';
+
+    if (isExpanded) {
+      if (!models.length) {
+        html += '<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">No models added yet for this product.</div>';
+      } else {
+        models.forEach(function(m, j) {
+          var variants = m.variants || [];
+          html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:10px;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">' +
+              '<div style="font-size:12.5px;font-weight:700;color:var(--text);">'+escHtml(m.name)+' <span style="font-weight:400;color:var(--text-muted);font-size:11px;">('+variants.length+' variant'+(variants.length===1?'':'s')+')</span></div>' +
+              '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+                '<button class="btn btn-secondary btn-sm" onclick="openDPModelModal(\''+escHtml(product)+'\','+j+')" style="padding:2px 8px;font-size:11px;">✏️ Rename</button>' +
+                '<button class="btn btn-danger btn-sm" onclick="deleteDPModel(\''+escHtml(product)+'\','+j+')" style="padding:2px 8px;font-size:11px;">🗑 Delete</button>' +
+                '<button class="btn btn-primary btn-sm" onclick="openDPVariantModal(\''+escHtml(product)+'\','+j+',null)" style="padding:2px 8px;font-size:11px;">＋ Add Variant</button>' +
+              '</div>' +
+            '</div>';
+
+          if (!variants.length) {
+            html += '<div style="font-size:11.5px;color:var(--text-hint);padding:4px 0 2px;">No variants added yet for this model.</div>';
+          } else {
+            html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11.5px;">' +
+              '<thead><tr style="background:var(--surface);color:var(--text-muted);text-align:left;">' +
+                '<th style="padding:5px 8px;">Variant</th><th style="padding:5px 8px;">ESP (₹)</th><th style="padding:5px 8px;width:100px;">Actions</th>' +
+              '</tr></thead><tbody>';
+            variants.forEach(function(v, k) {
+              var espFmt = isNaN(Number(v.esp)) ? v.esp : Number(v.esp).toLocaleString('en-IN');
+              html += '<tr style="border-bottom:1px solid var(--border);">' +
+                '<td style="padding:5px 8px;">'+escHtml(v.variant)+'</td>' +
+                '<td style="padding:5px 8px;">₹'+espFmt+'</td>' +
+                '<td style="padding:5px 8px;white-space:nowrap;">' +
+                  '<button class="btn btn-secondary btn-sm" onclick="openDPVariantModal(\''+escHtml(product)+'\','+j+','+k+')" style="padding:1px 7px;font-size:10.5px;">✏️</button> ' +
+                  '<button class="btn btn-danger btn-sm" onclick="deleteDPVariant(\''+escHtml(product)+'\','+j+','+k+')" style="padding:1px 7px;font-size:10.5px;">🗑</button>' +
+                '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+          }
+          html += '</div>';
+        });
+      }
+    }
+    html += '</div>';
+  });
+  listEl.innerHTML = html;
+}
+
+function openDPProductModal(idx) {
+  document.getElementById('dpProductEditIdx').value = idx === null ? '' : idx;
+  document.getElementById('dpProductModalTitle').textContent = idx === null ? 'Add Product' : 'Rename Product';
+  document.getElementById('dpProductNameInput').value = idx === null ? '' : _dpProducts[idx];
+  document.getElementById('dpProductModalOverlay').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('dpProductNameInput').focus(); }, 100);
+}
+function closeDPProductModal() { document.getElementById('dpProductModalOverlay').style.display = 'none'; }
+
+function saveDPProduct() {
+  var idxRaw = document.getElementById('dpProductEditIdx').value;
+  var idx = idxRaw === '' ? null : parseInt(idxRaw, 10);
+  var name = document.getElementById('dpProductNameInput').value.trim();
+  if (!name) { toast('⚠ Enter a product name'); return; }
+  var dup = _dpProducts.some(function(p, i){ return p.toLowerCase() === name.toLowerCase() && i !== idx; });
+  if (dup) { toast('⚠ A product with this name already exists'); return; }
+
+  if (idx === null) {
+    _dpProducts.push(name);
+    _dpProductModels[name] = [];
+    saveDPIRRProductToSheet(name);
+  } else {
+    var oldName = _dpProducts[idx];
+    _dpProducts[idx] = name;
+    if (oldName !== name) {
+      _dpProductModels[name] = _dpProductModels[oldName] || [];
+      delete _dpProductModels[oldName];
+      renameDPIRRProductToSheet(oldName, name);
+    }
+  }
+  closeDPProductModal();
+  renderDPManageView();
+  toast('✅ Product saved');
+}
+
+function deleteDPProduct(idx) {
+  var name = _dpProducts[idx];
+  openDPConfirm('Delete product "'+name+'" and all its models? This cannot be undone.', function() {
+    _dpProducts.splice(idx, 1);
+    delete _dpProductModels[name];
+    deleteDPIRRProductFromSheet(name);
+    renderDPManageView();
+    toast('🗑 Product deleted');
+  });
+}
+
+function openDPModelModal(product, idx) {
+  document.getElementById('dpModelProduct').value = product;
+  document.getElementById('dpModelEditIdx').value = idx === null ? '' : idx;
+  document.getElementById('dpModelModalTitle').textContent = idx === null ? ('Add Model — ' + product) : ('Rename Model — ' + product);
+  var models = _dpProductModels[product] || [];
+  var row = idx !== null ? (models[idx] || {}) : {};
+  document.getElementById('dpModelNameInput').value = row.name || '';
+  document.getElementById('dpModelModalOverlay').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('dpModelNameInput').focus(); }, 100);
+}
+function closeDPModelModal() { document.getElementById('dpModelModalOverlay').style.display = 'none'; }
+
+function saveDPModel() {
+  var product = document.getElementById('dpModelProduct').value;
+  var idxRaw  = document.getElementById('dpModelEditIdx').value;
+  var idx     = idxRaw === '' ? null : parseInt(idxRaw, 10);
+  var name    = document.getElementById('dpModelNameInput').value.trim();
+  if (!name) { toast('⚠ Enter a model name'); return; }
+  if (!_dpProductModels[product]) _dpProductModels[product] = [];
+  var models = _dpProductModels[product];
+  var dup = models.some(function(m, i){ return m.name.toLowerCase() === name.toLowerCase() && i !== idx; });
+  if (dup) { toast('⚠ A model with this name already exists for this product'); return; }
+
+  if (idx === null) {
+    models.push({ name: name, variants: [] });
+    saveDPIRRModelToSheet(product, name);
+  } else {
+    var oldName = models[idx].name;
+    models[idx].name = name; // preserve existing variants array on rename
+    if (!models[idx].variants) models[idx].variants = [];
+    if (oldName !== name) renameDPIRRModelToSheet(product, oldName, name);
+  }
+
+  closeDPModelModal();
+  renderDPManageView();
+  toast('✅ Model saved');
+}
+
+function deleteDPModel(product, idx) {
+  var model = (_dpProductModels[product] || [])[idx];
+  if (!model) return;
+  openDPConfirm('Delete model "'+model.name+'" and all its variants from '+product+'? This cannot be undone.', function() {
+    _dpProductModels[product].splice(idx, 1);
+    deleteDPIRRModelFromSheet(product, model.name);
+    renderDPManageView();
+    toast('🗑 Model deleted');
+  });
+}
+
+// ── Variant CRUD ──
+function openDPVariantModal(product, modelIdx, variantIdx) {
+  document.getElementById('dpVariantProduct').value  = product;
+  document.getElementById('dpVariantModelIdx').value  = modelIdx;
+  document.getElementById('dpVariantEditIdx').value   = variantIdx === null ? '' : variantIdx;
+  var model = (_dpProductModels[product] || [])[modelIdx] || { variants: [] };
+  document.getElementById('dpVariantModalTitle').textContent = variantIdx === null
+    ? ('Add Variant — ' + product + ' / ' + model.name)
+    : ('Edit Variant — ' + product + ' / ' + model.name);
+  var row = variantIdx !== null ? ((model.variants || [])[variantIdx] || {}) : {};
+  document.getElementById('dpVariantNameInput').value = row.variant || '';
+  document.getElementById('dpVariantEspInput').value  = (row.esp !== undefined && row.esp !== null) ? row.esp : '';
+  document.getElementById('dpVariantModalOverlay').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('dpVariantNameInput').focus(); }, 100);
+}
+function closeDPVariantModal() { document.getElementById('dpVariantModalOverlay').style.display = 'none'; }
+
+function saveDPVariant() {
+  var product   = document.getElementById('dpVariantProduct').value;
+  var modelIdx  = parseInt(document.getElementById('dpVariantModelIdx').value, 10);
+  var idxRaw    = document.getElementById('dpVariantEditIdx').value;
+  var idx       = idxRaw === '' ? null : parseInt(idxRaw, 10);
+  var name      = document.getElementById('dpVariantNameInput').value.trim();
+  var esp       = document.getElementById('dpVariantEspInput').value.trim();
+  if (!name) { toast('⚠ Enter a variant name'); return; }
+  if (esp === '') { toast('⚠ Enter an ESP value'); return; }
+
+  var model = (_dpProductModels[product] || [])[modelIdx];
+  if (!model) { toast('⚠ Model not found'); return; }
+  if (!model.variants) model.variants = [];
+  var variants = model.variants;
+  var dup = variants.some(function(v, i){ return v.variant.toLowerCase() === name.toLowerCase() && i !== idx; });
+  if (dup) { toast('⚠ A variant with this name already exists for this model'); return; }
+
+  var oldVariantName = idx !== null ? variants[idx].variant : name;
+  if (idx === null) variants.push({ variant: name, esp: esp });
+  else variants[idx] = { variant: name, esp: esp };
+  saveDPIRRVariantToSheet(product, model.name, name, esp, oldVariantName);
+
+  closeDPVariantModal();
+  renderDPManageView();
+  toast('✅ Variant saved');
+}
+
+function deleteDPVariant(product, modelIdx, variantIdx) {
+  var model = (_dpProductModels[product] || [])[modelIdx];
+  if (!model || !model.variants) return;
+  var v = model.variants[variantIdx];
+  if (!v) return;
+  openDPConfirm('Delete variant "'+v.variant+'" from '+product+' / '+model.name+'?', function() {
+    model.variants.splice(variantIdx, 1);
+    deleteDPIRRVariantFromSheet(product, model.name, v.variant);
+    renderDPManageView();
+    toast('🗑 Variant deleted');
+  });
+}
+
+// ── Bulk model upload via Excel ──
+function triggerDPModelUpload(product) {
+  _dpUploadTargetProduct = product;
+  var input = document.getElementById('dpModelUploadInput');
+  input.value = ''; // reset so re-selecting the same file re-fires onchange
+  input.click();
+}
+
+function findKeyLike(row, pattern) {
+  var keys = Object.keys(row);
+  for (var i = 0; i < keys.length; i++) {
+    if (pattern.test(keys[i])) return keys[i];
+  }
+  return null;
+}
+
+// Detects which sheet columns correspond to S.No / Model / Variant / ESP.
+// The Model column's header is often arbitrary (e.g. the product name itself,
+// as in "Turbo" being the header over a column of model names like City/Maxx/FastCharge),
+// so we identify it by elimination once S.No / Variant / ESP columns are found.
+function detectDPUploadColumns(row) {
+  var keys = Object.keys(row);
+  var snoKey     = findKeyLike(row, /^\s*(s\.?\s?no\.?|sr\.?\s?no\.?|#)\s*$/i);
+  var variantKey = findKeyLike(row, /variant/i);
+  var espKey     = findKeyLike(row, /showroom|price|amount|mrp|value|esp/i);
+  var modelKey   = findKeyLike(row, /^\s*model(\s*name)?\s*$/i);
+  if (!modelKey) {
+    modelKey = keys.find(function(k){ return k !== snoKey && k !== variantKey && k !== espKey; }) || null;
+  }
+  return { snoKey: snoKey, modelKey: modelKey, variantKey: variantKey, espKey: espKey };
+}
+
+function cleanNumericValue(v) {
+  if (v === undefined || v === null) return '';
+  return String(v).replace(/[^0-9.\-]/g, '').trim();
+}
+
+// Core upsert logic — pure function, testable independent of file/DOM APIs.
+// rows: array of plain objects parsed from the sheet (e.g. via XLSX.utils.sheet_to_json)
+// Returns { modelsAdded, variantsAdded, variantsUpdated, skipped }
+function upsertDPVariantsFromRows(product, rows) {
+  if (!_dpProductModels[product]) _dpProductModels[product] = [];
+  var models = _dpProductModels[product];
+  var modelsAdded = 0, variantsAdded = 0, variantsUpdated = 0, skipped = 0;
+  var cleanRows = []; // {model, variant, esp} — sent to backend in ONE bulk call
+
+  rows.forEach(function(row) {
+    var cols = detectDPUploadColumns(row);
+    var modelName   = cols.modelKey   ? String(row[cols.modelKey]   || '').trim() : '';
+    var variantName = cols.variantKey ? String(row[cols.variantKey] || '').trim() : '';
+    var esp         = cols.espKey     ? cleanNumericValue(row[cols.espKey]) : '';
+
+    if (!modelName || !variantName || esp === '') { skipped++; return; }
+    cleanRows.push({ model: modelName, variant: variantName, esp: esp });
+
+    var model = models.find(function(m){ return m.name.toLowerCase() === modelName.toLowerCase(); });
+    if (!model) {
+      model = { name: modelName, variants: [] };
+      models.push(model);
+      modelsAdded++;
+    }
+    if (!model.variants) model.variants = [];
+    var existingIdx = model.variants.findIndex(function(v){ return v.variant.toLowerCase() === variantName.toLowerCase(); });
+    if (existingIdx > -1) {
+      model.variants[existingIdx].esp = esp;
+      variantsUpdated++;
+    } else {
+      model.variants.push({ variant: variantName, esp: esp });
+      variantsAdded++;
+    }
+  });
+
+  return { modelsAdded: modelsAdded, variantsAdded: variantsAdded, variantsUpdated: variantsUpdated, skipped: skipped, cleanRows: cleanRows };
+}
+
+async function saveDPIRRVariantsBulkToSheet(product, rows) {
+  setSaveStatus('saving');
+  try {
+    var res = await API.post('/api/dpirr_variants_bulk', { product: product, rows: rows });
+    setSaveStatus('saved');
+    return res;
+  } catch (e) {
+    setSaveStatus('error');
+    throw e;
+  }
+}
+
+function handleDPModelExcelUpload(event) {
+  var file = event.target.files && event.target.files[0];
+  var product = _dpUploadTargetProduct;
+  if (!file || !product) return;
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = new Uint8Array(e.target.result);
+      var wb = XLSX.read(data, { type: 'array' });
+      var sheet = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      if (!rows.length) { toast('⚠ No rows found in the uploaded file'); return; }
+
+      var result = upsertDPVariantsFromRows(product, rows);
+      renderDPManageView();
+
+      var parts = [];
+      if (result.modelsAdded)    parts.push(result.modelsAdded + ' new model' + (result.modelsAdded===1?'':'s'));
+      if (result.variantsAdded)   parts.push(result.variantsAdded + ' variant' + (result.variantsAdded===1?'':'s') + ' added');
+      if (result.variantsUpdated) parts.push(result.variantsUpdated + ' updated');
+      if (result.skipped)         parts.push(result.skipped + ' skipped');
+      var msg = '✅ ' + product + ': ' + (parts.length ? parts.join(', ') : 'no changes');
+      toast(msg);
+
+      // Persist to Google Sheets in a SINGLE request, regardless of how many rows were in the file
+      if (result.cleanRows.length) {
+        saveDPIRRVariantsBulkToSheet(product, result.cleanRows).catch(function() {
+          toast('⚠ Changes saved locally but failed to sync to Google Sheet — please retry the upload.');
+        });
+      }
+    } catch (err) {
+      toast('⚠ Could not read file: ' + (err.message || 'invalid format'));
+    }
+  };
+  reader.onerror = function() { toast('⚠ Failed to read file'); };
+  reader.readAsArrayBuffer(file);
+}
+
+
+function openDPConfirm(message, fn) {
+  document.getElementById('dpConfirmMessage').textContent = message;
+  _dpConfirmFn = fn;
+  document.getElementById('dpConfirmOverlay').style.display = 'flex';
+}
+function closeDPConfirm() {
+  document.getElementById('dpConfirmOverlay').style.display = 'none';
+  _dpConfirmFn = null;
+}
+function runDPConfirm() {
+  var fn = _dpConfirmFn;
+  closeDPConfirm();
+  if (fn) fn();
+}
+
+function exportDPView(seg, monthId) {
+  var rows = applyDPFilters(getDPEntries(seg, monthId), monthId);
+  var header = ['Sr. No.'].concat(DP_COLS.map(function(c){ return c.label; }));
+  var aoa = [header];
+  rows.forEach(function(r, i){
+    aoa.push([r['Sr. No.']||i+1].concat(DP_COLS.map(function(c){ return r[c.key]||''; })));
+  });
+  var wb = XLSX.utils.book_new();
+  var monthLabel = (_dpMonths[seg].find(function(m){ return m.id===monthId; })||{}).label || monthId;
+  var sheetName = (seg.toUpperCase() + ' ' + monthLabel).slice(0,31);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), sheetName);
+  XLSX.writeFile(wb, 'Euler_DPIRR_' + seg + '_' + monthLabel.replace(/\s+/g,'_') + '.xlsx');
+}
+
 // ── TA/IF & Retail Code Sub-tabs ──
 var _taifFIs   = ['shriram','hfcl','ecofy'];
 var _retailFIs = ['hfcl','amu','annapurna'];
@@ -6299,7 +7745,7 @@ async function saveSnapshot() {
     var month = now.toLocaleString('default',{month:'short'});
     var year  = now.getFullYear();
     var snap  = computeSnapshot(month, year, now.toISOString().slice(0,10));
-    await API.post('api/snapshots', snap);
+    await API.post('/api/snapshots', snap);
     await loadState();
     renderSnapshots();
     toast('✅ Snapshot saved for ' + month + ' ' + year);
