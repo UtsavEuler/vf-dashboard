@@ -5,6 +5,7 @@ other path is a 404. Access is gated by Jarvis navigation during the temporary
 public-embed deployment.
 """
 
+import datetime
 import logging
 import os
 import time
@@ -344,6 +345,145 @@ def create_app(config=None, adapter=None):
         except Exception:
             _structured_log("/api/dpirr_models", "delete", "dpirr_models",
                             "error", started)
+            raise
+
+    @app.route("/api/dpirr_months", methods=["DELETE"])
+    def dpirr_months_delete():
+        """Delete a month view and cascade-delete every entry filed under it."""
+        started = time.monotonic()
+        (month_id,) = _require(request.args, "id")
+        try:
+            ad = _adapter()
+            ad.delete("dpirr_months", {"id": month_id})
+            ad.bulk_delete("dpirr_entries", {"monthId": month_id})
+            _structured_log("/api/dpirr_months", "delete", "dpirr_months", "ok",
+                            started)
+            return jsonify({"ok": True})
+        except Exception:
+            _structured_log("/api/dpirr_months", "delete", "dpirr_months",
+                            "error", started)
+            raise
+
+    # ── DP/IRR user identity (PIN-protected, no full login) ────────────────
+    # These endpoints return {"ok": False, "error": "..."} with a normal 200 for
+    # every *expected* business outcome (wrong PIN, unknown name, duplicate
+    # name) — never an HTTP error status. The client's fetch wrapper rejects
+    # non-2xx responses, so a 4xx/5xx here would surface as a generic "server
+    # error" instead of the specific, actionable message the UI shows. HTTP
+    # error statuses are reserved for genuinely exceptional cases: a malformed
+    # request (ValidationError, 400) or a real Sheets failure (raised by the
+    # adapter as UpstreamError/UpstreamTimeoutError, 502/504).
+
+    @app.route("/api/dpirr_users", methods=["GET"])
+    def dpirr_users_list():
+        """List registered users. pinHash is never sent to the client."""
+        started = time.monotonic()
+        try:
+            rows = _adapter().read("dpirr_users")
+            out = [{"name": r.get("name", ""), "isAdmin": r.get("isAdmin", "")}
+                   for r in rows if r.get("name")]
+            _structured_log("/api/dpirr_users", "read", "dpirr_users", "ok",
+                            started)
+            return jsonify(out)
+        except Exception:
+            _structured_log("/api/dpirr_users", "read", "dpirr_users", "error",
+                            started)
+            raise
+
+    @app.route("/api/dpirr_users_register", methods=["POST"])
+    def dpirr_users_register():
+        started = time.monotonic()
+        body = _json_body()
+        name, pin = _require(body, "name", "pin")
+        try:
+            ad = _adapter()
+            existing = ad.read("dpirr_users")
+            if any(r.get("name", "").strip().lower() == name.lower()
+                   for r in existing):
+                _structured_log("/api/dpirr_users_register", "write",
+                                "dpirr_users", "rejected", started)
+                return jsonify({
+                    "ok": False,
+                    "error": "This name is already registered — pick a "
+                             "different name or verify with your existing PIN",
+                })
+            ad.upsert("dpirr_users", {"name": name}, {
+                "name": name,
+                "pinHash": sheets.hash_dpirr_pin(name, pin),
+                "isAdmin": "false",
+                "createdAt": datetime.datetime.utcnow().isoformat(
+                    timespec="seconds") + "Z",
+            })
+            _structured_log("/api/dpirr_users_register", "write", "dpirr_users",
+                            "ok", started)
+            return jsonify({"ok": True, "name": name, "isAdmin": False})
+        except Exception:
+            _structured_log("/api/dpirr_users_register", "write", "dpirr_users",
+                            "error", started)
+            raise
+
+    @app.route("/api/dpirr_users_verify", methods=["POST"])
+    def dpirr_users_verify():
+        started = time.monotonic()
+        body = _json_body()
+        name, pin = _require(body, "name", "pin")
+        try:
+            rows = _adapter().read("dpirr_users")
+            match = next((r for r in rows
+                         if r.get("name", "").strip().lower() == name.lower()),
+                        None)
+            outcome = "ok"
+            if not match:
+                result = {"ok": False, "error": "User not found"}
+                outcome = "rejected"
+            elif match.get("pinHash", "") != sheets.hash_dpirr_pin(name, pin):
+                result = {"ok": False, "error": "Incorrect PIN"}
+                outcome = "rejected"
+            else:
+                result = {
+                    "ok": True,
+                    "name": match.get("name"),
+                    "isAdmin": str(match.get("isAdmin", "")).lower() == "true",
+                }
+            _structured_log("/api/dpirr_users_verify", "read", "dpirr_users",
+                            outcome, started)
+            return jsonify(result)
+        except Exception:
+            _structured_log("/api/dpirr_users_verify", "read", "dpirr_users",
+                            "error", started)
+            raise
+
+    @app.route("/api/dpirr_users_change_pin", methods=["POST"])
+    def dpirr_users_change_pin():
+        started = time.monotonic()
+        body = _json_body()
+        name, old_pin, new_pin = _require(body, "name", "oldPin", "newPin")
+        try:
+            ad = _adapter()
+            rows = ad.read("dpirr_users")
+            match = next((r for r in rows
+                         if r.get("name", "").strip().lower() == name.lower()),
+                        None)
+            if not match:
+                _structured_log("/api/dpirr_users_change_pin", "write",
+                                "dpirr_users", "rejected", started)
+                return jsonify({"ok": False, "error": "User not found"})
+            if match.get("pinHash", "") != sheets.hash_dpirr_pin(name, old_pin):
+                _structured_log("/api/dpirr_users_change_pin", "write",
+                                "dpirr_users", "rejected", started)
+                return jsonify({"ok": False, "error": "Current PIN is incorrect"})
+            ad.upsert("dpirr_users", {"name": match.get("name")}, {
+                "name": match.get("name"),
+                "pinHash": sheets.hash_dpirr_pin(name, new_pin),
+                "isAdmin": match.get("isAdmin", ""),
+                "createdAt": match.get("createdAt", ""),
+            })
+            _structured_log("/api/dpirr_users_change_pin", "write",
+                            "dpirr_users", "ok", started)
+            return jsonify({"ok": True})
+        except Exception:
+            _structured_log("/api/dpirr_users_change_pin", "write",
+                            "dpirr_users", "error", started)
             raise
 
     return app

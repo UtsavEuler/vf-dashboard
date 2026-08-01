@@ -11,6 +11,7 @@ The single source of truth for the frozen contract lives here:
 - SNAPSHOT_HEADERS is the fixed column order appended to Monthly_Snapshots.
 """
 
+import hashlib
 import logging
 import random
 import time
@@ -37,13 +38,18 @@ WORKSHEETS = {
     "dpirr_products": "DPIRR_Products",
     "dpirr_models": "DPIRR_Models",
     "dpirr_variants": "DPIRR_Variants",
+    # PIN-protected identity for DP/IRR entry attribution. Deliberately absent
+    # from READ_ALIASES/UPSERT_ALIASES/DELETE_ALIASES below — pinHash must never
+    # be exposed via the generic /api/<alias> routes, so routes.py owns explicit
+    # handlers (GET/register/verify/change_pin) that filter it out.
+    "dpirr_users": "DPIRR_Users",
 }
 
 # DP/IRR column orders. Order matters: it is the on-sheet column order and the
 # order rows are written in, so these lists are part of the frozen contract.
 DPIRR_MONTH_HEADERS = ["id", "label"]
 DPIRR_ENTRY_HEADERS = [
-    "id", "monthId", "monthLabel", "srNo", "customerName", "cibil",
+    "id", "monthId", "monthLabel", "srNo", "createdBy", "customerName", "cibil",
     "creditRemarks", "product", "model", "variant", "dealerName", "state",
     "city", "salesRm", "vfRm", "financier", "cocoDodo", "vfStatus", "remarks",
     "fundingType", "irr", "esp", "orp", "ltv", "downPayment", "discount",
@@ -52,6 +58,15 @@ DPIRR_ENTRY_HEADERS = [
 DPIRR_PRODUCT_HEADERS = ["name"]
 DPIRR_MODEL_HEADERS = ["product", "name"]
 DPIRR_VARIANT_HEADERS = ["product", "model", "variant", "esp"]
+DPIRR_USER_HEADERS = ["name", "pinHash", "isAdmin", "createdAt"]
+
+
+def hash_dpirr_pin(name, pin):
+    """Salt the PIN with the (lowercased) name so identical PINs across
+    different users never produce identical hashes."""
+    raw = (str(name).strip().lower() + ":" + str(pin).strip()).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
 
 # Aliases whose worksheet is auto-created (with this header row) when missing.
 # The original 8 worksheets are guaranteed to exist; a missing one is a real
@@ -62,6 +77,7 @@ AUTO_CREATE_HEADERS = {
     "dpirr_products": DPIRR_PRODUCT_HEADERS,
     "dpirr_models": DPIRR_MODEL_HEADERS,
     "dpirr_variants": DPIRR_VARIANT_HEADERS,
+    "dpirr_users": DPIRR_USER_HEADERS,
 }
 
 # Composite match keys per resource, exactly as the original server.py used them.
@@ -78,18 +94,21 @@ MATCH_KEYS = {
     "dpirr_products": ["name"],
     "dpirr_models": ["product", "name"],
     "dpirr_variants": ["product", "model", "variant"],
+    "dpirr_users": ["name"],
 }
 
 # Aliases that support each verb (mirrors server.py exactly).
-READ_ALIASES = list(WORKSHEETS.keys())
+READ_ALIASES = [a for a in WORKSHEETS.keys() if a != "dpirr_users"]
+# dpirr_users is deliberately absent from READ_ALIASES: routes.py owns an
+# explicit GET handler that strips pinHash before returning rows.
 # dpirr_variants is deliberately absent: its POST needs oldVariant matching so it
 # can rename in place, so routes.py owns an explicit handler for it.
 UPSERT_ALIASES = ["fi_master", "dealer_master", "added_dealers", "onboarding",
                   "fi_policy", "dealer_health", "fi_policy_geo",
                   "dpirr_months", "dpirr_entries", "dpirr_products",
                   "dpirr_models"]
-# dpirr_products / dpirr_models are deliberately absent: their DELETEs cascade
-# into child rows, so routes.py owns explicit handlers for them.
+# dpirr_products / dpirr_models / dpirr_months are deliberately absent: their
+# DELETEs cascade into child rows, so routes.py owns explicit handlers for them.
 DELETE_ALIASES = ["fi_master", "dealer_master", "added_dealers", "onboarding",
                   "fi_policy_geo", "dpirr_entries", "dpirr_variants"]
 

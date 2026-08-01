@@ -1566,6 +1566,12 @@
       <div class="page-title">📊 DP/IRR Tracker</div>
       <div class="page-sub">Track downpayment and IRR data by month</div>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);">
+      👤 Logged as <span id="dpCurrentUserLabel" style="color:var(--text);font-weight:600;">—</span>
+      <span id="dpAdminBadge" style="display:none;background:#a78bfa22;color:#a78bfa;border:1px solid #a78bfa44;border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700;">ADMIN</span>
+      <button class="btn btn-secondary btn-sm" onclick="openDPUserSwitchModal()" style="font-size:11px;padding:2px 8px;">Switch User</button>
+      <button class="btn btn-secondary btn-sm" onclick="openDPChangePinModal()" style="font-size:11px;padding:2px 8px;">Change PIN</button>
+    </div>
   </div>
 
   <!-- Main view tab bar -->
@@ -1591,6 +1597,60 @@
   </div>
 
 </div>
+</div>
+
+<!-- DP/IRR Identify Yourself Modal (dropdown + PIN) -->
+<div class="modal-overlay" id="dpUserSwitchOverlay" style="display:none;">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header"><div class="modal-title">👤 Who's making changes?</div><button class="modal-close" id="dpUserSwitchCloseBtn" onclick="closeDPUserSwitchModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group" style="margin:0 0 12px;">
+        <label class="form-label">Select Your Name</label>
+        <select class="form-select" id="dpUserSwitchSelect" onchange="onDPUserSwitchSelectChange()">
+          <option value="">— Select —</option>
+          <option value="__new__">➕ I'm not on this list</option>
+        </select>
+      </div>
+      <div class="form-group" id="dpUserSwitchNewNameWrap" style="margin:0 0 12px;display:none;">
+        <label class="form-label">Your Name</label>
+        <input type="text" class="form-select" id="dpUserSwitchNewName" placeholder="e.g. Rohit Singh">
+      </div>
+      <div class="form-group" id="dpUserSwitchPinWrap" style="margin:0;display:none;">
+        <label class="form-label" id="dpUserSwitchPinLabel">PIN</label>
+        <input type="password" inputmode="numeric" class="form-select" id="dpUserSwitchPin" placeholder="Enter PIN" onkeydown="if(event.key==='Enter') submitDPUserSwitch()">
+        <div id="dpUserSwitchPinHint" style="font-size:11px;color:var(--text-muted);margin-top:4px;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="dpUserSwitchCancelBtn" onclick="closeDPUserSwitchModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitDPUserSwitch()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- DP/IRR Change PIN Modal -->
+<div class="modal-overlay" id="dpChangePinOverlay" style="display:none;">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header"><div class="modal-title">🔒 Change PIN</div><button class="modal-close" onclick="closeDPChangePinModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group" style="margin:0 0 12px;">
+        <label class="form-label">Current PIN</label>
+        <input type="password" inputmode="numeric" class="form-select" id="dpChangePinOld" placeholder="Current PIN">
+      </div>
+      <div class="form-group" style="margin:0 0 12px;">
+        <label class="form-label">New PIN</label>
+        <input type="password" inputmode="numeric" class="form-select" id="dpChangePinNew" placeholder="New PIN">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Confirm New PIN</label>
+        <input type="password" inputmode="numeric" class="form-select" id="dpChangePinConfirm" placeholder="Confirm new PIN" onkeydown="if(event.key==='Enter') submitDPChangePin()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDPChangePinModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitDPChangePin()">Save</button>
+    </div>
+  </div>
 </div>
 
 <!-- DP/IRR Add Month Modal -->
@@ -1979,7 +2039,8 @@ async function loadState() {
       '/api/dpirr_entries',
       '/api/dpirr_products',
       '/api/dpirr_models',
-      '/api/dpirr_variants'
+      '/api/dpirr_variants',
+      '/api/dpirr_users'
     ];
     const settled = await Promise.allSettled(READ_PATHS.map(function(p){ return API.get(p); }));
     const failedReads = READ_PATHS.filter(function(p, i){ return settled[i].status === 'rejected'; });
@@ -1989,7 +2050,7 @@ async function loadState() {
     state.failedReads = failedReads;
     const settledValues = settled.map(function(s){ return s.status === 'fulfilled' ? s.value : null; });
     const [fiMaster, dealerMaster, addedDealers, onboarding, fiPolicy, dealerHealth, fiPolicyGeo, snapshots,
-           dpirrMonths, dpirrEntries, dpirrProducts, dpirrModels, dpirrVariants] = settledValues;
+           dpirrMonths, dpirrEntries, dpirrProducts, dpirrModels, dpirrVariants, dpirrUsers] = settledValues;
 
     // Ensure all responses are arrays
     const toArr = v => Array.isArray(v) ? v : [];
@@ -2097,6 +2158,9 @@ async function loadState() {
       var products = toArr(dpirrProducts);
       var models   = toArr(dpirrModels);
       var variants = toArr(dpirrVariants);
+      var usersRaw = toArr(dpirrUsers);
+
+      _dpUsers = usersRaw.filter(u => u && u.name).map(u => ({ name: u.name, isAdmin: String(u.isAdmin||'').toLowerCase()==='true' }));
 
       // Months
       _dpMonths.dp = months.filter(m => m && m.id).map(m => ({ id: m.id, label: m.label }));
@@ -2106,7 +2170,7 @@ async function loadState() {
       entries.forEach(function(e) {
         if (!e || !e.id || !e.monthId) return;
         if (!_dpData.dp[e.monthId]) _dpData.dp[e.monthId] = [];
-        var row = { '_id': e.id, 'Sr. No.': e.srNo || (_dpData.dp[e.monthId].length + 1) };
+        var row = { '_id': e.id, 'Sr. No.': e.srNo || (_dpData.dp[e.monthId].length + 1), 'createdBy': e.createdBy || '' };
         DP_COLS.forEach(function(c) { row[c.key] = e[c.key] || ''; });
         _dpData.dp[e.monthId].push(row);
       });
@@ -6444,6 +6508,7 @@ var _dpData        = { 'dp': {} };   // monthId -> [entries]
 var _dpFilters     = {};             // monthId -> {dealer:[],product:[],model:[],financier:[],salesRm:[],vfRm:[],vfStatus:[]}
 var _dpActiveMonth = { 'dp': null };
 var _dpEditTarget  = null; // {seg, monthId, idx}
+var _dpUsers = []; // [{name, isAdmin}] fetched from DPIRR_Users sheet
 var _dpDeleteTarget= null; // {seg, monthId, idx}
 
 var DP_PRODUCT_OPTS = ['Storm','Turbo','3WC','3WP'];
@@ -6491,6 +6556,10 @@ function genDPId() { return 'e_' + Date.now() + '_' + Math.random().toString(36)
 async function saveDPIRRMonthToSheet(monthObj) {
   setSaveStatus('saving');
   try { await API.post('/api/dpirr_months', monthObj); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+}
+async function deleteDPIRRMonthFromSheet(id) {
+  setSaveStatus('saving');
+  try { await API.delete('/api/dpirr_months?id=' + encodeURIComponent(id)); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 async function saveDPIRREntryToSheet(entryObj) {
   setSaveStatus('saving');
@@ -6544,8 +6613,30 @@ async function deleteDPIRRVariantFromSheet(product, model, variant) {
   try { await API.delete('/api/dpirr_variants?product=' + encodeURIComponent(product) + '&model=' + encodeURIComponent(model) + '&variant=' + encodeURIComponent(variant)); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
+function getMostRecentDPMonthId(seg) {
+  var MONTH_ORDER = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+  var months = _dpMonths[seg] || [];
+  if (!months.length) return null;
+  var best = null, bestKey = -1;
+  months.forEach(function(m) {
+    var parts = String(m.label||'').trim().split(/\s+/); // e.g. ["August","2026"]
+    var monthIdx = MONTH_ORDER.indexOf((parts[0]||'').toLowerCase());
+    var year = parseInt(parts[1], 10);
+    if (monthIdx === -1 || isNaN(year)) return; // fall back to skipping unparseable labels
+    var key = year * 12 + monthIdx;
+    if (key > bestKey) { bestKey = key; best = m.id; }
+  });
+  return best || months[months.length - 1].id; // fallback: last in list if nothing parsed
+}
+
 function initDPIRR() {
   renderDPMonthBar('dp');
+  updateDPUserNameLabel();
+  if (!getDPUserName()) openDPUserSwitchModal(true);
+  if (!_dpActiveMonth.dp && _dpMonths.dp && _dpMonths.dp.length) {
+    var mostRecentId = getMostRecentDPMonthId('dp');
+    if (mostRecentId) switchDPMonth('dp', mostRecentId);
+  }
   (function(){ var o=document.getElementById('dpAddMonthOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPAddMonth(); }); })();
   (function(){ var o=document.getElementById('dpEntryOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPEntry(); }); })();
   (function(){ var o=document.getElementById('dpDeleteOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPDelete(); }); })();
@@ -6553,18 +6644,156 @@ function initDPIRR() {
   (function(){ var o=document.getElementById('dpModelModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPModelModal(); }); })();
   (function(){ var o=document.getElementById('dpVariantModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPVariantModal(); }); })();
   (function(){ var o=document.getElementById('dpConfirmOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPConfirm(); }); })();
+  (function(){ var o=document.getElementById('dpChangePinOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPChangePinModal(); }); })();
+}
+
+// ── User identity (dropdown + personal PIN, no full login) ──
+function getDPUserName()    { return (localStorage.getItem('vf_dp_user_name') || '').trim(); }
+function getDPUserIsAdmin() { return localStorage.getItem('vf_dp_user_is_admin') === 'true'; }
+
+function updateDPUserNameLabel() {
+  var el = document.getElementById('dpCurrentUserLabel');
+  if (el) el.textContent = getDPUserName() || 'Not set';
+  var badge = document.getElementById('dpAdminBadge');
+  if (badge) badge.style.display = getDPUserIsAdmin() ? '' : 'none';
+  var manageTab = document.getElementById('dpViewTabManage');
+  if (manageTab) manageTab.style.display = getDPUserIsAdmin() ? '' : 'none';
+  // If a non-admin is currently on the Manage Products view (e.g. lost admin status
+  // after switching users), bounce them back to Monthly Entries.
+  if (!getDPUserIsAdmin() && document.getElementById('dpManageSection') && document.getElementById('dpManageSection').style.display !== 'none') {
+    switchDPMainView('entries');
+  }
+}
+
+function openDPUserSwitchModal(isForced) {
+  var sel = document.getElementById('dpUserSwitchSelect');
+  var opts = '<option value="">— Select —</option>' +
+    _dpUsers.map(function(u){ return '<option value="'+escHtml(u.name)+'">'+escHtml(u.name)+'</option>'; }).join('') +
+    '<option value="__new__">➕ I\'m not on this list</option>';
+  sel.innerHTML = opts;
+  sel.value = '';
+  document.getElementById('dpUserSwitchNewNameWrap').style.display = 'none';
+  document.getElementById('dpUserSwitchPinWrap').style.display = 'none';
+  document.getElementById('dpUserSwitchNewName').value = '';
+  document.getElementById('dpUserSwitchPin').value = '';
+  // If this is the mandatory first-time prompt, hide the ways to dismiss it
+  var closeBtn = document.getElementById('dpUserSwitchCloseBtn');
+  var cancelBtn = document.getElementById('dpUserSwitchCancelBtn');
+  if (closeBtn) closeBtn.style.display = isForced ? 'none' : '';
+  if (cancelBtn) cancelBtn.style.display = isForced ? 'none' : '';
+  document.getElementById('dpUserSwitchOverlay').style.display = 'flex';
+}
+function closeDPUserSwitchModal() {
+  document.getElementById('dpUserSwitchOverlay').style.display = 'none';
+}
+
+function onDPUserSwitchSelectChange() {
+  var val = document.getElementById('dpUserSwitchSelect').value;
+  var newNameWrap = document.getElementById('dpUserSwitchNewNameWrap');
+  var pinWrap = document.getElementById('dpUserSwitchPinWrap');
+  var pinLabel = document.getElementById('dpUserSwitchPinLabel');
+  var pinHint = document.getElementById('dpUserSwitchPinHint');
+
+  if (!val) {
+    newNameWrap.style.display = 'none';
+    pinWrap.style.display = 'none';
+    return;
+  }
+  if (val === '__new__') {
+    newNameWrap.style.display = '';
+    pinWrap.style.display = '';
+    pinLabel.textContent = 'Create a PIN';
+    pinHint.textContent = "You'll use this PIN every time you switch to this name.";
+    return;
+  }
+  newNameWrap.style.display = 'none';
+  pinWrap.style.display = '';
+  pinLabel.textContent = 'Enter PIN for ' + val;
+  pinHint.textContent = 'PIN is required every time you switch users.';
+}
+
+function submitDPUserSwitch() {
+  var sel = document.getElementById('dpUserSwitchSelect').value;
+  if (!sel) { toast('⚠ Select your name'); return; }
+
+  if (sel === '__new__') {
+    var newName = document.getElementById('dpUserSwitchNewName').value.trim();
+    var newPin  = document.getElementById('dpUserSwitchPin').value.trim();
+    if (!newName) { toast('⚠ Enter your name'); return; }
+    if (!newPin)  { toast('⚠ Create a PIN'); return; }
+    API.post('/api/dpirr_users_register', { name: newName, pin: newPin }).then(function(res) {
+      if (res && res.ok) {
+        localStorage.setItem('vf_dp_user_name', res.name);
+        localStorage.setItem('vf_dp_user_is_admin', res.isAdmin ? 'true' : 'false');
+        _dpUsers.push({ name: res.name, isAdmin: !!res.isAdmin });
+        updateDPUserNameLabel();
+        closeDPUserSwitchModal();
+        renderDPView('dp', _dpActiveMonth.dp); // refresh visible entries for new identity
+        toast('✅ Welcome, ' + res.name);
+      } else {
+        toast('⚠ ' + ((res && res.error) || 'Could not register — that name may already exist'));
+      }
+    }).catch(function(){ toast('⚠ Server error — please try again'); });
+    return;
+  }
+
+  var pin = document.getElementById('dpUserSwitchPin').value.trim();
+  if (!pin) { toast('⚠ Enter the PIN'); return; }
+  API.post('/api/dpirr_users_verify', { name: sel, pin: pin }).then(function(res) {
+    if (res && res.ok) {
+      localStorage.setItem('vf_dp_user_name', res.name);
+      localStorage.setItem('vf_dp_user_is_admin', res.isAdmin ? 'true' : 'false');
+      updateDPUserNameLabel();
+      closeDPUserSwitchModal();
+      renderDPView('dp', _dpActiveMonth.dp);
+      toast('✅ Switched to ' + res.name);
+    } else {
+      toast('⚠ ' + ((res && res.error) || 'Incorrect PIN'));
+    }
+  }).catch(function(){ toast('⚠ Server error — please try again'); });
+}
+
+function openDPChangePinModal() {
+  if (!getDPUserName()) { toast('⚠ Select your name first'); openDPUserSwitchModal(false); return; }
+  document.getElementById('dpChangePinOld').value = '';
+  document.getElementById('dpChangePinNew').value = '';
+  document.getElementById('dpChangePinConfirm').value = '';
+  document.getElementById('dpChangePinOverlay').style.display = 'flex';
+}
+function closeDPChangePinModal() {
+  document.getElementById('dpChangePinOverlay').style.display = 'none';
+}
+function submitDPChangePin() {
+  var oldPin = document.getElementById('dpChangePinOld').value.trim();
+  var newPin = document.getElementById('dpChangePinNew').value.trim();
+  var confirmPin = document.getElementById('dpChangePinConfirm').value.trim();
+  if (!oldPin || !newPin) { toast('⚠ Fill in all fields'); return; }
+  if (newPin !== confirmPin) { toast('⚠ New PIN and confirmation do not match'); return; }
+  API.post('/api/dpirr_users_change_pin', { name: getDPUserName(), oldPin: oldPin, newPin: newPin }).then(function(res) {
+    if (res && res.ok) {
+      closeDPChangePinModal();
+      toast('✅ PIN updated');
+    } else {
+      toast('⚠ ' + ((res && res.error) || 'Could not change PIN'));
+    }
+  }).catch(function(){ toast('⚠ Server error — please try again'); });
 }
 
 function switchDPMainView(view) {
-  var isEntries = view === 'entries';
-  document.getElementById('dpEntriesSection').style.display = isEntries ? '' : 'none';
-  document.getElementById('dpManageSection').style.display  = isEntries ? 'none' : '';
-  var te = document.getElementById('dpViewTabEntries'), tm = document.getElementById('dpViewTabManage');
-  te.style.color = isEntries ? 'var(--accent)' : 'var(--text-muted)';
-  te.style.borderBottomColor = isEntries ? 'var(--accent)' : 'transparent';
-  tm.style.color = isEntries ? 'var(--text-muted)' : 'var(--accent)';
-  tm.style.borderBottomColor = isEntries ? 'transparent' : 'var(--accent)';
-  if (!isEntries) renderDPManageView();
+  if (view === 'manage' && !getDPUserIsAdmin()) {
+    toast('⚠ Only admins can access Manage Products');
+    view = 'entries';
+  }
+  var sections = { entries: 'dpEntriesSection', manage: 'dpManageSection' };
+  var tabs     = { entries: 'dpViewTabEntries', manage: 'dpViewTabManage' };
+  Object.keys(sections).forEach(function(key) {
+    var active = key === view;
+    document.getElementById(sections[key]).style.display = active ? '' : 'none';
+    var tabEl = document.getElementById(tabs[key]);
+    tabEl.style.color = active ? 'var(--accent)' : 'var(--text-muted)';
+    tabEl.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
+  });
+  if (view === 'manage') renderDPManageView();
 }
 
 function renderDPMonthBar(seg) {
@@ -6572,12 +6801,39 @@ function renderDPMonthBar(seg) {
   if (!bar) return;
   var months = _dpMonths[seg];
   var active = _dpActiveMonth[seg];
+  var isAdmin = getDPUserIsAdmin();
   var html = months.map(function(m) {
     var isActive = m.id === active;
-    return '<button onclick="switchDPMonth(\''+seg+'\',\''+m.id+'\')" class="btn '+(isActive?'btn-primary':'btn-secondary')+' btn-sm" style="font-size:12px;">'+escHtml(m.label)+'</button>';
+    var btn = '<button onclick="switchDPMonth(\''+seg+'\',\''+m.id+'\')" class="btn '+(isActive?'btn-primary':'btn-secondary')+' btn-sm" style="font-size:12px;'+(isAdmin?'border-top-right-radius:0;border-bottom-right-radius:0;':'')+'">'+escHtml(m.label)+'</button>';
+    if (!isAdmin) return '<span style="display:inline-flex;">'+btn+'</span>';
+    var delBtn = '<button onclick="deleteDPMonth(\''+seg+'\',\''+m.id+'\')" class="btn '+(isActive?'btn-primary':'btn-secondary')+' btn-sm" title="Delete this month view" style="font-size:11px;padding:6px 8px;border-top-left-radius:0;border-bottom-left-radius:0;border-left:1px solid rgba(255,255,255,0.15);">🗑</button>';
+    return '<span style="display:inline-flex;">'+btn+delBtn+'</span>';
   }).join('');
   html += '<button onclick="openDPAddMonth(\''+seg+'\')" class="btn btn-secondary btn-sm" style="font-size:12px;border-style:dashed;">＋ Add Month View</button>';
   bar.innerHTML = html;
+}
+
+function deleteDPMonth(seg, monthId) {
+  var m = (_dpMonths[seg] || []).find(function(x){ return x.id === monthId; });
+  if (!m) return;
+  var entryCount = ((_dpData[seg] || {})[monthId] || []).length;
+  openDPConfirm('Delete "'+m.label+'" and all '+entryCount+' entries in it (from every user)? This cannot be undone.', function() {
+    _dpMonths[seg] = _dpMonths[seg].filter(function(x){ return x.id !== monthId; });
+    delete _dpData[seg][monthId];
+    deleteDPIRRMonthFromSheet(monthId);
+
+    if (_dpActiveMonth[seg] === monthId) {
+      var next = _dpMonths[seg][0];
+      _dpActiveMonth[seg] = next ? next.id : null;
+    }
+    renderDPMonthBar(seg);
+    if (_dpActiveMonth[seg]) {
+      renderDPView(seg, _dpActiveMonth[seg]);
+    } else {
+      document.getElementById('dpViewArea_'+seg).innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><div>Add a month view to start tracking.</div></div>';
+    }
+    toast('🗑 "' + m.label + '" deleted');
+  });
 }
 
 function openDPAddMonth(seg) {
@@ -6639,8 +6895,17 @@ function getDPEntries(seg, monthId) {
 }
 
 function getDPFilters(monthId) {
-  if (!_dpFilters[monthId]) _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[] };
+  if (!_dpFilters[monthId]) _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[], createdBy:[] };
   return _dpFilters[monthId];
+}
+
+// Scopes entries to what the current user is allowed to see:
+// admins see everyone's entries, everyone else sees only their own.
+function getDPVisibleRows(seg, monthId) {
+  var rows = getDPEntries(seg, monthId);
+  if (getDPUserIsAdmin()) return rows;
+  var me = getDPUserName().toLowerCase();
+  return rows.filter(function(r){ return (r.createdBy||'').toLowerCase() === me; });
 }
 
 function getRetailingDealerNames() {
@@ -6942,12 +7207,13 @@ function saveDPEntry() {
   var wasBulk = bulkCount > 1;
 
   if (idx !== null) {
-    // Edit existing single entry
+    // Edit existing single entry — preserve original creator, never overwrite it
     row['Sr. No.'] = arr[idx]['Sr. No.'];
     row['_id'] = arr[idx]['_id'] || genDPId();
+    row['createdBy'] = arr[idx]['createdBy'] || getDPUserName();
     arr[idx] = row;
 
-    var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'] };
+    var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'] };
     DP_COLS.forEach(function(col) { payload[col.key] = row[col.key] || ''; });
     saveDPIRREntryToSheet(payload);
 
@@ -6958,11 +7224,12 @@ function saveDPEntry() {
       var clone = Object.assign({}, row);
       clone['Sr. No.'] = arr.length + 1;
       clone['_id'] = genDPId();
+      clone['createdBy'] = getDPUserName();
       arr.push(clone);
       newRows.push(clone);
     }
     var bulkPayload = newRows.map(function(r) {
-      var p = { id: r['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: r['Sr. No.'] };
+      var p = { id: r['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: r['Sr. No.'], createdBy: r['createdBy'] };
       DP_COLS.forEach(function(col) { p[col.key] = r[col.key] || ''; });
       return p;
     });
@@ -6974,9 +7241,10 @@ function saveDPEntry() {
     // Single new entry
     row['Sr. No.'] = arr.length + 1;
     row['_id'] = genDPId();
+    row['createdBy'] = getDPUserName();
     arr.push(row);
 
-    var payload2 = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'] };
+    var payload2 = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'] };
     DP_COLS.forEach(function(col) { payload2[col.key] = row[col.key] || ''; });
     saveDPIRREntryToSheet(payload2);
   }
@@ -7000,16 +7268,8 @@ function confirmDPDelete() {
   var arr = getDPEntries(seg, monthId);
   var removed = arr[idx];
   arr.splice(idx, 1);
-  arr.forEach(function(r,i){ r['Sr. No.'] = i+1; });
 
   if (removed && removed['_id']) deleteDPIRREntryFromSheet(removed['_id']);
-  var monthObj = (_dpMonths[seg] || []).find(function(m){ return m.id === monthId; }) || {};
-  arr.forEach(function(r) {
-    if (!r['_id']) return;
-    var payload = { id: r['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: r['Sr. No.'] };
-    DP_COLS.forEach(function(col) { payload[col.key] = r[col.key] || ''; });
-    saveDPIRREntryToSheet(payload);
-  });
 
   closeDPDelete();
   renderDPView(seg, monthId);
@@ -7068,7 +7328,7 @@ function onDPFilterChange(monthId, field, cb) {
   else { var i = filters[field].indexOf(val); if (i > -1) filters[field].splice(i,1); }
   var btnId = 'dpMF_'+monthId+'_'+field+'_btn';
   var btn = document.getElementById(btnId);
-  var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status' };
+  var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status', createdBy:'Created By' };
   if (btn) btn.innerHTML = (filters[field].length ? filters[field].length+' selected' : labels[field]||field) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
   var seg = monthId.split('_')[0];
   renderDPTable(seg, monthId);
@@ -7086,12 +7346,12 @@ function clearDPFilter(monthId, field, btnId, label) {
 }
 
 function clearAllDPFilters(monthId) {
-  _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[] };
-  ['dealer','product','model','financier','salesRm','vfRm','vfStatus'].forEach(function(f) {
+  _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[], createdBy:[] };
+  ['dealer','product','model','financier','salesRm','vfRm','vfStatus','createdBy'].forEach(function(f) {
     var dd = document.getElementById('dpMF_'+monthId+'_'+f+'_dd');
     if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked=false; });
     var btn = document.getElementById('dpMF_'+monthId+'_'+f+'_btn');
-    var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status' };
+    var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status', createdBy:'Created By' };
     if (btn) btn.innerHTML = (labels[f]||f) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
   });
   var searchEl = document.getElementById('dpSearch_'+monthId);
@@ -7113,6 +7373,7 @@ function applyDPFilters(rows, monthId) {
     if (filters.salesRm.length   && filters.salesRm.indexOf(String(r.salesRm||''))          === -1) return false;
     if (filters.vfRm.length      && filters.vfRm.indexOf(String(r.vfRm||''))                === -1) return false;
     if (filters.vfStatus.length  && filters.vfStatus.indexOf(String(r.vfStatus||''))        === -1) return false;
+    if (filters.createdBy.length && filters.createdBy.indexOf(String(r.createdBy||''))      === -1) return false;
     return true;
   });
 }
@@ -7121,8 +7382,9 @@ function applyDPFilters(rows, monthId) {
 function renderDPView(seg, monthId) {
   var area = document.getElementById('dpViewArea_'+seg);
   if (!area) return;
-  var rows = getDPEntries(seg, monthId);
-  function uniq(field) { return [...new Set(rows.map(function(r){ return String(r[field]||''); }).filter(Boolean))].sort(); }
+  var isAdmin = getDPUserIsAdmin();
+  var visibleRows = getDPVisibleRows(seg, monthId);
+  function uniq(field) { return [...new Set(visibleRows.map(function(r){ return String(r[field]||''); }).filter(Boolean))].sort(); }
   var filters = getDPFilters(monthId);
 
   var filterBarHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">' +
@@ -7134,10 +7396,14 @@ function renderDPView(seg, monthId) {
     dpFilterDropdown(monthId, 'salesRm',   'RM Name',     uniq('salesRm'),   filters.salesRm) +
     dpFilterDropdown(monthId, 'vfRm',      'VF Name',     uniq('vfRm'),      filters.vfRm) +
     dpFilterDropdown(monthId, 'vfStatus',  'VF Status',   uniq('vfStatus'),  filters.vfStatus) +
+    (isAdmin ? dpFilterDropdown(monthId, 'createdBy', 'Created By', uniq('createdBy'), filters.createdBy) : '') +
     '<button class="btn btn-secondary btn-sm" onclick="clearAllDPFilters(\''+monthId+'\')" style="font-size:11px;">✕ Clear</button>' +
     '<button class="btn btn-primary btn-sm" onclick="openDPEntryModal(\''+seg+'\',\''+monthId+'\',null)">＋ Add Entry</button>' +
     '<button class="btn btn-secondary btn-sm" onclick="exportDPView(\''+seg+'\',\''+monthId+'\')" style="font-size:12px;">⬇ Export</button>' +
   '</div>';
+  if (!isAdmin) {
+    filterBarHtml += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">Showing only entries you created. Admins can see everyone\'s entries.</div>';
+  }
 
   area.innerHTML = filterBarHtml + '<div id="dpTableArea_'+monthId+'"></div>';
   renderDPTable(seg, monthId);
@@ -7155,6 +7421,7 @@ function updateDPVfStatusInline(selectEl, seg, monthId, idx) {
   var arr = getDPEntries(seg, monthId);
   var row = arr[idx];
   if (!row) return;
+  var oldStatus = row.vfStatus;
   var newStatus = selectEl.value;
   row.vfStatus = newStatus;
 
@@ -7164,7 +7431,7 @@ function updateDPVfStatusInline(selectEl, seg, monthId, idx) {
   selectEl.style.background = col + '22';
 
   var monthObj = (_dpMonths[seg] || []).find(function(m){ return m.id === monthId; }) || {};
-  var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'] };
+  var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'] || '' };
   DP_COLS.forEach(function(c) { payload[c.key] = row[c.key] || ''; });
   saveDPIRREntryToSheet(payload);
   toast('✅ VF Status updated');
@@ -7179,13 +7446,14 @@ function getDPDuplicateKey(row) {
 function renderDPTable(seg, monthId) {
   var el = document.getElementById('dpTableArea_'+monthId);
   if (!el) return;
-  var rows = getDPEntries(seg, monthId);
-  var filtered = applyDPFilters(rows, monthId);
+  var isAdmin = getDPUserIsAdmin();
+  var rows = getDPEntries(seg, monthId);              // full backing array (needed for correct edit/delete indices)
+  var visibleRows = getDPVisibleRows(seg, monthId);    // scoped to what this user may see
+  var filtered = applyDPFilters(visibleRows, monthId);
 
-  // Count occurrences of each identity key across ALL entries in this month (not just filtered),
-  // so duplicates are flagged consistently regardless of active filters.
+  // Duplicate detection scoped to whatever's visible to the current viewer
   var dupCounts = {};
-  rows.forEach(function(r) {
+  visibleRows.forEach(function(r) {
     var key = getDPDuplicateKey(r);
     if (!key.replace(/\|/g,'')) return; // skip if all identity fields are empty
     dupCounts[key] = (dupCounts[key]||0) + 1;
@@ -7194,20 +7462,22 @@ function renderDPTable(seg, monthId) {
   var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:var(--surface2);color:var(--text-muted);">';
   html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">Sr. No.</th>';
+  if (isAdmin) html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">Created By</th>';
   DP_COLS.forEach(function(c){ html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">'+c.label+'</th>'; });
   html += '<th style="padding:8px 12px;width:70px;">Actions</th></tr></thead><tbody>';
 
   filtered.forEach(function(r, i) {
-    var origIdx = rows.indexOf(r);
+    var origIdx = rows.indexOf(r); // index in the FULL array, for correct edit/delete targeting
     var dupKey = getDPDuplicateKey(r);
     var isDup  = dupKey.replace(/\|/g,'') && dupCounts[dupKey] > 1;
     var rowStyle = isDup
       ? 'border-bottom:1px solid var(--border);background:rgba(251,191,36,0.14);border-left:3px solid #fbbf24;'
       : 'border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--surface2);':'');
     html += '<tr style="'+rowStyle+'">';
-    html += '<td style="padding:7px 12px;white-space:nowrap;">'+(r['Sr. No.']||origIdx+1)+
+    html += '<td style="padding:7px 12px;white-space:nowrap;">'+(i+1)+
       (isDup ? ' <span title="Possible duplicate — same Customer/Product/Model/Variant/Dealer as another row" style="font-size:10px;color:#fbbf24;">⚠</span>' : '') +
       '</td>';
+    if (isAdmin) html += '<td style="padding:7px 12px;white-space:nowrap;color:var(--text-muted);">'+escHtml(r.createdBy||'—')+'</td>';
     DP_COLS.forEach(function(c){
       var v = String(r[c.key]||'');
       if (c.key === 'vfStatus') {
@@ -7231,7 +7501,7 @@ function renderDPTable(seg, monthId) {
 
   var dupRowCount = filtered.filter(function(r){ var k=getDPDuplicateKey(r); return k.replace(/\|/g,'') && dupCounts[k] > 1; }).length;
   html += '</tbody></table></div>';
-  html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">'+filtered.length+' of '+rows.length+' records' +
+  html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">'+filtered.length+' of '+visibleRows.length+' records' +
     (dupRowCount ? ' &nbsp;·&nbsp; <span style="color:#fbbf24;">⚠ '+dupRowCount+' possible duplicate'+(dupRowCount===1?'':'s')+'</span>' : '') +
     '</div>';
   el.innerHTML = html;
@@ -7391,7 +7661,9 @@ function saveDPModel() {
     var oldName = models[idx].name;
     models[idx].name = name; // preserve existing variants array on rename
     if (!models[idx].variants) models[idx].variants = [];
-    if (oldName !== name) renameDPIRRModelToSheet(product, oldName, name);
+    if (oldName !== name) {
+      renameDPIRRModelToSheet(product, oldName, name);
+    }
   }
 
   closeDPModelModal();
@@ -7445,9 +7717,17 @@ function saveDPVariant() {
   if (dup) { toast('⚠ A variant with this name already exists for this model'); return; }
 
   var oldVariantName = idx !== null ? variants[idx].variant : name;
-  if (idx === null) variants.push({ variant: name, esp: esp });
-  else variants[idx] = { variant: name, esp: esp };
-  saveDPIRRVariantToSheet(product, model.name, name, esp, oldVariantName);
+  var oldEsp = idx !== null ? variants[idx].esp : null;
+  if (idx === null) {
+    variants.push({ variant: name, esp: esp });
+    saveDPIRRVariantToSheet(product, model.name, name, esp, oldVariantName);
+  } else {
+    variants[idx] = { variant: name, esp: esp };
+    saveDPIRRVariantToSheet(product, model.name, name, esp, oldVariantName);
+    var changeDetails = [];
+    if (oldVariantName !== name) changeDetails.push('Renamed from "' + oldVariantName + '"');
+    if (String(oldEsp) !== String(esp)) changeDetails.push('ESP: ₹' + oldEsp + ' → ₹' + esp);
+  }
 
   closeDPVariantModal();
   renderDPManageView();
@@ -7610,11 +7890,13 @@ function runDPConfirm() {
 }
 
 function exportDPView(seg, monthId) {
-  var rows = applyDPFilters(getDPEntries(seg, monthId), monthId);
-  var header = ['Sr. No.'].concat(DP_COLS.map(function(c){ return c.label; }));
+  var isAdmin = getDPUserIsAdmin();
+  var rows = applyDPFilters(getDPVisibleRows(seg, monthId), monthId);
+  var header = ['Sr. No.'].concat(isAdmin ? ['Created By'] : []).concat(DP_COLS.map(function(c){ return c.label; }));
   var aoa = [header];
   rows.forEach(function(r, i){
-    aoa.push([r['Sr. No.']||i+1].concat(DP_COLS.map(function(c){ return r[c.key]||''; })));
+    var line = [i+1].concat(isAdmin ? [r.createdBy||''] : []).concat(DP_COLS.map(function(c){ return r[c.key]||''; }));
+    aoa.push(line);
   });
   var wb = XLSX.utils.book_new();
   var monthLabel = (_dpMonths[seg].find(function(m){ return m.id===monthId; })||{}).label || monthId;
