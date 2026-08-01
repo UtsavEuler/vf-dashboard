@@ -6645,6 +6645,7 @@ function initDPIRR() {
   (function(){ var o=document.getElementById('dpVariantModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPVariantModal(); }); })();
   (function(){ var o=document.getElementById('dpConfirmOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPConfirm(); }); })();
   (function(){ var o=document.getElementById('dpChangePinOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPChangePinModal(); }); })();
+  (function(){ var o=document.getElementById('dpUserSwitchOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPUserSwitchModal(); }); })();
 }
 
 // ── User identity (dropdown + personal PIN, no full login) ──
@@ -6676,11 +6677,8 @@ function openDPUserSwitchModal(isForced) {
   document.getElementById('dpUserSwitchPinWrap').style.display = 'none';
   document.getElementById('dpUserSwitchNewName').value = '';
   document.getElementById('dpUserSwitchPin').value = '';
-  // If this is the mandatory first-time prompt, hide the ways to dismiss it
-  var closeBtn = document.getElementById('dpUserSwitchCloseBtn');
-  var cancelBtn = document.getElementById('dpUserSwitchCancelBtn');
-  if (closeBtn) closeBtn.style.display = isForced ? 'none' : '';
-  if (cancelBtn) cancelBtn.style.display = isForced ? 'none' : '';
+  // Always dismissible — even the first-time prompt should never trap the user
+  // with no way out. Entries just stay unattributed until they do pick a name.
   document.getElementById('dpUserSwitchOverlay').style.display = 'flex';
 }
 function closeDPUserSwitchModal() {
