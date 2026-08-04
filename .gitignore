@@ -8,3 +8,4 @@ credentials.json
 .venv/
 venv/
 .pytest_cache/
+diagnose_snapshots.py

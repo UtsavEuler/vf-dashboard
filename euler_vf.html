@@ -1569,6 +1569,7 @@
     <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);">
       👤 Logged as <span id="dpCurrentUserLabel" style="color:var(--text);font-weight:600;">—</span>
       <span id="dpAdminBadge" style="display:none;background:#a78bfa22;color:#a78bfa;border:1px solid #a78bfa44;border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700;">ADMIN</span>
+      <button class="btn btn-secondary btn-sm" id="dpRefreshBtn" onclick="refreshDPIRR()" style="font-size:11px;padding:2px 8px;" title="Reload the latest data — see entries added by other users">🔄 Refresh</button>
       <button class="btn btn-secondary btn-sm" onclick="openDPUserSwitchModal()" style="font-size:11px;padding:2px 8px;">Switch User</button>
       <button class="btn btn-secondary btn-sm" onclick="openDPChangePinModal()" style="font-size:11px;padding:2px 8px;">Change PIN</button>
     </div>
@@ -1588,15 +1589,76 @@
   </div>
 
   <div id="dpManageSection" style="display:none;">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
-      <div style="font-size:13px;color:var(--text-muted);max-width:520px;">Manage products and their models here. New products and models are instantly available in the Add Entry dropdowns.</div>
-      <button class="btn btn-primary btn-sm" onclick="openDPProductModal(null)">＋ Add Product</button>
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px;">
+      <button id="dpManageSubTabProducts" onclick="switchDPManageSubview('products')" style="padding:6px 16px;font-size:12px;font-weight:600;border:none;border-bottom:2px solid var(--accent);margin-bottom:-1px;background:none;color:var(--accent);cursor:pointer;">🏷 Products</button>
+      <button id="dpManageSubTabUsers" onclick="switchDPManageSubview('users')" style="padding:6px 16px;font-size:12px;font-weight:600;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;color:var(--text-muted);cursor:pointer;">👤 Users</button>
     </div>
-    <div id="dpProductsList"></div>
-    <input type="file" id="dpModelUploadInput" accept=".xlsx,.xls" style="display:none;" onchange="handleDPModelExcelUpload(event)">
+
+    <div id="dpManageProductsSubview">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+        <div style="font-size:13px;color:var(--text-muted);max-width:520px;">Manage products and their models here. New products and models are instantly available in the Add Entry dropdowns.</div>
+        <button class="btn btn-primary btn-sm" onclick="openDPProductModal(null)">＋ Add Product</button>
+      </div>
+      <div id="dpProductsList"></div>
+      <input type="file" id="dpModelUploadInput" accept=".xlsx,.xls" style="display:none;" onchange="handleDPModelExcelUpload(event)">
+    </div>
+
+    <div id="dpManageUsersSubview" style="display:none;">
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;max-width:600px;">Everyone who has ever identified themselves in DP/IRR. Deleting a user removes them from this list only — any entries they created stay exactly as they are, still attributed to their name, and remain visible to admins even though other users will no longer see them.</div>
+      <div id="dpUsersList"></div>
+    </div>
   </div>
 
 </div>
+</div>
+
+<!-- Delete User Confirm Modal (requires the ADMIN's own PIN) -->
+<div class="modal-overlay" id="dpDeleteUserOverlay" style="display:none;">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header"><div class="modal-title">🗑 Delete User</div><button class="modal-close" onclick="closeDeleteUserConfirm()">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--text);margin-bottom:12px;" id="dpDeleteUserMessage"></div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Your Admin PIN</label>
+        <input type="password" inputmode="numeric" class="form-select" id="dpDeleteUserPin" placeholder="Enter your PIN to confirm" onkeydown="if(event.key==='Enter') confirmDeleteUser()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDeleteUserConfirm()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDeleteUser()">Delete User</button>
+    </div>
+  </div>
+</div>
+
+
+<div class="page" id="pageSnapshots">
+<div class="container">
+  <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    <div>
+      <div class="page-title">📸 Snapshots</div>
+      <div class="page-sub">Monthly point-in-time snapshots with drill-down by POC, Zone, State, and Dealer</div>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="openSnapshotModal()">📸 Save Snapshot</button>
+  </div>
+  <div id="snapshotContent"></div>
+</div>
+</div>
+
+<!-- Snapshot Password Modal -->
+<div class="modal-overlay" id="snapshotModalOverlay" style="display:none;">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header"><div class="modal-title" id="snapshotModalTitle">📸 Save Snapshot</div><button class="modal-close" onclick="closeSnapshotModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-select" id="snapshotPassword" placeholder="Enter password" onkeydown="if(event.key==='Enter') confirmSnapshot()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeSnapshotModal()">Cancel</button>
+      <button class="btn btn-primary" id="snapshotModalConfirmBtn" onclick="confirmSnapshot()">Save Snapshot</button>
+    </div>
+  </div>
 </div>
 
 <!-- DP/IRR Identify Yourself Modal (dropdown + PIN) -->
@@ -2171,7 +2233,7 @@ async function loadState() {
         if (!e || !e.id || !e.monthId) return;
         if (!_dpData.dp[e.monthId]) _dpData.dp[e.monthId] = [];
         var row = { '_id': e.id, 'Sr. No.': e.srNo || (_dpData.dp[e.monthId].length + 1), 'createdBy': e.createdBy || '' };
-        DP_COLS.forEach(function(c) { row[c.key] = e[c.key] || ''; });
+        DP_COLS.forEach(function(c) { row[c.key] = dpVal(e[c.key]); });
         _dpData.dp[e.monthId].push(row);
       });
       Object.keys(_dpData.dp).forEach(function(mid) {
@@ -6519,10 +6581,15 @@ var _dpConfirmFn     = null;                     // pending confirm callback for
 var _dpUploadTargetProduct = null;               // product currently targeted for bulk Excel upload
 var _dpManageExpanded = {};                      // productName -> boolean, tracks collapse state (default collapsed)
 
-var DP_VF_STATUS_OPTS = ['Disbursement Pending','Initial Docs Received','Partial Docs Received','Docs Pending',
+var DP_VF_STATUS_OPTS = ['Disbursement Pending','Disbursement Received','Initial Docs Received','Partial Docs Received','Docs Pending',
   'Financier Feedback Pending','FI Initiated','FI Pending','SL Pending','Push Back SL','DP Pending',
   'Acknowledgement Pending','Push Back DO','DO Pending','DO Received','Dropped','Rejected','Self Finance','Hold','Next Month'];
 var DP_FUNDING_OPTS = ['ESP','ORP'];
+
+// Preserves legitimate falsy values (0, "0") as-is — only truly missing
+// (undefined/null) values fall back to ''. A plain `x || ''` incorrectly
+// blanks out a genuine 0, e.g. Discount when no discount was given.
+function dpVal(v) { return (v === undefined || v === null) ? '' : v; }
 
 var DP_COLS = [
   { key:'customerName',  label:'Customer Name',       type:'text',   numeric:false, required:true  },
@@ -6629,6 +6696,31 @@ function getMostRecentDPMonthId(seg) {
   return best || months[months.length - 1].id; // fallback: last in list if nothing parsed
 }
 
+async function refreshDPIRR() {
+  var btn = document.getElementById('dpRefreshBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '🔄 Refreshing...'; }
+  try {
+    await loadState();
+    renderDPMonthBar('dp');
+
+    var entriesVisible = document.getElementById('dpEntriesSection').style.display !== 'none';
+    var manageVisible  = document.getElementById('dpManageSection').style.display !== 'none';
+
+    if (entriesVisible && _dpActiveMonth.dp) {
+      renderDPView('dp', _dpActiveMonth.dp);
+    } else if (manageVisible) {
+      var usersSubviewVisible = document.getElementById('dpManageUsersSubview').style.display !== 'none';
+      if (usersSubviewVisible) { renderDPUsersList(); }
+      else { renderDPManageView(); } // rebuilds products list; stays on the products subview
+    }
+    toast('✅ Data refreshed');
+  } catch (e) {
+    toast('❌ Failed to refresh: ' + (e.message || 'unknown error'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Refresh'; }
+  }
+}
+
 function initDPIRR() {
   renderDPMonthBar('dp');
   updateDPUserNameLabel();
@@ -6645,6 +6737,7 @@ function initDPIRR() {
   (function(){ var o=document.getElementById('dpVariantModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPVariantModal(); }); })();
   (function(){ var o=document.getElementById('dpConfirmOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPConfirm(); }); })();
   (function(){ var o=document.getElementById('dpChangePinOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPChangePinModal(); }); })();
+  (function(){ var o=document.getElementById('dpDeleteUserOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDeleteUserConfirm(); }); })();
   (function(){ var o=document.getElementById('dpUserSwitchOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPUserSwitchModal(); }); })();
 }
 
@@ -6659,6 +6752,9 @@ function updateDPUserNameLabel() {
   if (badge) badge.style.display = getDPUserIsAdmin() ? '' : 'none';
   var manageTab = document.getElementById('dpViewTabManage');
   if (manageTab) manageTab.style.display = getDPUserIsAdmin() ? '' : 'none';
+  // Month bar has admin-only delete buttons — must be redrawn on every identity
+  // switch, otherwise it keeps showing whatever the PREVIOUS user was allowed to see.
+  renderDPMonthBar('dp');
   // If a non-admin is currently on the Manage Products view (e.g. lost admin status
   // after switching users), bounce them back to Monthly Entries.
   if (!getDPUserIsAdmin() && document.getElementById('dpManageSection') && document.getElementById('dpManageSection').style.display !== 'none') {
@@ -6955,6 +7051,11 @@ function getDealerMasterRowByName(label) {
 
 // ── Entry modal ──
 function openDPEntryModal(seg, monthId, idx) {
+  if (idx === null && !getDPUserName()) {
+    toast('⚠ Please identify yourself before adding an entry');
+    openDPUserSwitchModal(false);
+    return;
+  }
   _dpEditTarget = { seg: seg, monthId: monthId, idx: idx };
   var row = {};
   if (idx !== null) {
@@ -7173,6 +7274,12 @@ function closeDPEntry() {
 
 function saveDPEntry() {
   if (!_dpEditTarget) return;
+  if (_dpEditTarget.idx === null && !getDPUserName()) {
+    toast('⚠ Please identify yourself before adding an entry');
+    closeDPEntry();
+    openDPUserSwitchModal(false);
+    return;
+  }
   var row = {};
   var missing = [];
   DP_COLS.forEach(function(col) {
@@ -7477,7 +7584,7 @@ function renderDPTable(seg, monthId) {
       '</td>';
     if (isAdmin) html += '<td style="padding:7px 12px;white-space:nowrap;color:var(--text-muted);">'+escHtml(r.createdBy||'—')+'</td>';
     DP_COLS.forEach(function(c){
-      var v = String(r[c.key]||'');
+      var v = String(dpVal(r[c.key]));
       if (c.key === 'vfStatus') {
         var statusCol = getDPStatusColor(v);
         var opts = DP_VF_STATUS_OPTS.map(function(o){
@@ -7488,7 +7595,7 @@ function renderDPTable(seg, monthId) {
           'style="background:'+statusCol+'22;color:'+statusCol+';border:1px solid '+statusCol+'44;border-radius:4px;padding:3px 6px;font-size:11px;white-space:nowrap;max-width:170px;">' +
           opts + '</select></td>';
       } else {
-        html += '<td style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(r[c.key]||'').replace(/"/g,"'")+'">'+v+'</td>';
+        html += '<td style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(dpVal(r[c.key])).replace(/"/g,"'")+'">'+v+'</td>';
       }
     });
     html += '<td style="padding:7px 8px;white-space:nowrap;">' +
@@ -7512,6 +7619,7 @@ function toggleDPProductExpand(product) {
 }
 
 function renderDPManageView() {
+  switchDPManageSubview('products');
   var listEl = document.getElementById('dpProductsList');
   if (!listEl) return;
   if (!_dpProducts.length) {
@@ -7581,6 +7689,109 @@ function renderDPManageView() {
     html += '</div>';
   });
   listEl.innerHTML = html;
+}
+
+// ── Manage Products sub-tabs: Products / Users ──
+function switchDPManageSubview(view) {
+  var sections = { products: 'dpManageProductsSubview', users: 'dpManageUsersSubview' };
+  var tabs     = { products: 'dpManageSubTabProducts', users: 'dpManageSubTabUsers' };
+  Object.keys(sections).forEach(function(key) {
+    var active = key === view;
+    document.getElementById(sections[key]).style.display = active ? '' : 'none';
+    var tabEl = document.getElementById(tabs[key]);
+    tabEl.style.color = active ? 'var(--accent)' : 'var(--text-muted)';
+    tabEl.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
+  });
+  if (view === 'users') renderDPUsersList();
+}
+
+function renderDPUsersList() {
+  var el = document.getElementById('dpUsersList');
+  if (!el) return;
+  if (!_dpUsers.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">👤</div><div>No users registered yet.</div></div>';
+    return;
+  }
+  var me = getDPUserName();
+  var adminCount = _dpUsers.filter(function(u){ return u.isAdmin; }).length;
+
+  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+    '<thead><tr style="background:var(--surface2);color:var(--text-muted);text-align:left;">' +
+      '<th style="padding:8px 12px;">Name</th>' +
+      '<th style="padding:8px 12px;">Role</th>' +
+      '<th style="padding:8px 12px;width:70px;">Actions</th>' +
+    '</tr></thead><tbody>';
+
+  _dpUsers.forEach(function(u, i) {
+    var isSelf = u.name.toLowerCase() === me.toLowerCase();
+    var isLastAdmin = u.isAdmin && adminCount <= 1;
+    var disableReason = isSelf ? 'You are currently using this account' : (isLastAdmin ? 'Cannot delete the last remaining admin' : '');
+    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--surface2);':'')+'">' +
+      '<td style="padding:8px 12px;font-weight:600;">'+escHtml(u.name)+(isSelf?' <span style="font-size:10px;color:var(--text-muted);">(you)</span>':'')+'</td>' +
+      '<td style="padding:8px 12px;">' + (u.isAdmin ? '<span style="background:#a78bfa22;color:#a78bfa;border:1px solid #a78bfa44;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;">ADMIN</span>' : '<span style="color:var(--text-muted);font-size:12px;">User</span>') + '</td>' +
+      '<td style="padding:8px 12px;">' +
+        (disableReason
+          ? '<button class="btn btn-secondary btn-sm" disabled title="'+disableReason+'" style="padding:2px 8px;font-size:11px;opacity:0.5;cursor:not-allowed;">🗑</button>'
+          : '<button class="btn btn-danger btn-sm" onclick="openDeleteUserConfirm(\''+escHtml(u.name).replace(/'/g,"\\'")+'\')" style="padding:2px 8px;font-size:11px;" title="Delete this user">🗑</button>') +
+      '</td></tr>';
+  });
+
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+var _pendingDeleteUserName = null;
+
+function openDeleteUserConfirm(name) {
+  _pendingDeleteUserName = name;
+  document.getElementById('dpDeleteUserMessage').textContent =
+    'Delete "' + name + '"? Any entries they created will stay exactly as they are — they just won\'t show up for other regular users anymore. Enter your own admin PIN to confirm.';
+  document.getElementById('dpDeleteUserPin').value = '';
+  document.getElementById('dpDeleteUserOverlay').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('dpDeleteUserPin').focus(); }, 100);
+}
+
+function closeDeleteUserConfirm() {
+  document.getElementById('dpDeleteUserOverlay').style.display = 'none';
+  _pendingDeleteUserName = null;
+}
+
+function confirmDeleteUser() {
+  var pin = document.getElementById('dpDeleteUserPin').value.trim();
+  if (!pin) { toast('⚠ Enter your PIN'); return; }
+  var targetName = _pendingDeleteUserName;
+  if (!targetName) { closeDeleteUserConfirm(); return; }
+
+  API.post('/api/dpirr_users_verify', { name: getDPUserName(), pin: pin }).then(function(res) {
+    if (!res || !res.ok) {
+      toast('⚠ ' + ((res && res.error) || 'Incorrect PIN'));
+      return;
+    }
+    if (!res.isAdmin) {
+      toast('⚠ Only admins can delete users');
+      closeDeleteUserConfirm();
+      return;
+    }
+    deleteDPIRRUserFromSheet(targetName).then(function() {
+      _dpUsers = _dpUsers.filter(function(u){ return u.name !== targetName; });
+      closeDeleteUserConfirm();
+      renderDPUsersList();
+      toast('✅ "' + targetName + '" deleted — their past entries are unaffected');
+    }).catch(function() {
+      toast('❌ Failed to delete user — please try again');
+    });
+  }).catch(function(){ toast('⚠ Server error — please try again'); });
+}
+
+async function deleteDPIRRUserFromSheet(name) {
+  setSaveStatus('saving');
+  try {
+    await API.delete('/api/dpirr_users?name=' + encodeURIComponent(name));
+    setSaveStatus('saved');
+  } catch (e) {
+    setSaveStatus('error');
+    throw e;
+  }
 }
 
 function openDPProductModal(idx) {
@@ -7893,7 +8104,7 @@ function exportDPView(seg, monthId) {
   var header = ['Sr. No.'].concat(isAdmin ? ['Created By'] : []).concat(DP_COLS.map(function(c){ return c.label; }));
   var aoa = [header];
   rows.forEach(function(r, i){
-    var line = [i+1].concat(isAdmin ? [r.createdBy||''] : []).concat(DP_COLS.map(function(c){ return r[c.key]||''; }));
+    var line = [i+1].concat(isAdmin ? [dpVal(r.createdBy)] : []).concat(DP_COLS.map(function(c){ return dpVal(r[c.key]); }));
     aoa.push(line);
   });
   var wb = XLSX.utils.book_new();
@@ -7940,6 +8151,7 @@ var _snapFilter = 0; // 0=all, 1=1M, 3=3M, 6=6M, 12=12M
 var _snapDrillType = ''; // 'poc'|'zone'|'state'|'dealer'
 var _snapDrillValue = '';
 var SNAP_PASS = 'snapshot@1234$';
+(function(){ var o=document.getElementById('snapshotModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeSnapshotModal(); }); })();
 
 
 function onSnapDrillTypeChange() {
@@ -8000,7 +8212,20 @@ function setSnapFilter(n) {
   renderSnapshots();
 }
 
+var _snapPendingDeleteDate = null;
+
 function openSnapshotModal() {
+  _snapPendingDeleteDate = null;
+  document.getElementById('snapshotModalTitle').textContent = '📸 Save Snapshot';
+  document.getElementById('snapshotModalConfirmBtn').textContent = 'Save Snapshot';
+  var el = document.getElementById('snapshotModalOverlay');
+  if (el) { el.style.display = 'flex'; setTimeout(function(){ document.getElementById('snapshotPassword').focus(); },100); }
+}
+
+function openSnapshotDeleteModal(date) {
+  _snapPendingDeleteDate = date;
+  document.getElementById('snapshotModalTitle').textContent = '🗑 Delete Snapshot';
+  document.getElementById('snapshotModalConfirmBtn').textContent = 'Delete Snapshot';
   var el = document.getElementById('snapshotModalOverlay');
   if (el) { el.style.display = 'flex'; setTimeout(function(){ document.getElementById('snapshotPassword').focus(); },100); }
 }
@@ -8009,13 +8234,29 @@ function closeSnapshotModal() {
   var el = document.getElementById('snapshotModalOverlay');
   if (el) el.style.display = 'none';
   var pw = document.getElementById('snapshotPassword'); if (pw) pw.value = '';
+  _snapPendingDeleteDate = null;
 }
 
 async function confirmSnapshot() {
   var pw = document.getElementById('snapshotPassword');
   if (!pw || pw.value !== SNAP_PASS) { toast('⚠ Incorrect password.'); return; }
+  var pendingDelete = _snapPendingDeleteDate;
   closeSnapshotModal();
-  await saveSnapshot();
+  if (pendingDelete) {
+    await deleteSnapshot(pendingDelete);
+  } else {
+    await saveSnapshot();
+  }
+}
+
+async function deleteSnapshot(date) {
+  toast('🗑 Deleting snapshot...');
+  try {
+    await API.delete('/api/snapshots?snapshot_date=' + encodeURIComponent(date));
+    await loadState();
+    renderSnapshots();
+    toast('✅ Snapshot deleted');
+  } catch(e) { toast('❌ Failed to delete snapshot: ' + e.message); }
 }
 
 async function saveSnapshot() {
@@ -8493,6 +8734,7 @@ function renderSnapshots() {
     html += '<th style="padding:8px 12px;text-align:center;">Dealers</th>' +
       '<th style="padding:8px 12px;text-align:center;">Health</th>';
   }
+  html += '<th style="padding:8px 12px;text-align:center;width:50px;">Actions</th>';
   html += '</tr></thead><tbody>';
 
   snaps.forEach(function(s, i) {
@@ -8514,11 +8756,17 @@ function renderSnapshots() {
       PRODS.forEach(function(p){
         html += '<td style="padding:8px 12px;text-align:center;">' + healthBar(s,'health_'+p.key) + '</td>';
       });
+      ['fi_mou_signed','fi_mou_wip','fi_mou_na'].forEach(function(k) {
+        html += '<td style="padding:8px 12px;text-align:center;">' + (s[k]||0) + ' ' + delta(s,prev,k,true) + '</td>';
+      });
     } else {
       var dh = getDrillHealth(s, _snapDrillType, _snapDrillValue);
       html += '<td style="padding:8px 12px;text-align:center;">' + (dh ? dh.total : '—') + '</td>';
       html += '<td style="padding:8px 12px;text-align:center;">' + healthChips(dh) + '</td>';
     }
+    html += '<td style="padding:8px 12px;text-align:center;">' +
+      '<button class="btn btn-danger btn-sm" onclick="openSnapshotDeleteModal(\''+String(s.snapshot_date||'').replace(/'/g,"\\'")+'\')" style="padding:2px 8px;font-size:11px;" title="Delete this snapshot">🗑</button>' +
+      '</td>';
     html += '</tr>';
   });
 

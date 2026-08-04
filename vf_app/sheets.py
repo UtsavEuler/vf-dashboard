@@ -95,6 +95,7 @@ MATCH_KEYS = {
     "dpirr_models": ["product", "name"],
     "dpirr_variants": ["product", "model", "variant"],
     "dpirr_users": ["name"],
+    "snapshots": ["snapshot_date"],
 }
 
 # Aliases that support each verb (mirrors server.py exactly).
@@ -109,8 +110,12 @@ UPSERT_ALIASES = ["fi_master", "dealer_master", "added_dealers", "onboarding",
                   "dpirr_models"]
 # dpirr_products / dpirr_models / dpirr_months are deliberately absent: their
 # DELETEs cascade into child rows, so routes.py owns explicit handlers for them.
+# dpirr_users deletion deliberately does NOT cascade to dpirr_entries — a
+# deleted user's past entries are left exactly as they are (still attributed
+# to that name), so no historical record is ever silently destroyed.
 DELETE_ALIASES = ["fi_master", "dealer_master", "added_dealers", "onboarding",
-                  "fi_policy_geo", "dpirr_entries", "dpirr_variants"]
+                  "fi_policy_geo", "dpirr_entries", "dpirr_variants",
+                  "snapshots", "dpirr_users"]
 
 # /api/bootstrap reads every listed sheet in ONE request. With 13 worksheets that
 # is 13+ sequential Google round-trips, which risks blowing the Vercel function
