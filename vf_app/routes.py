@@ -298,12 +298,20 @@ def create_app(config=None, adapter=None):
         old_variant = str(raw_old).strip() if raw_old is not None else ""
         old_variant = old_variant or variant
         try:
-            _adapter().upsert(
+            ad = _adapter()
+            ad.upsert(
                 "dpirr_variants",
                 {"product": product, "model": model, "variant": old_variant},
                 {"product": product, "model": model, "variant": variant,
                  "esp": esp},
             )
+            if old_variant != variant:
+                # Renaming a variant must carry its state-ESP overrides along.
+                ad.bulk_update(
+                    "dpirr_variant_state_esp",
+                    {"product": product, "model": model, "variant": old_variant},
+                    {"variant": variant},
+                )
             _structured_log("/api/dpirr_variants", "write", "dpirr_variants",
                             "ok", started)
             return jsonify({"ok": True})
@@ -312,9 +320,31 @@ def create_app(config=None, adapter=None):
                             "error", started)
             raise
 
+    @app.route("/api/dpirr_variants", methods=["DELETE"])
+    def dpirr_variants_delete():
+        """Delete a variant and cascade-delete any state-ESP overrides on it."""
+        started = time.monotonic()
+        product, model, variant = _require(request.args, "product", "model",
+                                           "variant")
+        try:
+            ad = _adapter()
+            ad.delete("dpirr_variants",
+                      {"product": product, "model": model, "variant": variant})
+            ad.bulk_delete("dpirr_variant_state_esp",
+                          {"product": product, "model": model,
+                           "variant": variant})
+            _structured_log("/api/dpirr_variants", "delete", "dpirr_variants",
+                            "ok", started)
+            return jsonify({"ok": True})
+        except Exception:
+            _structured_log("/api/dpirr_variants", "delete", "dpirr_variants",
+                            "error", started)
+            raise
+
     @app.route("/api/dpirr_products", methods=["DELETE"])
     def dpirr_products_delete():
-        """Delete a product and cascade-delete all its models and variants."""
+        """Delete a product and cascade-delete all its models, variants, and
+        any state-ESP overrides on those variants."""
         started = time.monotonic()
         (name,) = _require(request.args, "name")
         try:
@@ -322,6 +352,7 @@ def create_app(config=None, adapter=None):
             ad.delete("dpirr_products", {"name": name})
             ad.bulk_delete("dpirr_models", {"product": name})
             ad.bulk_delete("dpirr_variants", {"product": name})
+            ad.bulk_delete("dpirr_variant_state_esp", {"product": name})
             _structured_log("/api/dpirr_products", "delete", "dpirr_products",
                             "ok", started)
             return jsonify({"ok": True})
@@ -332,13 +363,16 @@ def create_app(config=None, adapter=None):
 
     @app.route("/api/dpirr_models", methods=["DELETE"])
     def dpirr_models_delete():
-        """Delete a model and cascade-delete all its variants."""
+        """Delete a model and cascade-delete all its variants and any
+        state-ESP overrides on those variants."""
         started = time.monotonic()
         product, name = _require(request.args, "product", "name")
         try:
             ad = _adapter()
             ad.delete("dpirr_models", {"product": product, "name": name})
             ad.bulk_delete("dpirr_variants", {"product": product, "model": name})
+            ad.bulk_delete("dpirr_variant_state_esp",
+                          {"product": product, "model": name})
             _structured_log("/api/dpirr_models", "delete", "dpirr_models", "ok",
                             started)
             return jsonify({"ok": True})

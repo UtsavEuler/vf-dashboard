@@ -38,6 +38,11 @@ WORKSHEETS = {
     "dpirr_products": "DPIRR_Products",
     "dpirr_models": "DPIRR_Models",
     "dpirr_variants": "DPIRR_Variants",
+    # Optional per-state ESP overrides (e.g. a state government subsidy that
+    # changes the effective price). Deliberately its own table, not extra
+    # columns — adding a new state later is just a new row, never a schema
+    # change, no matter how many states eventually offer one.
+    "dpirr_variant_state_esp": "DPIRR_VariantStateEsp",
     # PIN-protected identity for DP/IRR entry attribution. Deliberately absent
     # from READ_ALIASES/UPSERT_ALIASES/DELETE_ALIASES below — pinHash must never
     # be exposed via the generic /api/<alias> routes, so routes.py owns explicit
@@ -58,6 +63,7 @@ DPIRR_ENTRY_HEADERS = [
 DPIRR_PRODUCT_HEADERS = ["name"]
 DPIRR_MODEL_HEADERS = ["product", "name"]
 DPIRR_VARIANT_HEADERS = ["product", "model", "variant", "esp"]
+DPIRR_VARIANT_STATE_ESP_HEADERS = ["product", "model", "variant", "state", "esp"]
 DPIRR_USER_HEADERS = ["name", "pinHash", "isAdmin", "createdAt"]
 
 
@@ -77,6 +83,7 @@ AUTO_CREATE_HEADERS = {
     "dpirr_products": DPIRR_PRODUCT_HEADERS,
     "dpirr_models": DPIRR_MODEL_HEADERS,
     "dpirr_variants": DPIRR_VARIANT_HEADERS,
+    "dpirr_variant_state_esp": DPIRR_VARIANT_STATE_ESP_HEADERS,
     "dpirr_users": DPIRR_USER_HEADERS,
 }
 
@@ -94,6 +101,7 @@ MATCH_KEYS = {
     "dpirr_products": ["name"],
     "dpirr_models": ["product", "name"],
     "dpirr_variants": ["product", "model", "variant"],
+    "dpirr_variant_state_esp": ["product", "model", "variant", "state"],
     "dpirr_users": ["name"],
     "snapshots": ["snapshot_date"],
 }
@@ -107,15 +115,17 @@ READ_ALIASES = [a for a in WORKSHEETS.keys() if a != "dpirr_users"]
 UPSERT_ALIASES = ["fi_master", "dealer_master", "added_dealers", "onboarding",
                   "fi_policy", "dealer_health", "fi_policy_geo",
                   "dpirr_months", "dpirr_entries", "dpirr_products",
-                  "dpirr_models"]
+                  "dpirr_models", "dpirr_variant_state_esp"]
 # dpirr_products / dpirr_models / dpirr_months are deliberately absent: their
 # DELETEs cascade into child rows, so routes.py owns explicit handlers for them.
+# dpirr_variants is deliberately absent too now: deleting a variant must also
+# clean up any state-ESP overrides tied to it, so routes.py owns that handler.
 # dpirr_users deletion deliberately does NOT cascade to dpirr_entries — a
 # deleted user's past entries are left exactly as they are (still attributed
 # to that name), so no historical record is ever silently destroyed.
 DELETE_ALIASES = ["fi_master", "dealer_master", "added_dealers", "onboarding",
-                  "fi_policy_geo", "dpirr_entries", "dpirr_variants",
-                  "snapshots", "dpirr_users"]
+                  "fi_policy_geo", "dpirr_entries", "snapshots", "dpirr_users",
+                  "dpirr_variant_state_esp"]
 
 # /api/bootstrap reads every listed sheet in ONE request. With 13 worksheets that
 # is 13+ sequential Google round-trips, which risks blowing the Vercel function

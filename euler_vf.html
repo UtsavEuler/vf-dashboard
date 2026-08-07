@@ -1822,6 +1822,34 @@
   </div>
 </div>
 
+<!-- DP/IRR State-Specific ESP Overrides Modal -->
+<div class="modal-overlay" id="dpStateEspOverlay" style="display:none;">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header"><div class="modal-title" id="dpStateEspTitle">🌍 State ESP Overrides</div><button class="modal-close" onclick="closeDPStateEspModal()">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="dpStateEspProduct">
+      <input type="hidden" id="dpStateEspModel">
+      <input type="hidden" id="dpStateEspVariant">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Set a different ESP for specific states — e.g. when a state government subsidy changes the effective price. States without an override here just use the variant's normal ESP.</div>
+      <div id="dpStateEspList" style="margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;align-items:flex-end;border-top:1px solid var(--border);padding-top:12px;">
+        <div class="form-group" style="margin:0;flex:1;">
+          <label class="form-label">State</label>
+          <input type="text" class="form-select" id="dpStateEspNewState" placeholder="e.g. Maharashtra">
+        </div>
+        <div class="form-group" style="margin:0;flex:1;">
+          <label class="form-label">ESP (₹)</label>
+          <input type="number" class="form-select" id="dpStateEspNewEsp" step="any" placeholder="e.g. 580000">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="addDPStateEspOverride()" style="padding:8px 12px;">＋ Add</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDPStateEspModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- DP/IRR Generic Confirm Modal (product/model delete) -->
 <div class="modal-overlay" id="dpConfirmOverlay" style="display:none;">
   <div class="modal" style="max-width:380px;">
@@ -2102,7 +2130,8 @@ async function loadState() {
       '/api/dpirr_products',
       '/api/dpirr_models',
       '/api/dpirr_variants',
-      '/api/dpirr_users'
+      '/api/dpirr_users',
+      '/api/dpirr_variant_state_esp'
     ];
     const settled = await Promise.allSettled(READ_PATHS.map(function(p){ return API.get(p); }));
     const failedReads = READ_PATHS.filter(function(p, i){ return settled[i].status === 'rejected'; });
@@ -2112,7 +2141,7 @@ async function loadState() {
     state.failedReads = failedReads;
     const settledValues = settled.map(function(s){ return s.status === 'fulfilled' ? s.value : null; });
     const [fiMaster, dealerMaster, addedDealers, onboarding, fiPolicy, dealerHealth, fiPolicyGeo, snapshots,
-           dpirrMonths, dpirrEntries, dpirrProducts, dpirrModels, dpirrVariants, dpirrUsers] = settledValues;
+           dpirrMonths, dpirrEntries, dpirrProducts, dpirrModels, dpirrVariants, dpirrUsers, dpirrStateEsp] = settledValues;
 
     // Ensure all responses are arrays
     const toArr = v => Array.isArray(v) ? v : [];
@@ -2221,8 +2250,18 @@ async function loadState() {
       var models   = toArr(dpirrModels);
       var variants = toArr(dpirrVariants);
       var usersRaw = toArr(dpirrUsers);
+      var stateEspRaw = toArr(dpirrStateEsp);
 
       _dpUsers = usersRaw.filter(u => u && u.name).map(u => ({ name: u.name, isAdmin: String(u.isAdmin||'').toLowerCase()==='true' }));
+
+      _dpStateEspOverrides = {};
+      stateEspRaw.forEach(function(o) {
+        if (!o || !o.product || !o.model || !o.variant || !o.state) return;
+        _dpStateEspOverrides[o.product] = _dpStateEspOverrides[o.product] || {};
+        _dpStateEspOverrides[o.product][o.model] = _dpStateEspOverrides[o.product][o.model] || {};
+        _dpStateEspOverrides[o.product][o.model][o.variant] = _dpStateEspOverrides[o.product][o.model][o.variant] || {};
+        _dpStateEspOverrides[o.product][o.model][o.variant][o.state] = o.esp;
+      });
 
       // Months
       _dpMonths.dp = months.filter(m => m && m.id).map(m => ({ id: m.id, label: m.label }));
@@ -6571,6 +6610,7 @@ var _dpFilters     = {};             // monthId -> {dealer:[],product:[],model:[
 var _dpActiveMonth = { 'dp': null };
 var _dpEditTarget  = null; // {seg, monthId, idx}
 var _dpUsers = []; // [{name, isAdmin}] fetched from DPIRR_Users sheet
+var _dpStateEspOverrides = {}; // _dpStateEspOverrides[product][model][variant][state] = esp
 var _dpDeleteTarget= null; // {seg, monthId, idx}
 
 var DP_PRODUCT_OPTS = ['Storm','Turbo','3WC','3WP'];
@@ -6735,6 +6775,7 @@ function initDPIRR() {
   (function(){ var o=document.getElementById('dpProductModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPProductModal(); }); })();
   (function(){ var o=document.getElementById('dpModelModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPModelModal(); }); })();
   (function(){ var o=document.getElementById('dpVariantModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPVariantModal(); }); })();
+  (function(){ var o=document.getElementById('dpStateEspOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPStateEspModal(); }); })();
   (function(){ var o=document.getElementById('dpConfirmOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPConfirm(); }); })();
   (function(){ var o=document.getElementById('dpChangePinOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPChangePinModal(); }); })();
   (function(){ var o=document.getElementById('dpDeleteUserOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDeleteUserConfirm(); }); })();
@@ -7156,6 +7197,23 @@ function onDPCreateMultipleToggle() {
   if (cb && wrap) wrap.style.display = cb.checked ? '' : 'none';
 }
 
+// Returns the correct ESP for a variant given a dealer's state — checks for a
+// state-specific override first (e.g. a state subsidy), falls back to the
+// variant's normal ESP otherwise. Returns null if the variant itself isn't found.
+function computeDPEsp(product, model, variant, state) {
+  var modelObj = getDPModelObj(product, model);
+  var variantObj = modelObj && (modelObj.variants || []).find(function(v){ return v.variant === variant; });
+  var base = variantObj ? variantObj.esp : null;
+  if (state) {
+    var byProduct = _dpStateEspOverrides[product];
+    var byModel   = byProduct && byProduct[model];
+    var byVariant = byModel && byModel[variant];
+    var override  = byVariant && byVariant[state];
+    if (override !== undefined && override !== null && override !== '') return override;
+  }
+  return base;
+}
+
 function onDPDealerChange() {
   var sel = document.getElementById('dpModal_dealerName');
   if (!sel) return;
@@ -7171,6 +7229,17 @@ function onDPDealerChange() {
   if (salesEl) salesEl.value = d.rmSales || '';
   if (vfEl)    vfEl.value    = d.vfPoc || '';
   if (cocoEl)  cocoEl.value  = d.dodoCocoType || '';
+
+  // ESP can vary by state (e.g. a state government subsidy) — recompute it if
+  // a variant is already selected, now that the state may have changed.
+  var productEl = document.getElementById('dpModal_product');
+  var modelEl   = document.getElementById('dpModal_model');
+  var variantEl = document.getElementById('dpModal_variant');
+  var espEl     = document.getElementById('dpModal_esp');
+  if (productEl && modelEl && variantEl && variantEl.value && espEl) {
+    var esp = computeDPEsp(productEl.value, modelEl.value, variantEl.value, stateEl ? stateEl.value : '');
+    if (esp !== null && esp !== undefined) espEl.value = esp;
+  }
 }
 
 function buildDPModelOptionsHtml(product, selectedName) {
@@ -7231,11 +7300,10 @@ function onDPVariantChange() {
   var modelEl   = document.getElementById('dpModal_model');
   var variantEl = document.getElementById('dpModal_variant');
   var espEl     = document.getElementById('dpModal_esp');
+  var stateEl   = document.getElementById('dpModal_state');
   if (!productEl || !modelEl || !variantEl || !espEl) return;
-  var model = getDPModelObj(productEl.value, modelEl.value);
-  var variants = (model && model.variants) || [];
-  var v = variants.find(function(x){ return x.variant === variantEl.value; });
-  if (v) espEl.value = v.esp;
+  var esp = computeDPEsp(productEl.value, modelEl.value, variantEl.value, stateEl ? stateEl.value : '');
+  if (esp !== null && esp !== undefined) espEl.value = esp;
 }
 
 // Down Payment = ORP − LTV ; Effective DP = Down Payment − Discount
@@ -7672,10 +7740,12 @@ function renderDPManageView() {
               '</tr></thead><tbody>';
             variants.forEach(function(v, k) {
               var espFmt = isNaN(Number(v.esp)) ? v.esp : Number(v.esp).toLocaleString('en-IN');
+              var overrideCount = Object.keys((_dpStateEspOverrides[product] && _dpStateEspOverrides[product][m.name] && _dpStateEspOverrides[product][m.name][v.variant]) || {}).length;
               html += '<tr style="border-bottom:1px solid var(--border);">' +
                 '<td style="padding:5px 8px;">'+escHtml(v.variant)+'</td>' +
                 '<td style="padding:5px 8px;">₹'+espFmt+'</td>' +
                 '<td style="padding:5px 8px;white-space:nowrap;">' +
+                  '<button class="btn btn-secondary btn-sm" onclick="openDPStateEspModal(\''+escHtml(product)+'\',\''+escHtml(m.name)+'\',\''+escHtml(v.variant)+'\')" style="padding:1px 7px;font-size:10.5px;" title="State-specific ESP overrides">🌍'+(overrideCount?' '+overrideCount:'')+'</button> ' +
                   '<button class="btn btn-secondary btn-sm" onclick="openDPVariantModal(\''+escHtml(product)+'\','+j+','+k+')" style="padding:1px 7px;font-size:10.5px;">✏️</button> ' +
                   '<button class="btn btn-danger btn-sm" onclick="deleteDPVariant(\''+escHtml(product)+'\','+j+','+k+')" style="padding:1px 7px;font-size:10.5px;">🗑</button>' +
                 '</td></tr>';
@@ -7951,9 +8021,105 @@ function deleteDPVariant(product, modelIdx, variantIdx) {
   openDPConfirm('Delete variant "'+v.variant+'" from '+product+' / '+model.name+'?', function() {
     model.variants.splice(variantIdx, 1);
     deleteDPIRRVariantFromSheet(product, model.name, v.variant);
+    if (_dpStateEspOverrides[product] && _dpStateEspOverrides[product][model.name]) {
+      delete _dpStateEspOverrides[product][model.name][v.variant];
+    }
     renderDPManageView();
     toast('🗑 Variant deleted');
   });
+}
+
+// ── State-specific ESP overrides ──
+function openDPStateEspModal(product, model, variant) {
+  document.getElementById('dpStateEspProduct').value = product;
+  document.getElementById('dpStateEspModel').value = model;
+  document.getElementById('dpStateEspVariant').value = variant;
+  document.getElementById('dpStateEspTitle').textContent = '🌍 ' + product + ' / ' + model + ' / ' + variant;
+  document.getElementById('dpStateEspNewState').value = '';
+  document.getElementById('dpStateEspNewEsp').value = '';
+  renderDPStateEspList();
+  document.getElementById('dpStateEspOverlay').style.display = 'flex';
+}
+
+function closeDPStateEspModal() {
+  document.getElementById('dpStateEspOverlay').style.display = 'none';
+}
+
+function renderDPStateEspList() {
+  var product = document.getElementById('dpStateEspProduct').value;
+  var model   = document.getElementById('dpStateEspModel').value;
+  var variant = document.getElementById('dpStateEspVariant').value;
+  var overrides = (_dpStateEspOverrides[product] && _dpStateEspOverrides[product][model] && _dpStateEspOverrides[product][model][variant]) || {};
+  var states = Object.keys(overrides).sort();
+
+  var el = document.getElementById('dpStateEspList');
+  if (!states.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No state overrides yet — this variant uses its normal ESP everywhere.</div>';
+    return;
+  }
+  var html = '<div style="display:grid;gap:6px;">';
+  states.forEach(function(state) {
+    var espFmt = isNaN(Number(overrides[state])) ? overrides[state] : Number(overrides[state]).toLocaleString('en-IN');
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">' +
+      '<span style="font-size:13px;"><strong>'+escHtml(state)+'</strong> — ₹'+espFmt+'</span>' +
+      '<button class="btn btn-danger btn-sm" onclick="removeDPStateEspOverride(\''+escHtml(state).replace(/'/g,"\\'")+'\')" style="padding:1px 7px;font-size:10.5px;">🗑</button>' +
+    '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function addDPStateEspOverride() {
+  var product = document.getElementById('dpStateEspProduct').value;
+  var model   = document.getElementById('dpStateEspModel').value;
+  var variant = document.getElementById('dpStateEspVariant').value;
+  var state = document.getElementById('dpStateEspNewState').value.trim();
+  var esp   = document.getElementById('dpStateEspNewEsp').value.trim();
+  if (!state) { toast('⚠ Enter a state name'); return; }
+  if (!esp)   { toast('⚠ Enter an ESP value'); return; }
+
+  _dpStateEspOverrides[product] = _dpStateEspOverrides[product] || {};
+  _dpStateEspOverrides[product][model] = _dpStateEspOverrides[product][model] || {};
+  _dpStateEspOverrides[product][model][variant] = _dpStateEspOverrides[product][model][variant] || {};
+  _dpStateEspOverrides[product][model][variant][state] = esp;
+
+  saveDPIRRStateEspToSheet(product, model, variant, state, esp);
+  document.getElementById('dpStateEspNewState').value = '';
+  document.getElementById('dpStateEspNewEsp').value = '';
+  renderDPStateEspList();
+  renderDPManageView();
+  toast('✅ ' + state + ' override saved');
+}
+
+function removeDPStateEspOverride(state) {
+  var product = document.getElementById('dpStateEspProduct').value;
+  var model   = document.getElementById('dpStateEspModel').value;
+  var variant = document.getElementById('dpStateEspVariant').value;
+  if (_dpStateEspOverrides[product] && _dpStateEspOverrides[product][model] && _dpStateEspOverrides[product][model][variant]) {
+    delete _dpStateEspOverrides[product][model][variant][state];
+  }
+  deleteDPIRRStateEspFromSheet(product, model, variant, state);
+  renderDPStateEspList();
+  renderDPManageView();
+  toast('🗑 ' + state + ' override removed');
+}
+
+async function saveDPIRRStateEspToSheet(product, model, variant, state, esp) {
+  setSaveStatus('saving');
+  try {
+    await API.post('/api/dpirr_variant_state_esp', { product: product, model: model, variant: variant, state: state, esp: esp });
+    setSaveStatus('saved');
+  } catch (e) { setSaveStatus('error'); }
+}
+
+async function deleteDPIRRStateEspFromSheet(product, model, variant, state) {
+  setSaveStatus('saving');
+  try {
+    await API.delete('/api/dpirr_variant_state_esp?product=' + encodeURIComponent(product) +
+      '&model=' + encodeURIComponent(model) + '&variant=' + encodeURIComponent(variant) +
+      '&state=' + encodeURIComponent(state));
+    setSaveStatus('saved');
+  } catch (e) { setSaveStatus('error'); }
 }
 
 // ── Bulk model upload via Excel ──
