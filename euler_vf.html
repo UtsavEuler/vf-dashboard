@@ -2271,7 +2271,7 @@ async function loadState() {
       entries.forEach(function(e) {
         if (!e || !e.id || !e.monthId) return;
         if (!_dpData.dp[e.monthId]) _dpData.dp[e.monthId] = [];
-        var row = { '_id': e.id, 'Sr. No.': e.srNo || (_dpData.dp[e.monthId].length + 1), 'createdBy': e.createdBy || '' };
+        var row = { '_id': e.id, 'Sr. No.': e.srNo || (_dpData.dp[e.monthId].length + 1), 'createdBy': e.createdBy || '', 'isSelfFinance': e.isSelfFinance || 'false' };
         DP_COLS.forEach(function(c) { row[c.key] = dpVal(e[c.key]); });
         _dpData.dp[e.monthId].push(row);
       });
@@ -7147,7 +7147,14 @@ function openDPEntryModal(seg, monthId, idx) {
       var fopts = ['<option value="">— Select Financier —</option>'].concat(financiers.map(function(f){
         return '<option value="'+escHtml(f)+'"'+(val===f?' selected':'')+'>'+escHtml(f)+'</option>';
       })).join('');
-      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+      var isSelfFinanceChecked = row.isSelfFinance === 'true';
+      body += '<div class="form-group" style="margin:0;grid-column:1 / -1;display:flex;align-items:center;gap:8px;">' +
+        '<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer;margin:0;">' +
+          '<input type="checkbox" id="dpModal_isSelfFinance" onchange="onDPSelfFinanceToggle()"'+(isSelfFinanceChecked?' checked':'')+'> Self Finance' +
+        '</label>' +
+        '<span style="font-size:11px;color:var(--text-muted);">(customer arranged their own financing — Financier may be unknown)</span>' +
+      '</div>' +
+      '<div class="form-group" style="margin:0;"><label class="form-label" id="dpFinancierLabel">'+reqLabel(col)+'</label>' +
         '<select class="form-select" id="'+fieldId+'">'+fopts+'</select></div>';
     } else if (col.type === 'select-status') {
       var sopts = ['<option value="">— Select Status —</option>'].concat(DP_VF_STATUS_OPTS.map(function(o){
@@ -7187,6 +7194,7 @@ function openDPEntryModal(seg, monthId, idx) {
   document.getElementById('dpEntryBody').innerHTML = body;
   document.getElementById('dpEntryOverlay').style.display = 'flex';
   recalcDPFinancials();
+  onDPSelfFinanceToggle();
 
   // If editing and dealer already set, ensure auto fields populated (already are from row)
 }
@@ -7307,6 +7315,18 @@ function onDPVariantChange() {
 }
 
 // Down Payment = ORP − LTV ; Effective DP = Down Payment − Discount
+// Financier is normally mandatory, but not when the customer arranged their
+// own financing (Self Finance) — in that case any financier, or none Euler
+// tracks, may be involved, so it shouldn't block saving the entry.
+function onDPSelfFinanceToggle() {
+  var cb = document.getElementById('dpModal_isSelfFinance');
+  var label = document.getElementById('dpFinancierLabel');
+  if (!cb || !label) return;
+  label.innerHTML = cb.checked
+    ? 'Financier <span style="font-size:10px;color:var(--text-muted);">(optional — Self Finance)</span>'
+    : 'Financier <span style="color:var(--flag);">*</span>';
+}
+
 function recalcDPFinancials() {
   var orpEl      = document.getElementById('dpModal_orp');
   var ltvEl      = document.getElementById('dpModal_ltv');
@@ -7350,11 +7370,15 @@ function saveDPEntry() {
   }
   var row = {};
   var missing = [];
+  var isSelfFinanceEl = document.getElementById('dpModal_isSelfFinance');
+  var isSelfFinance = !!(isSelfFinanceEl && isSelfFinanceEl.checked);
+  row.isSelfFinance = isSelfFinance ? 'true' : 'false';
   DP_COLS.forEach(function(col) {
     var el = document.getElementById('dpModal_' + col.key);
     var v = el ? el.value.trim() : '';
     row[col.key] = v;
-    if (col.required && !v) missing.push(col.label);
+    var isRequired = col.required && !(col.key === 'financier' && isSelfFinance);
+    if (isRequired && !v) missing.push(col.label);
   });
   if (missing.length) {
     toast('⚠ Required: ' + missing.join(', '));
@@ -7386,7 +7410,7 @@ function saveDPEntry() {
     row['createdBy'] = arr[idx]['createdBy'] || getDPUserName();
     arr[idx] = row;
 
-    var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'] };
+    var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'], isSelfFinance: row.isSelfFinance };
     DP_COLS.forEach(function(col) { payload[col.key] = row[col.key] || ''; });
     saveDPIRREntryToSheet(payload);
 
@@ -7402,7 +7426,7 @@ function saveDPEntry() {
       newRows.push(clone);
     }
     var bulkPayload = newRows.map(function(r) {
-      var p = { id: r['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: r['Sr. No.'], createdBy: r['createdBy'] };
+      var p = { id: r['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: r['Sr. No.'], createdBy: r['createdBy'], isSelfFinance: r.isSelfFinance };
       DP_COLS.forEach(function(col) { p[col.key] = r[col.key] || ''; });
       return p;
     });
@@ -7417,7 +7441,7 @@ function saveDPEntry() {
     row['createdBy'] = getDPUserName();
     arr.push(row);
 
-    var payload2 = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'] };
+    var payload2 = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'], isSelfFinance: row.isSelfFinance };
     DP_COLS.forEach(function(col) { payload2[col.key] = row[col.key] || ''; });
     saveDPIRREntryToSheet(payload2);
   }
