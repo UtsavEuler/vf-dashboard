@@ -7118,7 +7118,8 @@ function openDPEntryModal(seg, monthId, idx) {
         '<input type="text" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'"></div>';
     } else if (col.type === 'number') {
       var calcTrigger = (col.key === 'orp' || col.key === 'ltv' || col.key === 'discount') ? ' onchange="recalcDPFinancials()" oninput="recalcDPFinancials()"' : '';
-      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+      var labelId = col.key === 'irr' ? ' id="dpIrrLabel"' : '';
+      body += '<div class="form-group" style="margin:0;"><label class="form-label"'+labelId+'>'+reqLabel(col)+'</label>' +
         '<input type="number" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" step="any"'+calcTrigger+'></div>';
     } else if (col.type === 'calc') {
       body += '<div class="form-group" style="margin:0;"><label class="form-label">'+col.label+' <span style="font-size:10px;color:var(--text-muted);">(calculated)</span></label>' +
@@ -7315,16 +7316,24 @@ function onDPVariantChange() {
 }
 
 // Down Payment = ORP − LTV ; Effective DP = Down Payment − Discount
-// Financier is normally mandatory, but not when the customer arranged their
-// own financing (Self Finance) — in that case any financier, or none Euler
-// tracks, may be involved, so it shouldn't block saving the entry.
+// Financier and IRR are normally mandatory, but not when the customer arranged
+// their own financing (Self Finance) — in that case any financier (or none
+// Euler tracks) may be involved, and the deal's IRR may not be known/relevant.
 function onDPSelfFinanceToggle() {
   var cb = document.getElementById('dpModal_isSelfFinance');
-  var label = document.getElementById('dpFinancierLabel');
-  if (!cb || !label) return;
-  label.innerHTML = cb.checked
-    ? 'Financier <span style="font-size:10px;color:var(--text-muted);">(optional — Self Finance)</span>'
-    : 'Financier <span style="color:var(--flag);">*</span>';
+  if (!cb) return;
+  var financierLabel = document.getElementById('dpFinancierLabel');
+  if (financierLabel) {
+    financierLabel.innerHTML = cb.checked
+      ? 'Financier <span style="font-size:10px;color:var(--text-muted);">(optional — Self Finance)</span>'
+      : 'Financier <span style="color:var(--flag);">*</span>';
+  }
+  var irrLabel = document.getElementById('dpIrrLabel');
+  if (irrLabel) {
+    irrLabel.innerHTML = cb.checked
+      ? 'IRR (%) <span style="font-size:10px;color:var(--text-muted);">(optional — Self Finance)</span>'
+      : 'IRR (%) <span style="color:var(--flag);">*</span>';
+  }
 }
 
 function recalcDPFinancials() {
@@ -7377,7 +7386,7 @@ function saveDPEntry() {
     var el = document.getElementById('dpModal_' + col.key);
     var v = el ? el.value.trim() : '';
     row[col.key] = v;
-    var isRequired = col.required && !(col.key === 'financier' && isSelfFinance);
+    var isRequired = col.required && !((col.key === 'financier' || col.key === 'irr') && isSelfFinance);
     if (isRequired && !v) missing.push(col.label);
   });
   if (missing.length) {
