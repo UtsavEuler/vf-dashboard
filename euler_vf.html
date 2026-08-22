@@ -6648,6 +6648,7 @@ var DP_COLS = [
   { key:'vfStatus',      label:'VF Status',           type:'select-status',    numeric:false, required:true },
   { key:'remarks',       label:'Remarks',             type:'text',   numeric:false, required:false },
   { key:'fundingType',   label:'Type of Funding',     type:'select-funding',   numeric:false, required:true },
+  { key:'loanTenure',    label:'Loan Tenure (months)', type:'number', numeric:true, required:true },
   { key:'irr',           label:'IRR (%)',             type:'number', numeric:true, required:true },
   { key:'esp',           label:'ESP',                 type:'auto',   numeric:true, required:true },
   { key:'orp',           label:'ORP',                 type:'number', numeric:true, required:true },
@@ -7119,8 +7120,9 @@ function openDPEntryModal(seg, monthId, idx) {
     } else if (col.type === 'number') {
       var calcTrigger = (col.key === 'orp' || col.key === 'ltv' || col.key === 'discount') ? ' onchange="recalcDPFinancials()" oninput="recalcDPFinancials()"' : '';
       var labelId = col.key === 'irr' ? ' id="dpIrrLabel"' : '';
+      var minAttr = col.key === 'discount' ? ' min="0"' : (col.key === 'loanTenure' ? ' min="1"' : '');
       body += '<div class="form-group" style="margin:0;"><label class="form-label"'+labelId+'>'+reqLabel(col)+'</label>' +
-        '<input type="number" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" step="any"'+calcTrigger+'></div>';
+        '<input type="number" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" step="any"'+minAttr+calcTrigger+'></div>';
     } else if (col.type === 'calc') {
       body += '<div class="form-group" style="margin:0;"><label class="form-label">'+col.label+' <span style="font-size:10px;color:var(--text-muted);">(calculated)</span></label>' +
         '<input type="number" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" step="any" readonly style="opacity:0.75;cursor:not-allowed;"></div>';
@@ -7249,6 +7251,7 @@ function onDPDealerChange() {
     var esp = computeDPEsp(productEl.value, modelEl.value, variantEl.value, stateEl ? stateEl.value : '');
     if (esp !== null && esp !== undefined) espEl.value = esp;
   }
+  recalcDPFinancials();
 }
 
 function buildDPModelOptionsHtml(product, selectedName) {
@@ -7313,6 +7316,7 @@ function onDPVariantChange() {
   if (!productEl || !modelEl || !variantEl || !espEl) return;
   var esp = computeDPEsp(productEl.value, modelEl.value, variantEl.value, stateEl ? stateEl.value : '');
   if (esp !== null && esp !== undefined) espEl.value = esp;
+  recalcDPFinancials();
 }
 
 // Down Payment = ORP − LTV ; Effective DP = Down Payment − Discount
@@ -7342,6 +7346,7 @@ function recalcDPFinancials() {
   var discEl     = document.getElementById('dpModal_discount');
   var dpEl       = document.getElementById('dpModal_downPayment');
   var effDpEl    = document.getElementById('dpModal_effectiveDp');
+  var espEl      = document.getElementById('dpModal_esp');
   if (!dpEl) return;
 
   var orp = parseFloat(orpEl ? orpEl.value : '');
@@ -7352,6 +7357,19 @@ function recalcDPFinancials() {
     dpEl.value = downPayment;
   } else {
     dpEl.value = '';
+  }
+  // Down Payment is calculated (ORP − LTV), not typed directly — if LTV
+  // exceeds ORP the result goes negative, which signals a data entry issue.
+  dpEl.style.color = (downPayment !== null && downPayment < 0) ? '#f87171' : '';
+  dpEl.title = (downPayment !== null && downPayment < 0) ? 'Negative — check ORP and LTV, LTV should not exceed ORP' : '';
+
+  // ORP should never be below the variant's Ex-Showroom Price (ORP = ESP +
+  // registration/insurance/etc.) — flag it live, before the user even saves.
+  if (orpEl && espEl) {
+    var esp = parseFloat(espEl.value);
+    var orpTooLow = !isNaN(orp) && !isNaN(esp) && orp < esp;
+    orpEl.style.color = orpTooLow ? '#f87171' : '';
+    orpEl.title = orpTooLow ? 'ORP cannot be less than the Ex-Showroom Price (₹' + espEl.value + ')' : '';
   }
 
   if (effDpEl) {
@@ -7379,18 +7397,47 @@ function saveDPEntry() {
   }
   var row = {};
   var missing = [];
+  var negativeFields = [];
+  var invalidPositiveFields = [];
   var isSelfFinanceEl = document.getElementById('dpModal_isSelfFinance');
   var isSelfFinance = !!(isSelfFinanceEl && isSelfFinanceEl.checked);
   row.isSelfFinance = isSelfFinance ? 'true' : 'false';
+  var isNewEntry = _dpEditTarget.idx === null;
   DP_COLS.forEach(function(col) {
     var el = document.getElementById('dpModal_' + col.key);
     var v = el ? el.value.trim() : '';
     row[col.key] = v;
-    var isRequired = col.required && !((col.key === 'financier' || col.key === 'irr') && isSelfFinance);
+    // Loan Tenure is mandatory only for entries created from now on — editing
+    // an entry that predates this field should never be blocked by it.
+    var isRequired = col.required
+      && !((col.key === 'financier' || col.key === 'irr') && isSelfFinance)
+      && !(col.key === 'loanTenure' && !isNewEntry);
     if (isRequired && !v) missing.push(col.label);
+    if ((col.key === 'discount' || col.key === 'downPayment') && v !== '' && parseFloat(v) < 0) {
+      negativeFields.push(col.label);
+    }
+    // Loan Tenure must be strictly greater than 0 — unlike Discount/Down
+    // Payment, a value of exactly 0 doesn't make sense for a loan term either.
+    if (col.key === 'loanTenure' && v !== '' && parseFloat(v) <= 0) {
+      invalidPositiveFields.push(col.label);
+    }
   });
   if (missing.length) {
     toast('⚠ Required: ' + missing.join(', '));
+    return;
+  }
+  if (negativeFields.length) {
+    toast('⚠ Cannot be negative: ' + negativeFields.join(', '));
+    return;
+  }
+  if (invalidPositiveFields.length) {
+    toast('⚠ Must be greater than 0: ' + invalidPositiveFields.join(', '));
+    return;
+  }
+  // ORP (On-Road Price) is ESP plus additional charges (registration,
+  // insurance, etc.), so it should never come in below the Ex-Showroom Price.
+  if (row.orp !== '' && row.esp !== '' && parseFloat(row.orp) < parseFloat(row.esp)) {
+    toast('⚠ ORP (₹' + row.orp + ') cannot be less than the Ex-Showroom Price (₹' + row.esp + ') for the selected variant');
     return;
   }
 
