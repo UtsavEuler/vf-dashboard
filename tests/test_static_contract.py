@@ -158,6 +158,10 @@ def _clean_path(raw):
     return raw.split("?")[0].split("#")[0].split("${")[0]
 
 
+_BATCH_READ_PATH = re.compile(
+    r"const\s+BATCH_READ_PATH\s*=\s*(['\"])(.*?)\1")
+
+
 def _frontend_api_calls(text):
     """Extract (METHOD, path) for every /api URL the page requests.
 
@@ -172,6 +176,11 @@ def _frontend_api_calls(text):
     for block in _READ_PATHS_BLOCK.findall(text):
         for _quote, raw in _QUOTED_PATH.findall(block):
             found.add(("GET", _clean_path(raw)))
+    # The batched read is called through a constant, so its API.get() site holds
+    # no literal for the pattern above to find. It is the path the dashboard
+    # actually uses on load, so it must still be checked against the routes.
+    for _quote, raw in _BATCH_READ_PATH.findall(text):
+        found.add(("GET", _clean_path(raw)))
     return found
 
 
@@ -235,13 +244,19 @@ def test_frontend_api_calls_include_the_dpirr_surface():
     for alias in ("fi_master", "dealer_master", "added_dealers", "onboarding",
                   "fi_policy", "dealer_health", "fi_policy_geo", "snapshots"):
         assert ("GET", f"/api/{alias}") in calls
+    # The batched endpoint is the one the initial load actually uses.
+    assert ("GET", "/api/bootstrap_all") in calls
 
 
 # ── The frontend must surface failures, never swallow them ───────────────────
 def test_api_handle_rejects_non_2xx():
     """A reverted _handle turned every 404 into an empty table. Never again."""
     text = _read(VF_HTML)
-    assert "if (!r.ok) return Promise.reject" in text
+    assert "if (!r.ok) {" in text
+    assert "return Promise.reject(err);" in text
+    # The status rides on the error: the initial load falls back to per-section
+    # reads only when the batch route is ABSENT, never when it is failing.
+    assert "err.status = r.status;" in text
     assert "catch(e) { console.error('JSON parse error:'" not in text
 
 

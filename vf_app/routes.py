@@ -139,6 +139,32 @@ def create_app(config=None, adapter=None):
             _structured_log("/api/bootstrap", "read", "*", "error", started)
             raise
 
+    @app.route("/api/bootstrap_all", methods=["GET"])
+    def bootstrap_all():
+        """The dashboard's whole initial read model in ONE request.
+
+        The page needs 15 worksheets. Fetched as 15 parallel /api/<alias> calls
+        they land on 15 separate serverless instances, share no caches, and cost
+        ~3 Google requests each - ~45 requests inside a two-second burst, against
+        a quota of 60 reads per minute per user. The overflow came back as 429s,
+        which surfaced to the user as sporadic 502s on whichever sheets lost the
+        race. read_many() serves the identical data in 2 Google requests.
+        """
+        started = time.monotonic()
+        try:
+            data = _adapter().read_many(sheets.INITIAL_LOAD_ALIASES)
+            # pinHash must never leave the process, exactly as the dedicated
+            # /api/dpirr_users handler guarantees.
+            data["dpirr_users"] = [
+                {"name": r.get("name", ""), "isAdmin": r.get("isAdmin", "")}
+                for r in data.get("dpirr_users", []) if r.get("name")
+            ]
+            _structured_log("/api/bootstrap_all", "read", "*", "ok", started)
+            return jsonify(data)
+        except Exception:
+            _structured_log("/api/bootstrap_all", "read", "*", "error", started)
+            raise
+
     # ── Per-resource reads ────────────────────────────────────────────────
     @app.route("/api/<alias>", methods=["GET"])
     def api_get(alias):

@@ -18,12 +18,20 @@ class FakeAdapter:
     tests can assert the exact match keys used for writes/deletes."""
 
     def __init__(self):
-        self.data = {alias: [] for alias in sheets.READ_ALIASES}
+        # Every worksheet, not just READ_ALIASES: dpirr_users is deliberately
+        # absent from READ_ALIASES (routes.py owns its pinHash-stripping
+        # handler) but writes and deletes still target it, so seeding from
+        # READ_ALIASES left the fake without a bucket for it.
+        self.data = {alias: [] for alias in sheets.WORKSHEETS}
         self.calls = []  # list of (op, alias, match_keys)
 
     def read(self, alias):
         self.calls.append(("read", alias, None))
         return [dict(r) for r in self.data[alias]]
+
+    def read_many(self, aliases):
+        self.calls.append(("read_many", "*", None))
+        return {a: [dict(r) for r in self.data[a]] for a in aliases}
 
     def upsert(self, alias, match_keys, data_dict):
         self.calls.append(("upsert", alias, dict(match_keys)))

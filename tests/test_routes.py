@@ -279,12 +279,17 @@ def test_dpirr_variant_post_renames_in_place(client, adapter):
         "product": "P", "model": "M", "variant": "V2", "esp": "9",
         "oldVariant": "V1"})
     assert resp.status_code == 200
-    op, alias, keys = adapter.calls[-1]
-    assert (op, alias) == ("upsert", "dpirr_variants")
-    assert keys == {"product": "P", "model": "M", "variant": "V1"}
+    # The upsert is no longer the last call: a rename also carries the variant's
+    # state-ESP overrides across, so assert on the upsert itself.
+    upserts = [c for c in adapter.calls if c[:2] == ("upsert", "dpirr_variants")]
+    assert len(upserts) == 1
+    assert upserts[0][2] == {"product": "P", "model": "M", "variant": "V1"}
     # Renamed in place — not duplicated.
     assert adapter.data["dpirr_variants"] == [
         {"product": "P", "model": "M", "variant": "V2", "esp": "9"}]
+    # The rename cascades to the state-ESP overrides, matched on the OLD name.
+    assert ("bulk_update", "dpirr_variant_state_esp",
+            {"product": "P", "model": "M", "variant": "V1"}) in adapter.calls
 
 
 def test_dpirr_variant_post_without_old_variant_matches_itself(client, adapter):
@@ -389,3 +394,31 @@ def test_logs_never_contain_rows(client, caplog):
     assert marker not in text
     # But structured fields ARE present.
     assert "worksheet=fi_master" in text
+
+
+# ── /api/bootstrap_all: the whole initial read model in one request ──────────
+def test_bootstrap_all_returns_every_read_alias(client, adapter):
+    adapter.data["fi_master"] = [{"name": "F1"}]
+    adapter.data["dpirr_products"] = [{"name": "P"}]
+    body = client.get("/api/bootstrap_all").get_json()
+    assert set(body) == set(sheets.INITIAL_LOAD_ALIASES)
+    assert body["fi_master"] == [{"name": "F1"}]
+    assert body["dpirr_products"] == [{"name": "P"}]
+
+
+def test_bootstrap_all_is_one_adapter_read(client, adapter):
+    """The point of the endpoint. Falling back to a read() per alias would put
+    the Sheets quota pressure straight back."""
+    client.get("/api/bootstrap_all")
+    assert [c[0] for c in adapter.calls] == ["read_many"]
+
+
+def test_bootstrap_all_never_leaks_pin_hashes(client, adapter):
+    """Same guarantee the dedicated /api/dpirr_users handler makes. A batch
+    endpoint that forgot this would ship every PIN hash to the browser."""
+    adapter.data["dpirr_users"] = [
+        {"name": "U", "pinHash": "SECRET", "isAdmin": "true",
+         "createdAt": "2026-01-01T00:00:00Z"}]
+    resp = client.get("/api/bootstrap_all")
+    assert "SECRET" not in resp.get_data(as_text=True)
+    assert resp.get_json()["dpirr_users"] == [{"name": "U", "isAdmin": "true"}]

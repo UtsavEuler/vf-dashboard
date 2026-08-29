@@ -2073,8 +2073,14 @@ const API = {
   },
   _handle: function(r) {
     // Reject every non-2xx so a failed read is never silently converted into an
-    // empty dataset and a failed write is never presented as success.
-    if (!r.ok) return Promise.reject(new Error('Request failed (' + r.status + ')'));
+    // empty dataset and a failed write is never presented as success. The status
+    // rides along on the error: callers must be able to tell "this route does not
+    // exist here" from "the data store is unwell", which need opposite responses.
+    if (!r.ok) {
+      var err = new Error('Request failed (' + r.status + ')');
+      err.status = r.status;
+      return Promise.reject(err);
+    }
     return r.text().then(function(text) {
       if (!text) return null;
       try { return JSON.parse(text); }
@@ -2111,11 +2117,15 @@ async function loadState() {
   if (loader) loader.style.display = 'flex';
   setSaveStatus('saving');
   try {
-    // allSettled, not all: one failing read must degrade ONE section, not blank
-    // the whole dashboard. API._handle rejects non-2xx (so a failure is never a
-    // silently empty dataset), and each rejected read becomes null here, which
-    // toArr() below turns into an empty section. The failures are listed to the
-    // user rather than swallowed, and everything failing is still a hard error.
+    // One batched request, not 15 parallel ones. Fanning out per worksheet put
+    // each read on its own serverless instance, sharing no cache and costing ~3
+    // Google calls apiece — ~45 requests in a two-second burst against a quota
+    // of 60 reads/minute/user. The overflow returned 429, which reached the user
+    // as sporadic 502s on whichever sheets lost the race. This one path returns
+    // identical data in 2 Google calls.
+    const BATCH_READ_PATH = '/api/bootstrap_all';
+    // The same read surface as literal paths, in the order destructured below.
+    // Used by the fallback, and asserted against the Flask routes.
     const READ_PATHS = [
       '/api/fi_master',
       '/api/dealer_master',
@@ -2133,13 +2143,57 @@ async function loadState() {
       '/api/dpirr_users',
       '/api/dpirr_variant_state_esp'
     ];
-    const settled = await Promise.allSettled(READ_PATHS.map(function(p){ return API.get(p); }));
-    const failedReads = READ_PATHS.filter(function(p, i){ return settled[i].status === 'rejected'; });
-    if (failedReads.length === READ_PATHS.length) {
-      throw new Error('Every dashboard read failed');
+    // Fallback path, reached ONLY when /api/bootstrap_all is absent (404/405) —
+    // this page and that route deploy together, so in practice only a stale
+    // cached page gets here. It must never run on a 5xx: the batch endpoint
+    // failing is usually the Sheets quota, and answering that with 15 more
+    // requests is the exact burst that caused the incident.
+    // allSettled, not all: one failing read must degrade ONE section, not blank
+    // the whole dashboard. API._handle rejects non-2xx (so a failure is never a
+    // silently empty dataset), and each rejected read becomes null here, which
+    // toArr() below turns into an empty section. The failures are listed to the
+    // user rather than swallowed, and everything failing is still a hard error.
+    async function loadReadsIndividually() {
+      const settled = await Promise.allSettled(READ_PATHS.map(function(p){ return API.get(p); }));
+      const failed = READ_PATHS.filter(function(p, i){ return settled[i].status === 'rejected'; });
+      if (failed.length === READ_PATHS.length) {
+        throw new Error('Every dashboard read failed');
+      }
+      return {
+        values: settled.map(function(s){ return s.status === 'fulfilled' ? s.value : null; }),
+        failed: failed
+      };
+    }
+
+    let settledValues, failedReads;
+    try {
+      const batch = await API.get(BATCH_READ_PATH);
+      if (!batch || typeof batch !== 'object') throw new Error('Malformed batch response');
+      // An alias the batch did not return is a FAILED section, not an empty one.
+      // Mapping it straight to undefined would let toArr() render it as a clean
+      // empty table and report the load as fully healthy — the silent-empty
+      // failure mode the whole read path exists to prevent.
+      failedReads = READ_PATHS.filter(function(p){
+        return !Array.isArray(batch[p.replace('/api/', '')]);
+      });
+      if (failedReads.length === READ_PATHS.length) {
+        throw new Error('Every dashboard read failed');
+      }
+      settledValues = READ_PATHS.map(function(p){
+        var v = batch[p.replace('/api/', '')];
+        return Array.isArray(v) ? v : null;
+      });
+    } catch (batchErr) {
+      // Only a missing route earns the fan-out. Anything else — 500, 502, 504,
+      // a malformed body — propagates, because the per-alias path would make an
+      // overloaded backend worse and would report the same failure anyway.
+      if (batchErr && batchErr.status !== 404 && batchErr.status !== 405) throw batchErr;
+      console.warn('Batch read unavailable, falling back to per-section reads:', batchErr);
+      const fallback = await loadReadsIndividually();
+      settledValues = fallback.values;
+      failedReads = fallback.failed;
     }
     state.failedReads = failedReads;
-    const settledValues = settled.map(function(s){ return s.status === 'fulfilled' ? s.value : null; });
     const [fiMaster, dealerMaster, addedDealers, onboarding, fiPolicy, dealerHealth, fiPolicyGeo, snapshots,
            dpirrMonths, dpirrEntries, dpirrProducts, dpirrModels, dpirrVariants, dpirrUsers, dpirrStateEsp] = settledValues;
 

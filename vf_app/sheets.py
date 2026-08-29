@@ -135,6 +135,12 @@ BOOTSTRAP_ALIASES = ["fi_master", "dealer_master", "added_dealers",
                      "onboarding", "fi_policy", "fi_policy_geo",
                      "dealer_health", "snapshots"]
 
+# Every worksheet the dashboard's initial load needs, served by /api/bootstrap_all
+# through read_many() in a FIXED 2 Google calls. Unrelated to BOOTSTRAP_ALIASES
+# above, which is the older per-sheet /api/bootstrap set. dpirr_users is included
+# here but the route strips pinHash before it leaves the process - see routes.py.
+INITIAL_LOAD_ALIASES = READ_ALIASES + ["dpirr_users"]
+
 SNAPSHOT_HEADERS = [
     "snapshot_date", "snapshot_month", "snapshot_year", "fi_total", "fi_active",
     "fi_onboarded", "fi_suspended", "fi_p1", "fi_p2", "dealer_total",
@@ -174,7 +180,7 @@ def _is_timeout(exc):
 
 
 def call_google(fn, *, retries=4, base_delay=0.5, max_total_delay=8.0,
-                sleep=time.sleep):
+                sleep=None):
     """Run a Google Sheets call with a BOUNDED retry policy.
 
     Retries only transient failures (HTTP 429 rate limits and timeouts) with
@@ -183,6 +189,9 @@ def call_google(fn, *, retries=4, base_delay=0.5, max_total_delay=8.0,
     timeout maps to UpstreamTimeoutError (504) and anything else to
     UpstreamError (502). Raw exceptions never escape.
     """
+    # Resolved here, not as a default argument: a default binds time.sleep at
+    # import, which no test can then substitute.
+    sleep = time.sleep if sleep is None else sleep
     slept = 0.0
     last = None
     for attempt in range(retries):
@@ -215,6 +224,8 @@ class GoogleSheetsAdapter:
     def __init__(self, config=None):
         self._config = config or get_config()
         self._sh = None  # cached spreadsheet handle (warm-instance only)
+        self._ws_cache = {}  # title -> Worksheet (warm-instance only)
+        self._sheet_titles = None  # titles from ONE metadata fetch
 
     # -- client -------------------------------------------------------------
     def _spreadsheet(self):
@@ -226,22 +237,69 @@ class GoogleSheetsAdapter:
             creds = Credentials.from_service_account_info(
                 self._config.credentials, scopes=scopes)
             gc = gspread.authorize(creds)
-            self._sh = call_google(lambda: gc.open_by_key(self._config.sheet_id))
+            # Bound every Google call. Without a timeout the only limit is
+            # Vercel killing the function, which surfaces as an opaque platform
+            # 502 with no log line instead of a clean, logged 504.
+            gc.set_timeout(self._config.google_timeout_seconds)
+            # open_by_key issues no HTTP request in gspread 6 - the handle is
+            # lazy - so there is nothing here to retry.
+            self._sh = gc.open_by_key(self._config.sheet_id)
         return self._sh
 
+    # -- worksheet resolution ------------------------------------------------
+    def _worksheet(self, title):
+        """Resolve a title to a Worksheet, cached per instance.
+
+        gspread's Spreadsheet.worksheet() re-fetches the ENTIRE spreadsheet
+        metadata on every single call. Those fetches count against the same
+        60-reads-per-minute-per-user Sheets quota as the data reads themselves,
+        so a request that touched three worksheets spent three of its Google
+        calls re-learning information that had not changed. Cache the handle.
+
+        Warm-instance optimisation only, exactly like _sh: a cold instance still
+        resolves correctly, and worksheet identity is stable for the lifetime of
+        one request, which is all any single operation depends on.
+        """
+        if title not in self._ws_cache:
+            self._ws_cache[title] = self._spreadsheet().worksheet(title)
+        return self._ws_cache[title]
+
+    def _titles(self, refresh=False):
+        """The set of worksheet titles, from ONE metadata fetch, cached."""
+        if self._sheet_titles is None or refresh:
+            data = call_google(self._spreadsheet().fetch_sheet_metadata)
+            self._sheet_titles = {
+                sheet["properties"]["title"]
+                for sheet in data.get("sheets", [])
+                if sheet.get("properties", {}).get("title")
+            }
+        return self._sheet_titles
+
     def _ws(self, title):
-        return call_google(lambda: self._spreadsheet().worksheet(title))
+        return call_google(lambda: self._worksheet(title))
 
     def _ws_or_create(self, title, headers):
-        """Like _ws, but creates the worksheet with a header row if absent."""
+        """Like _ws, but creates the worksheet with a header row if absent.
+
+        ONLY a genuine WorksheetNotFound may trigger creation. The previous bare
+        `except Exception` also swallowed rate limits, so a 429 on the lookup was
+        misread as "sheet missing" and tried to add_worksheet() a title that
+        already existed - which Google rejects with a 400. That laundered a
+        retryable 429 into a non-retryable error, so call_google() skipped its
+        backoff and returned 502 immediately instead of waiting out the limit.
+        """
+        from gspread.exceptions import WorksheetNotFound
+
         def _do():
-            sh = self._spreadsheet()
             try:
-                return sh.worksheet(title)
-            except Exception:  # noqa: BLE001 - any lookup failure means "create"
-                created = sh.add_worksheet(
+                return self._worksheet(title)
+            except WorksheetNotFound:
+                created = self._spreadsheet().add_worksheet(
                     title=title, rows=500, cols=max(10, len(headers) + 2))
                 created.append_row(headers)
+                self._ws_cache[title] = created
+                if self._sheet_titles is not None:
+                    self._sheet_titles.add(title)
                 return created
 
         return call_google(_do)
@@ -274,33 +332,61 @@ class GoogleSheetsAdapter:
             return self._manual_parse(worksheet)
 
     def _manual_parse(self, worksheet):
-        all_vals = call_google(lambda: worksheet.get_all_values())
-        if not all_vals:
-            return []
-        headers = all_vals[0]
-        seen = {}
-        deduped = []
-        for h in headers:
-            if h in seen:
-                deduped.append(h + "_dup_" + str(seen[h]))
-                seen[h] += 1
-            else:
-                seen[h] = 1
-                deduped.append(h)
-        result = []
-        for row in all_vals[1:]:
-            if not any(row):
-                continue
-            padded = row + [""] * (len(deduped) - len(row))
-            d = {}
-            for i, h in enumerate(deduped):
-                if "_dup_" not in h:
-                    d[h] = padded[i]
-            result.append(d)
-        return result
+        return _dedupe_parse(call_google(worksheet.get_all_values))
 
     def read(self, alias):
         return self._rows_to_dicts(self._ws_for(alias))
+
+    def read_many(self, aliases):
+        """Read several worksheets in a FIXED number of Google calls.
+
+        One metadata fetch (usually already cached) plus ONE values:batchGet,
+        however many aliases are asked for - against 3 calls per alias when the
+        caller loops over read(). The dashboard's initial load touches 15
+        worksheets, so this is the difference between ~45 Google requests and 2,
+        under a 60-reads-per-minute-per-user quota.
+
+        Returns {alias: rows}. An auto-creatable worksheet that does not exist
+        yet comes back as [] rather than failing the whole batch - the same rows
+        a freshly created empty sheet would yield. Creating it is left to the
+        first write, so a read never provokes a write.
+        """
+        aliases = list(aliases)
+        if not aliases:
+            return {}
+
+        present = self._titles()
+        wanted = [a for a in aliases if WORKSHEETS[a] in present]
+        if len(wanted) != len(aliases):
+            # Something looks absent. Confirm against fresh metadata before
+            # acting on it: this instance's cache may simply predate another
+            # instance creating the sheet, and treating a populated worksheet as
+            # missing would render real rows as a clean empty section.
+            present = self._titles(refresh=True)
+            wanted = [a for a in aliases if WORKSHEETS[a] in present]
+
+        missing = [a for a in aliases if a not in wanted]
+        for alias in missing:
+            if alias not in AUTO_CREATE_HEADERS:
+                # One of the original 8 is genuinely absent: a real fault, which
+                # must keep failing rather than silently reading as empty.
+                raise UpstreamError()
+
+        out = {alias: [] for alias in missing}
+        if not wanted:
+            return out
+
+        sh = self._spreadsheet()
+        ranges = ["'" + WORKSHEETS[a].replace("'", "''") + "'" for a in wanted]
+        payload = call_google(lambda: sh.values_batch_get(ranges))
+        value_ranges = payload.get("valueRanges", [])
+        if len(value_ranges) != len(wanted):
+            # The response must line up positionally with the request; if it
+            # does not, rows cannot be safely attributed to worksheets.
+            raise UpstreamError()
+        for alias, value_range in zip(wanted, value_ranges):
+            out[alias] = _values_to_records(value_range.get("values") or [])
+        return out
 
     # -- writes -------------------------------------------------------------
     def upsert(self, alias, match_keys, data_dict):
@@ -456,6 +542,61 @@ class GoogleSheetsAdapter:
             return len(rows)
 
         return call_google(_do)
+
+
+def _values_to_records(all_vals):
+    """Turn a raw value grid into row dicts.
+
+    Mirrors gspread's get_all_records (short rows padded, cells numericised) so
+    a batched read returns exactly what the per-worksheet path returns, and
+    falls back to the duplicate-header-tolerant parse when headers repeat.
+    """
+    from gspread.utils import numericise_all, to_records
+
+    if not all_vals:
+        return []
+    headers = all_vals[0]
+    if not headers or len(headers) != len(set(headers)):
+        return _dedupe_parse(all_vals)
+    # Pad to the WIDEST row, not to the header row: get_all_records reads through
+    # get(pad_values=True), so a data row extending past the last header keeps
+    # its trailing cells under blank keys rather than losing them.
+    width = max(len(row) for row in all_vals)
+    padded_headers = headers + [""] * (width - len(headers))
+    rows = [
+        numericise_all(row + [""] * (width - len(row)),
+                       empty2zero=False, default_blank="")
+        for row in all_vals[1:]
+    ]
+    return to_records(padded_headers, rows)
+
+
+def _dedupe_parse(all_vals):
+    """Duplicate-header-tolerant parse: duplicate columns dropped, blank rows
+    skipped, every value left as a string."""
+    if not all_vals:
+        return []
+    headers = all_vals[0]
+    seen = {}
+    deduped = []
+    for h in headers:
+        if h in seen:
+            deduped.append(h + "_dup_" + str(seen[h]))
+            seen[h] += 1
+        else:
+            seen[h] = 1
+            deduped.append(h)
+    result = []
+    for row in all_vals[1:]:
+        if not any(row):
+            continue
+        padded = row + [""] * (len(deduped) - len(row))
+        d = {}
+        for i, h in enumerate(deduped):
+            if "_dup_" not in h:
+                d[h] = padded[i]
+        result.append(d)
+    return result
 
 
 def _contiguous_runs(rows):

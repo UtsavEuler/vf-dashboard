@@ -5,6 +5,7 @@ Sheet by passing plain callables that raise the relevant exceptions.
 """
 
 import pytest
+from gspread.exceptions import WorksheetNotFound
 
 from vf_app import sheets
 from vf_app.config import Config
@@ -104,6 +105,8 @@ def test_worksheet_and_match_key_contract():
         "dpirr_products": "DPIRR_Products",
         "dpirr_models": "DPIRR_Models",
         "dpirr_variants": "DPIRR_Variants",
+        "dpirr_variant_state_esp": "DPIRR_VariantStateEsp",
+        "dpirr_users": "DPIRR_Users",
     }
     assert sheets.MATCH_KEYS["fi_master"] == ["name"]
     assert sheets.MATCH_KEYS["dealer_master"] == ["dealerName", "location"]
@@ -118,6 +121,9 @@ def test_worksheet_and_match_key_contract():
     assert sheets.MATCH_KEYS["dpirr_products"] == ["name"]
     assert sheets.MATCH_KEYS["dpirr_models"] == ["product", "name"]
     assert sheets.MATCH_KEYS["dpirr_variants"] == ["product", "model", "variant"]
+    assert sheets.MATCH_KEYS["dpirr_variant_state_esp"] == [
+        "product", "model", "variant", "state"]
+    assert sheets.MATCH_KEYS["dpirr_users"] == ["name"]
 
 
 def test_dpirr_header_contract():
@@ -126,16 +132,20 @@ def test_dpirr_header_contract():
     assert sheets.DPIRR_PRODUCT_HEADERS == ["name"]
     assert sheets.DPIRR_MODEL_HEADERS == ["product", "name"]
     assert sheets.DPIRR_VARIANT_HEADERS == ["product", "model", "variant", "esp"]
+    assert sheets.DPIRR_VARIANT_STATE_ESP_HEADERS == [
+        "product", "model", "variant", "state", "esp"]
+    assert sheets.DPIRR_USER_HEADERS == [
+        "name", "pinHash", "isAdmin", "createdAt"]
     assert sheets.DPIRR_ENTRY_HEADERS == [
-        "id", "monthId", "monthLabel", "srNo", "customerName", "cibil",
-        "creditRemarks", "product", "model", "variant", "dealerName", "state",
-        "city", "salesRm", "vfRm", "financier", "cocoDodo", "vfStatus",
-        "remarks", "fundingType", "irr", "esp", "orp", "ltv", "downPayment",
-        "discount", "effectiveDp",
+        "id", "monthId", "monthLabel", "srNo", "createdBy", "customerName",
+        "cibil", "creditRemarks", "product", "model", "variant", "dealerName",
+        "state", "city", "salesRm", "vfRm", "financier", "isSelfFinance",
+        "cocoDodo", "vfStatus", "remarks", "fundingType", "loanTenure", "irr",
+        "esp", "orp", "ltv", "downPayment", "discount", "effectiveDp",
     ]
     assert set(sheets.AUTO_CREATE_HEADERS) == {
         "dpirr_months", "dpirr_entries", "dpirr_products", "dpirr_models",
-        "dpirr_variants"}
+        "dpirr_variants", "dpirr_variant_state_esp", "dpirr_users"}
 
 
 def test_bootstrap_aliases_exclude_dpirr():
@@ -282,11 +292,29 @@ class StubSpreadsheet:
         self.wss = {t: StubWorksheet(t, r) for t, r in present.items()}
         self.created = []
         self.batch_requests = []
+        self.metadata_fetches = 0
+        self.batch_gets = []
 
     def worksheet(self, title):
+        # Raise what gspread raises: the adapter now distinguishes a genuinely
+        # missing worksheet from a transient failure, so a generic Exception
+        # here would no longer model the real client.
         if title not in self.wss:
-            raise Exception(f"WorksheetNotFound: {title}")
+            raise WorksheetNotFound(title)
         return self.wss[title]
+
+    def fetch_sheet_metadata(self, params=None):
+        self.metadata_fetches += 1
+        return {"sheets": [{"properties": {"title": t, "sheetId": w.id}}
+                           for t, w in self.wss.items()]}
+
+    def values_batch_get(self, ranges, params=None):
+        self.batch_gets.append(list(ranges))
+        out = []
+        for rng in ranges:
+            title = rng.strip("'").replace("''", "'")
+            out.append({"values": [list(r) for r in self.wss[title].rows]})
+        return {"valueRanges": out}
 
     def add_worksheet(self, title=None, rows=None, cols=None):
         self.created.append({"title": title, "rows": rows, "cols": cols})
@@ -453,3 +481,101 @@ def test_contiguous_runs():
     assert sheets._contiguous_runs([2]) == [(2, 2)]
     assert sheets._contiguous_runs([2, 3, 4, 7, 9, 10]) == [
         (2, 4), (7, 7), (9, 10)]
+
+
+# ── Google call COUNT is the thing that broke production ─────────────────────
+# The dashboard's initial load blew the Sheets quota (60 reads/minute/user) and
+# came back as sporadic 502s. Nothing about the returned data was wrong, so only
+# a test that counts requests can catch a regression here.
+def test_worksheet_lookup_is_cached_per_instance():
+    """gspread re-fetches all spreadsheet metadata on every worksheet() call.
+    Repeated operations must not keep paying for it."""
+    adapter = stub_adapter({"DPIRR_Models": [["product", "name"]]})
+    calls = {"n": 0}
+    real = adapter._sh.worksheet
+
+    def counting(title):
+        calls["n"] += 1
+        return real(title)
+
+    adapter._sh.worksheet = counting
+    for _ in range(5):
+        adapter.read("dpirr_models")
+    assert calls["n"] == 1
+
+
+def test_read_many_is_two_calls_regardless_of_alias_count():
+    """One metadata fetch plus ONE batchGet, whatever the alias count. Looping
+    over read() instead costs ~3 Google calls per alias."""
+    titles = {sheets.WORKSHEETS[a]: [["name"], ["x"]]
+              for a in sheets.INITIAL_LOAD_ALIASES}
+    adapter = stub_adapter(titles)
+    out = adapter.read_many(sheets.INITIAL_LOAD_ALIASES)
+    assert set(out) == set(sheets.INITIAL_LOAD_ALIASES)
+    assert adapter._sh.metadata_fetches == 1
+    assert len(adapter._sh.batch_gets) == 1
+    assert len(adapter._sh.batch_gets[0]) == len(sheets.INITIAL_LOAD_ALIASES)
+
+
+def test_read_many_matches_read_row_for_row():
+    """The batched path must be a drop-in for the per-worksheet path, including
+    gspread's numericising of cell values."""
+    grid = [["name", "esp"], ["A", "100"], ["B", ""]]
+    adapter = stub_adapter({"DPIRR_Products": grid})
+    assert adapter.read_many(["dpirr_products"])["dpirr_products"] == [
+        {"name": "A", "esp": 100}, {"name": "B", "esp": ""}]
+
+
+def test_read_many_treats_absent_autocreate_sheet_as_empty():
+    """A DP/IRR sheet that does not exist yet reads as empty. It must NOT be
+    created here: a read may never provoke a write."""
+    adapter = stub_adapter({})
+    assert adapter.read_many(["dpirr_products"]) == {"dpirr_products": []}
+    assert adapter._sh.created == []
+
+
+def test_read_many_still_fails_on_a_missing_original_sheet():
+    """A missing original worksheet is a real fault and must not read as empty."""
+    adapter = stub_adapter({})
+    with pytest.raises(UpstreamError):
+        adapter.read_many(["fi_master"])
+
+
+def test_rate_limited_lookup_is_not_mistaken_for_a_missing_sheet(monkeypatch):
+    """A 429 on the worksheet lookup used to be caught as "sheet missing", which
+    tried to add_worksheet() an existing title — a 400 Google will not retry. It
+    must stay a retryable rate limit and create nothing."""
+    monkeypatch.setattr(sheets.time, "sleep", lambda s: None)
+    adapter = stub_adapter({"DPIRR_Products": [["name"]]})
+    attempts = {"n": 0}
+
+    def rate_limited(title):
+        attempts["n"] += 1
+        raise Exception("APIError 429: quota exceeded")
+
+    adapter._sh.worksheet = rate_limited
+    with pytest.raises(UpstreamError):
+        adapter._ws_or_create("DPIRR_Products", ["name"])
+    assert adapter._sh.created == []
+    assert attempts["n"] > 1  # it backed off and retried, rather than failing hard
+
+
+def test_read_many_refetches_titles_before_calling_a_sheet_missing():
+    """A warm instance's title cache can predate another instance creating the
+    sheet. Trusting it would render real rows as a clean empty section."""
+    adapter = stub_adapter({})
+    assert adapter.read_many(["dpirr_products"]) == {"dpirr_products": []}
+    # Another instance creates and populates it; this instance's cache is stale.
+    adapter._sh.wss["DPIRR_Products"] = StubWorksheet(
+        "DPIRR_Products", [["name"], ["P1"]])
+    assert adapter.read_many(["dpirr_products"]) == {
+        "dpirr_products": [{"name": "P1"}]}
+
+
+def test_read_many_keeps_cells_past_the_last_header():
+    """gspread's get_all_records pads to the widest row, so a data row extending
+    past the header keeps its trailing cells. The batched path must match."""
+    grid = [["name"], ["P1", "extra"]]
+    adapter = stub_adapter({"DPIRR_Products": grid})
+    rows = adapter.read_many(["dpirr_products"])["dpirr_products"]
+    assert rows == [{"name": "P1", "": "extra"}]
