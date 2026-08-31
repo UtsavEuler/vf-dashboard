@@ -543,6 +543,11 @@
   .multi-filter-clear { padding:6px 14px; font-size:11px; color:var(--accent); cursor:pointer; border-top:1px solid var(--border); margin-top:4px; }
   .multi-filter-clear:hover { text-decoration:underline; }
 
+  /* position:sticky on <th> renders unreliably with border-collapse:collapse
+     (a documented browser limitation) — this table uses border-collapse:separate
+     instead, which means row borders must live on each <td>, not the <tr>. */
+  .dp-entries-tbl td { border-bottom: 1px solid var(--border); }
+
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -7778,22 +7783,25 @@ function renderDPTable(seg, monthId) {
     dupCounts[key] = (dupCounts[key]||0) + 1;
   });
 
-  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead><tr style="background:var(--surface2);color:var(--text-muted);">';
-  html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">Sr. No.</th>';
-  if (isAdmin) html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">Created By</th>';
-  DP_COLS.forEach(function(c){ html += '<th style="padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;">'+c.label+'</th>'; });
-  html += '<th style="padding:8px 12px;width:70px;">Actions</th></tr></thead><tbody>';
+  var html = '<div style="overflow:auto;max-height:70vh;">' +
+    '<table class="dp-entries-tbl" style="width:100%;border-collapse:separate;border-spacing:0;font-size:12px;">';
+  var thStyle = 'padding:8px 12px;white-space:nowrap;font-weight:600;text-align:left;' +
+    'position:sticky;top:0;z-index:1;background:var(--surface2);color:var(--text-muted);';
+  html += '<thead><tr>';
+  html += '<th style="'+thStyle+'">Sr. No.</th>';
+  if (isAdmin) html += '<th style="'+thStyle+'">Created By</th>';
+  DP_COLS.forEach(function(c){ html += '<th style="'+thStyle+'">'+c.label+'</th>'; });
+  html += '<th style="'+thStyle+'width:70px;">Actions</th></tr></thead><tbody>';
 
   filtered.forEach(function(r, i) {
     var origIdx = rows.indexOf(r); // index in the FULL array, for correct edit/delete targeting
     var dupKey = getDPDuplicateKey(r);
     var isDup  = dupKey.replace(/\|/g,'') && dupCounts[dupKey] > 1;
     var rowStyle = isDup
-      ? 'border-bottom:1px solid var(--border);background:rgba(251,191,36,0.14);border-left:3px solid #fbbf24;'
-      : 'border-bottom:1px solid var(--border);'+(i%2===1?'background:var(--surface2);':'');
+      ? 'background:rgba(251,191,36,0.14);'
+      : (i%2===1?'background:var(--surface2);':'');
     html += '<tr style="'+rowStyle+'">';
-    html += '<td style="padding:7px 12px;white-space:nowrap;">'+(i+1)+
+    html += '<td style="padding:7px 12px;white-space:nowrap;'+(isDup?'border-left:3px solid #fbbf24;':'')+'">'+(i+1)+
       (isDup ? ' <span title="Possible duplicate — same Customer/Product/Model/Variant/Dealer as another row" style="font-size:10px;color:#fbbf24;">⚠</span>' : '') +
       '</td>';
     if (isAdmin) html += '<td style="padding:7px 12px;white-space:nowrap;color:var(--text-muted);">'+escHtml(r.createdBy||'—')+'</td>';
