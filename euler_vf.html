@@ -1575,6 +1575,7 @@
       👤 Logged as <span id="dpCurrentUserLabel" style="color:var(--text);font-weight:600;">—</span>
       <span id="dpAdminBadge" style="display:none;background:#a78bfa22;color:#a78bfa;border:1px solid #a78bfa44;border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700;">ADMIN</span>
       <button class="btn btn-secondary btn-sm" id="dpRefreshBtn" onclick="refreshDPIRR()" style="font-size:11px;padding:2px 8px;" title="Reload the latest data — see entries added by other users">🔄 Refresh</button>
+      <button class="btn btn-secondary btn-sm" onclick="openDPAnalysisModal()" style="font-size:11px;padding:2px 8px;">📊 Analysis</button>
       <button class="btn btn-secondary btn-sm" onclick="openDPUserSwitchModal()" style="font-size:11px;padding:2px 8px;">Switch User</button>
       <button class="btn btn-secondary btn-sm" onclick="openDPChangePinModal()" style="font-size:11px;padding:2px 8px;">Change PIN</button>
     </div>
@@ -1851,6 +1852,17 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeDPStateEspModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- DP/IRR Analysis Modal -->
+<div class="modal-overlay" id="dpAnalysisOverlay" style="display:none;">
+  <div class="modal" style="max-width:920px;max-height:88vh;overflow-y:auto;">
+    <div class="modal-header"><div class="modal-title">📊 DP/IRR Analysis</div><button class="modal-close" onclick="closeDPAnalysisModal()">✕</button></div>
+    <div class="modal-body" id="dpAnalysisBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDPAnalysisModal()">Close</button>
     </div>
   </div>
 </div>
@@ -6836,6 +6848,7 @@ function initDPIRR() {
   (function(){ var o=document.getElementById('dpModelModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPModelModal(); }); })();
   (function(){ var o=document.getElementById('dpVariantModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPVariantModal(); }); })();
   (function(){ var o=document.getElementById('dpStateEspOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPStateEspModal(); }); })();
+  (function(){ var o=document.getElementById('dpAnalysisOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPAnalysisModal(); }); })();
   (function(){ var o=document.getElementById('dpConfirmOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPConfirm(); }); })();
   (function(){ var o=document.getElementById('dpChangePinOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPChangePinModal(); }); })();
   (function(){ var o=document.getElementById('dpDeleteUserOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDeleteUserConfirm(); }); })();
@@ -7101,6 +7114,203 @@ function getDPVisibleRows(seg, monthId) {
   if (getDPUserIsAdmin()) return rows;
   var me = getDPUserName().toLowerCase();
   return rows.filter(function(r){ return (r.createdBy||'').toLowerCase() === me; });
+}
+
+// All entries visible to the current user, across every month — the data
+// scope for the Analysis modal. Same visibility rule as everywhere else:
+// admins see everything, everyone else sees only their own entries.
+function getAllVisibleDPEntries() {
+  var out = [];
+  (_dpMonths.dp || []).forEach(function(m) {
+    out = out.concat(getDPVisibleRows('dp', m.id));
+  });
+  return out;
+}
+
+// Generic "group by X, broken down by product" cross-tab, used for both the
+// Top Financiers and VF Status analyses. Rows sorted by total descending.
+function computeDPCrossTab(entries, groupKey, opts) {
+  opts = opts || {};
+  var products = [];
+  var groups = {};
+
+  entries.forEach(function(r) {
+    var groupVal = String(dpVal(r[groupKey])).trim();
+    if (opts.skipEmpty && !groupVal) return;
+    if (!groupVal) groupVal = '(blank)';
+    var product = String(dpVal(r.product)).trim() || '(no product)';
+    if (products.indexOf(product) === -1) products.push(product);
+
+    if (!groups[groupVal]) groups[groupVal] = { total: 0, byProduct: {} };
+    groups[groupVal].total++;
+    groups[groupVal].byProduct[product] = (groups[groupVal].byProduct[product] || 0) + 1;
+  });
+
+  var rows = Object.keys(groups).map(function(g) {
+    return { name: g, total: groups[g].total, byProduct: groups[g].byProduct };
+  }).sort(function(a, b) { return b.total - a.total; });
+
+  if (opts.limit) rows = rows.slice(0, opts.limit);
+  return { products: products, rows: rows };
+}
+
+// CIBIL/credit score distribution: buckets of 50 starting at 500, a
+// dedicated NTC (-1) count, a not-captured count, and the score threshold
+// for the top 25/50/75/90% of customers with a genuinely captured score.
+function computeDPCibilAnalysis(entries) {
+  var buckets = {};
+  var ntcCount = 0;
+  var notCapturedCount = 0;
+  var validScores = [];
+
+  entries.forEach(function(r) {
+    var raw = String(dpVal(r.cibil)).trim();
+    if (raw === '') { notCapturedCount++; return; }
+    var score = parseFloat(raw);
+    if (isNaN(score)) { notCapturedCount++; return; }
+    if (score === -1) { ntcCount++; return; }
+    validScores.push(score);
+    var bucketKey = score < 500 ? 'below500' : String(500 + Math.floor((score - 500) / 50) * 50);
+    buckets[bucketKey] = (buckets[bucketKey] || 0) + 1;
+  });
+
+  var numericKeys = Object.keys(buckets).filter(function(k){ return k !== 'below500'; })
+    .map(Number).sort(function(a,b){ return b-a; });
+  var orderedKeys = numericKeys.map(String).concat(buckets['below500'] !== undefined ? ['below500'] : []);
+
+  var totalValid = validScores.length;
+  // Percentile thresholds (top 25/50/75/90%) must stay based on real scores
+  // only — NTC isn't a score value and can't be meaningfully sorted alongside
+  // one. But the bucket/NTC percentages below use a different, wider base:
+  // "captured" cases (real score OR NTC), matching how section 4 defines
+  // "captured" — this is what makes the NTC row's % directly comparable to
+  // the bucket rows above it, and the whole column add up to 100%.
+  var totalCaptured = totalValid + ntcCount;
+  var sortedDesc = validScores.slice().sort(function(a,b){ return b-a; });
+
+  function percentileThreshold(pct) {
+    if (!totalValid) return null;
+    var idx = Math.max(0, Math.ceil(totalValid * pct / 100) - 1);
+    return sortedDesc[idx];
+  }
+
+  var rows = orderedKeys.map(function(key) {
+    var count = buckets[key];
+    var label = key === 'below500' ? '< 500' : (key + '-' + (Number(key)+49));
+    var pct = totalCaptured ? (count / totalCaptured * 100) : 0;
+    return { label: label, count: count, pct: pct };
+  });
+
+  return {
+    rows: rows,
+    ntcCount: ntcCount,
+    ntcPct: totalCaptured ? (ntcCount / totalCaptured * 100) : 0,
+    notCapturedCount: notCapturedCount,
+    totalValid: totalValid,
+    totalCaptured: totalCaptured,
+    totalEntries: entries.length,
+    thresholds: {
+      p25: percentileThreshold(25),
+      p50: percentileThreshold(50),
+      p75: percentileThreshold(75),
+      p90: percentileThreshold(90)
+    }
+  };
+}
+
+function openDPAnalysisModal() {
+  document.getElementById('dpAnalysisBody').innerHTML = renderDPAnalysisHtml(getAllVisibleDPEntries());
+  document.getElementById('dpAnalysisOverlay').style.display = 'flex';
+}
+
+function closeDPAnalysisModal() {
+  document.getElementById('dpAnalysisOverlay').style.display = 'none';
+}
+
+function renderDPAnalysisHtml(entries) {
+  var sectionStyle = 'margin-bottom:24px;';
+  var titleStyle = 'font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;';
+  var subStyle = 'font-size:12px;color:var(--text-muted);';
+  var tableStyle = 'width:100%;border-collapse:collapse;font-size:12px;';
+  var thStyle = 'padding:6px 10px;text-align:left;background:var(--surface2);color:var(--text-muted);border-bottom:1px solid var(--border);';
+  var tdStyle = 'padding:6px 10px;border-bottom:1px solid var(--border);';
+
+  var total = entries.length;
+  var html = '';
+
+  if (!total) {
+    return '<div class="empty-state"><div class="empty-icon">📊</div><div>No entries to analyze yet.</div></div>';
+  }
+
+  // ── 1. Total entries by product ──
+  var byProduct = {};
+  entries.forEach(function(r){ var p = String(dpVal(r.product)).trim() || '(no product)'; byProduct[p] = (byProduct[p]||0)+1; });
+  var productRows = Object.keys(byProduct).map(function(p){ return {name:p, count:byProduct[p]}; })
+    .sort(function(a,b){ return b.count - a.count; });
+  html += '<div style="'+sectionStyle+'"><div style="'+titleStyle+'">1. Total Entries: '+total+'</div>' +
+    '<table style="'+tableStyle+'"><thead><tr><th style="'+thStyle+'">Product</th><th style="'+thStyle+'">Count</th><th style="'+thStyle+'">%</th></tr></thead><tbody>' +
+    productRows.map(function(r){
+      return '<tr><td style="'+tdStyle+'">'+escHtml(r.name)+'</td><td style="'+tdStyle+'">'+r.count+'</td><td style="'+tdStyle+'">'+(r.count/total*100).toFixed(1)+'%</td></tr>';
+    }).join('') +
+    '</tbody></table></div>';
+
+  // ── 2. Top 10 financiers, product-wise ──
+  var finCross = computeDPCrossTab(entries, 'financier', { skipEmpty: true, limit: 10 });
+  html += '<div style="'+sectionStyle+'"><div style="'+titleStyle+'">2. Top 10 Financiers (Product-wise)</div>' +
+    '<div style="overflow-x:auto;"><table style="'+tableStyle+'"><thead><tr>' +
+    '<th style="'+thStyle+'">Financier</th>' +
+    finCross.products.map(function(p){ return '<th style="'+thStyle+'">'+escHtml(p)+'</th>'; }).join('') +
+    '<th style="'+thStyle+'">Total</th></tr></thead><tbody>' +
+    finCross.rows.map(function(r){
+      var contribPct = total ? (r.total / total * 100) : 0;
+      return '<tr><td style="'+tdStyle+'font-weight:600;">'+escHtml(r.name)+'</td>' +
+        finCross.products.map(function(p){ return '<td style="'+tdStyle+'">'+(r.byProduct[p]||0)+'</td>'; }).join('') +
+        '<td style="'+tdStyle+'font-weight:600;">'+r.total+' <span style="font-weight:400;color:var(--text-muted);">('+contribPct.toFixed(1)+'%)</span></td></tr>';
+    }).join('') +
+    '</tbody></table></div>' +
+    (finCross.rows.length ? '' : '<div style="'+subStyle+'">No financiers to show (all self-financed, or no data).</div>') +
+    '</div>';
+
+  // ── 3. CIBIL captured count ──
+  var cibilCapturedCount = entries.filter(function(r){ return String(dpVal(r.cibil)).trim() !== ''; }).length;
+  html += '<div style="'+sectionStyle+'"><div style="'+titleStyle+'">3. CIBIL/Credit Score Captured</div>' +
+    '<div style="'+subStyle+'">'+cibilCapturedCount+' of '+total+' entries — <strong style="color:var(--text);">'+(cibilCapturedCount/total*100).toFixed(1)+'%</strong></div></div>';
+
+  // ── 4. VF Status split, product-wise ──
+  var statusCross = computeDPCrossTab(entries, 'vfStatus', {});
+  html += '<div style="'+sectionStyle+'"><div style="'+titleStyle+'">4. VF Status Split (Product-wise)</div>' +
+    '<div style="overflow-x:auto;"><table style="'+tableStyle+'"><thead><tr>' +
+    '<th style="'+thStyle+'">VF Status</th>' +
+    statusCross.products.map(function(p){ return '<th style="'+thStyle+'">'+escHtml(p)+'</th>'; }).join('') +
+    '<th style="'+thStyle+'">Total</th></tr></thead><tbody>' +
+    statusCross.rows.map(function(r){
+      return '<tr><td style="'+tdStyle+'font-weight:600;color:'+getDPStatusColor(r.name)+';">'+escHtml(r.name)+'</td>' +
+        statusCross.products.map(function(p){ return '<td style="'+tdStyle+'">'+(r.byProduct[p]||0)+'</td>'; }).join('') +
+        '<td style="'+tdStyle+'font-weight:600;">'+r.total+'</td></tr>';
+    }).join('') +
+    '</tbody></table></div></div>';
+
+  // ── 5. CIBIL distribution + percentiles + NTC ──
+  var cibil = computeDPCibilAnalysis(entries);
+  html += '<div style="'+sectionStyle+'"><div style="'+titleStyle+'">5. Credit Score Distribution</div>';
+  if (cibil.totalValid) {
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">' +
+      [['Top 25%',cibil.thresholds.p25],['Top 50%',cibil.thresholds.p50],['Top 75%',cibil.thresholds.p75],['Top 90%',cibil.thresholds.p90]].map(function(t){
+        return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;">' +
+          '<div style="font-size:10px;color:var(--text-muted);">'+t[0]+' of customers</div>' +
+          '<div style="font-size:16px;font-weight:700;color:var(--text);">≥ '+t[1]+'</div></div>';
+      }).join('') + '</div>';
+  }
+  html += '<div style="overflow-x:auto;"><table style="'+tableStyle+'"><thead><tr>' +
+    '<th style="'+thStyle+'">Score Range</th><th style="'+thStyle+'">Count</th><th style="'+thStyle+'">% of Captured</th></tr></thead><tbody>' +
+    cibil.rows.map(function(r){
+      return '<tr><td style="'+tdStyle+'">'+r.label+'</td><td style="'+tdStyle+'">'+r.count+'</td><td style="'+tdStyle+'">'+r.pct.toFixed(1)+'%</td></tr>';
+    }).join('') +
+    '<tr><td style="'+tdStyle+'color:#fbbf24;font-weight:600;">NTC (New To Credit)</td><td style="'+tdStyle+'">'+cibil.ntcCount+'</td><td style="'+tdStyle+'color:#fbbf24;">'+cibil.ntcPct.toFixed(1)+'%</td></tr>' +
+    '<tr><td style="'+tdStyle+'color:var(--text-muted);">Not Captured</td><td style="'+tdStyle+'">'+cibil.notCapturedCount+'</td><td style="'+tdStyle+'">—</td></tr>' +
+    '</tbody></table></div></div>';
+
+  return html;
 }
 
 function getRetailingDealerNames() {
