@@ -7173,7 +7173,7 @@ function openDPEntryModal(seg, monthId, idx) {
         '<input type="text" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'"></div>';
     } else if (col.type === 'number') {
       var calcTrigger = (col.key === 'orp' || col.key === 'ltv' || col.key === 'discount') ? ' onchange="recalcDPFinancials()" oninput="recalcDPFinancials()"' : '';
-      var labelId = col.key === 'irr' ? ' id="dpIrrLabel"' : '';
+      var labelId = col.key === 'irr' ? ' id="dpIrrLabel"' : (col.key === 'loanTenure' ? ' id="dpLoanTenureLabel"' : '');
       var minAttr = col.key === 'discount' ? ' min="0"' : (col.key === 'loanTenure' ? ' min="1"' : '');
       body += '<div class="form-group" style="margin:0;"><label class="form-label"'+labelId+'>'+reqLabel(col)+'</label>' +
         '<input type="number" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" step="any"'+minAttr+calcTrigger+'></div>';
@@ -7392,6 +7392,17 @@ function onDPSelfFinanceToggle() {
       ? 'IRR (%) <span style="font-size:10px;color:var(--text-muted);">(optional — Self Finance)</span>'
       : 'IRR (%) <span style="color:var(--flag);">*</span>';
   }
+  var tenureLabel = document.getElementById('dpLoanTenureLabel');
+  if (tenureLabel) {
+    var isNewEntry = _dpEditTarget && _dpEditTarget.idx === null;
+    if (cb.checked) {
+      tenureLabel.innerHTML = 'Loan Tenure (months) <span style="font-size:10px;color:var(--text-muted);">(optional — Self Finance)</span>';
+    } else if (isNewEntry) {
+      tenureLabel.innerHTML = 'Loan Tenure (months) <span style="color:var(--flag);">*</span>';
+    } else {
+      tenureLabel.innerHTML = 'Loan Tenure (months) <span style="font-size:10px;color:var(--text-muted);">(optional)</span>';
+    }
+  }
 }
 
 function recalcDPFinancials() {
@@ -7461,10 +7472,11 @@ function saveDPEntry() {
     var el = document.getElementById('dpModal_' + col.key);
     var v = el ? el.value.trim() : '';
     row[col.key] = v;
-    // Loan Tenure is mandatory only for entries created from now on — editing
-    // an entry that predates this field should never be blocked by it.
+    // Loan Tenure is optional when Self Finance is on (tenure may not be known
+    // for a self-arranged loan), AND is mandatory only for entries created
+    // from now on — editing a pre-existing entry should never be blocked by it.
     var isRequired = col.required
-      && !((col.key === 'financier' || col.key === 'irr') && isSelfFinance)
+      && !((col.key === 'financier' || col.key === 'irr' || col.key === 'loanTenure') && isSelfFinance)
       && !(col.key === 'loanTenure' && !isNewEntry);
     if (isRequired && !v) missing.push(col.label);
     if ((col.key === 'discount' || col.key === 'downPayment') && v !== '' && parseFloat(v) < 0) {
