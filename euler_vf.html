@@ -1860,7 +1860,13 @@
 <div class="modal-overlay" id="dpAnalysisOverlay" style="display:none;">
   <div class="modal" style="max-width:920px;max-height:88vh;overflow-y:auto;">
     <div class="modal-header"><div class="modal-title">📊 DP/IRR Analysis</div><button class="modal-close" onclick="closeDPAnalysisModal()">✕</button></div>
-    <div class="modal-body" id="dpAnalysisBody"></div>
+    <div class="modal-body">
+      <div class="form-group" style="margin:0 0 16px 0;max-width:260px;">
+        <label class="form-label">Scope</label>
+        <select class="form-select" id="dpAnalysisMonthFilter" onchange="renderDPAnalysisForSelectedMonth()"></select>
+      </div>
+      <div id="dpAnalysisBody"></div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeDPAnalysisModal()">Close</button>
     </div>
@@ -7116,12 +7122,14 @@ function getDPVisibleRows(seg, monthId) {
   return rows.filter(function(r){ return (r.createdBy||'').toLowerCase() === me; });
 }
 
-// All entries visible to the current user, across every month — the data
-// scope for the Analysis modal. Same visibility rule as everywhere else:
-// admins see everything, everyone else sees only their own entries.
-function getAllVisibleDPEntries() {
+// All entries visible to the current user — either for one specific month
+// (pass its monthId) or across every month (pass null/omit). Same visibility
+// rule as everywhere else: admins see everything, everyone else sees only
+// their own entries.
+function getAllVisibleDPEntries(monthId) {
   var out = [];
   (_dpMonths.dp || []).forEach(function(m) {
+    if (monthId && m.id !== monthId) return;
     out = out.concat(getDPVisibleRows('dp', m.id));
   });
   return out;
@@ -7219,8 +7227,22 @@ function computeDPCibilAnalysis(entries) {
 }
 
 function openDPAnalysisModal() {
-  document.getElementById('dpAnalysisBody').innerHTML = renderDPAnalysisHtml(getAllVisibleDPEntries());
+  var sel = document.getElementById('dpAnalysisMonthFilter');
+  var months = _dpMonths.dp || [];
+  var opts = '<option value="__all__">All Time</option>' +
+    months.map(function(m){ return '<option value="'+escHtml(m.id)+'">'+escHtml(m.label)+'</option>'; }).join('');
+  sel.innerHTML = opts;
+  // Default to whichever month is currently active on the main dashboard.
+  var defaultMonth = _dpActiveMonth.dp;
+  sel.value = (defaultMonth && months.some(function(m){ return m.id === defaultMonth; })) ? defaultMonth : '__all__';
+  renderDPAnalysisForSelectedMonth();
   document.getElementById('dpAnalysisOverlay').style.display = 'flex';
+}
+
+function renderDPAnalysisForSelectedMonth() {
+  var sel = document.getElementById('dpAnalysisMonthFilter');
+  var monthId = (sel.value === '__all__') ? null : sel.value;
+  document.getElementById('dpAnalysisBody').innerHTML = renderDPAnalysisHtml(getAllVisibleDPEntries(monthId));
 }
 
 function closeDPAnalysisModal() {
