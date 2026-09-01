@@ -7403,7 +7403,7 @@ function openDPEntryModal(seg, monthId, idx) {
   function reqLabel(col) { return col.label + (col.required ? ' <span style="color:var(--flag);">*</span>' : ''); }
 
   DP_COLS.forEach(function(col) {
-    var val = row[col.key] || '';
+    var val = dpVal(row[col.key]);
     var fieldId = 'dpModal_' + col.key;
     if (col.type === 'text') {
       body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
@@ -7763,6 +7763,7 @@ function saveDPEntry() {
   var wasBulk = bulkCount > 1;
 
   if (idx !== null) {
+    var oldRow = arr[idx];
     // Edit existing single entry — preserve original creator, never overwrite it
     row['Sr. No.'] = arr[idx]['Sr. No.'];
     row['_id'] = arr[idx]['_id'] || genDPId();
@@ -7772,6 +7773,39 @@ function saveDPEntry() {
     var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'], isSelfFinance: row.isSelfFinance };
     DP_COLS.forEach(function(col) { payload[col.key] = row[col.key] || ''; });
     saveDPIRREntryToSheet(payload);
+
+    // Offer to propagate this edit's changed fields to other duplicate entries
+    // (same Customer/Product/Model/Variant/Dealer) in the same month — e.g. a
+    // Sales RM correction made on one row often needs to land on its
+    // duplicates too, without re-typing it on each one by hand.
+    var changedFields = DP_COLS.filter(function(col) {
+      return String(dpVal(oldRow[col.key])) !== String(dpVal(row[col.key]));
+    });
+    var dupKey = getDPDuplicateKey(row);
+    if (changedFields.length && dupKey.replace(/\|/g,'')) {
+      var siblings = arr.filter(function(r, i) {
+        return i !== idx && getDPDuplicateKey(r) === dupKey;
+      });
+      if (siblings.length) {
+        var fieldLabels = changedFields.map(function(c){ return c.label; }).join(', ');
+        var siblingWord = siblings.length===1 ? 'entry' : 'entries';
+        openDPConfirm(
+          'This entry is a duplicate of ' + siblings.length + ' other ' + siblingWord +
+          ' (same Customer/Product/Model/Variant/Dealer). Apply your change'+(changedFields.length===1?'':'s')+
+          ' to ' + fieldLabels + ' on ' + (siblings.length===1?'that entry':'those entries') + ' too?',
+          function() {
+            siblings.forEach(function(sibling) {
+              changedFields.forEach(function(col) { sibling[col.key] = row[col.key]; });
+              var sibPayload = { id: sibling['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: sibling['Sr. No.'], createdBy: sibling['createdBy'], isSelfFinance: sibling.isSelfFinance };
+              DP_COLS.forEach(function(col) { sibPayload[col.key] = sibling[col.key] || ''; });
+              saveDPIRREntryToSheet(sibPayload);
+            });
+            renderDPView(seg, monthId);
+            toast('✅ Changes applied to ' + siblings.length + ' duplicate ' + siblingWord + ' too');
+          }
+        );
+      }
+    }
 
   } else if (wasBulk) {
     // Create N identical entries in one shot

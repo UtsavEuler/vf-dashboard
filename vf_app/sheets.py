@@ -312,7 +312,19 @@ class GoogleSheetsAdapter:
         return self._ws(WORKSHEETS[alias])
 
     def _headers_for(self, alias, worksheet):
-        return AUTO_CREATE_HEADERS.get(alias) or worksheet.row_values(1)
+        """The on-sheet header row is the source of truth whenever the sheet
+        already has one — a worksheet like DPIRR_Entries can gain columns
+        manually after it already has data (e.g. isSelfFinance/loanTenure
+        were added well after the sheet existed), and a bulk write silently
+        misaligning every value against the wrong column is exactly the kind
+        of bug that stays invisible until someone reads the sheet directly.
+        The Python constant is only a fallback for a genuinely fresh, empty
+        worksheet that has no header row yet.
+        """
+        existing = call_google(lambda: worksheet.row_values(1))
+        if existing:
+            return existing
+        return AUTO_CREATE_HEADERS.get(alias) or existing
 
     # -- reads --------------------------------------------------------------
     def _rows_to_dicts(self, worksheet):
