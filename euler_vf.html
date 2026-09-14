@@ -1838,6 +1838,9 @@
       <input type="hidden" id="dpStateEspVariant">
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Set a different ESP for specific states — e.g. when a state government subsidy changes the effective price. States without an override here just use the variant's normal ESP.</div>
       <div id="dpStateEspList" style="margin-bottom:14px;"></div>
+      <div id="dpStateEspEditingBanner" style="display:none;font-size:12px;color:var(--accent);margin-bottom:8px;">
+        Editing <strong id="dpStateEspEditingName"></strong> — <a href="#" onclick="cancelDPStateEspEdit();return false;" style="color:var(--text-muted);text-decoration:underline;">cancel</a>
+      </div>
       <div style="display:flex;gap:8px;align-items:flex-end;border-top:1px solid var(--border);padding-top:12px;">
         <div class="form-group" style="margin:0;flex:1;">
           <label class="form-label">State</label>
@@ -1847,7 +1850,7 @@
           <label class="form-label">ESP (₹)</label>
           <input type="number" class="form-select" id="dpStateEspNewEsp" step="any" placeholder="e.g. 580000">
         </div>
-        <button class="btn btn-primary btn-sm" onclick="addDPStateEspOverride()" style="padding:8px 12px;">＋ Add</button>
+        <button class="btn btn-primary btn-sm" id="dpStateEspSubmitBtn" onclick="addDPStateEspOverride()" style="padding:8px 12px;">＋ Add</button>
       </div>
     </div>
     <div class="modal-footer">
@@ -6683,7 +6686,7 @@ function initTAIFViews() {
 // ══════════════════════════════════════════════════════════════
 var _dpMonths      = { 'dp': [] };   // [{id, label}]
 var _dpData        = { 'dp': {} };   // monthId -> [entries]
-var _dpFilters     = {};             // monthId -> {dealer:[],product:[],model:[],financier:[],salesRm:[],vfRm:[],vfStatus:[]}
+var _dpFilters     = {};             // monthId -> {dealer:[],product:[],model:[],financier:[],salesRm:[],vfRm:[],vfStatus:[],createdBy:[],selfFinance:[]}
 var _dpActiveMonth = { 'dp': null };
 var _dpEditTarget  = null; // {seg, monthId, idx}
 var _dpUsers = []; // [{name, isAdmin}] fetched from DPIRR_Users sheet
@@ -7109,7 +7112,7 @@ function getDPEntries(seg, monthId) {
 }
 
 function getDPFilters(monthId) {
-  if (!_dpFilters[monthId]) _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[], createdBy:[] };
+  if (!_dpFilters[monthId]) _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[], createdBy:[], selfFinance:[] };
   return _dpFilters[monthId];
 }
 
@@ -7918,7 +7921,7 @@ function onDPFilterChange(monthId, field, cb) {
   else { var i = filters[field].indexOf(val); if (i > -1) filters[field].splice(i,1); }
   var btnId = 'dpMF_'+monthId+'_'+field+'_btn';
   var btn = document.getElementById(btnId);
-  var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status', createdBy:'Created By' };
+  var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status', createdBy:'Created By', selfFinance:'Self Finance' };
   if (btn) btn.innerHTML = (filters[field].length ? filters[field].length+' selected' : labels[field]||field) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
   var seg = monthId.split('_')[0];
   renderDPTable(seg, monthId);
@@ -7936,12 +7939,12 @@ function clearDPFilter(monthId, field, btnId, label) {
 }
 
 function clearAllDPFilters(monthId) {
-  _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[], createdBy:[] };
-  ['dealer','product','model','financier','salesRm','vfRm','vfStatus','createdBy'].forEach(function(f) {
+  _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[], createdBy:[], selfFinance:[] };
+  ['dealer','product','model','financier','salesRm','vfRm','vfStatus','createdBy','selfFinance'].forEach(function(f) {
     var dd = document.getElementById('dpMF_'+monthId+'_'+f+'_dd');
     if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked=false; });
     var btn = document.getElementById('dpMF_'+monthId+'_'+f+'_btn');
-    var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status', createdBy:'Created By' };
+    var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status', createdBy:'Created By', selfFinance:'Self Finance' };
     if (btn) btn.innerHTML = (labels[f]||f) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
   });
   var searchEl = document.getElementById('dpSearch_'+monthId);
@@ -7964,6 +7967,12 @@ function applyDPFilters(rows, monthId) {
     if (filters.vfRm.length      && filters.vfRm.indexOf(String(r.vfRm||''))                === -1) return false;
     if (filters.vfStatus.length  && filters.vfStatus.indexOf(String(r.vfStatus||''))        === -1) return false;
     if (filters.createdBy.length && filters.createdBy.indexOf(String(r.createdBy||''))      === -1) return false;
+    if (filters.selfFinance.length) {
+      var isSelf = String(dpVal(r.isSelfFinance)) === 'true';
+      var wantsYes = filters.selfFinance.indexOf('Yes') > -1;
+      var wantsNo  = filters.selfFinance.indexOf('No') > -1;
+      if (!((wantsYes && isSelf) || (wantsNo && !isSelf))) return false;
+    }
     return true;
   });
 }
@@ -7986,6 +7995,7 @@ function renderDPView(seg, monthId) {
     dpFilterDropdown(monthId, 'salesRm',   'RM Name',     uniq('salesRm'),   filters.salesRm) +
     dpFilterDropdown(monthId, 'vfRm',      'VF Name',     uniq('vfRm'),      filters.vfRm) +
     dpFilterDropdown(monthId, 'vfStatus',  'VF Status',   uniq('vfStatus'),  filters.vfStatus) +
+    dpFilterDropdown(monthId, 'selfFinance', 'Self Finance', ['Yes','No'], filters.selfFinance) +
     (isAdmin ? dpFilterDropdown(monthId, 'createdBy', 'Created By', uniq('createdBy'), filters.createdBy) : '') +
     '<button class="btn btn-secondary btn-sm" onclick="clearAllDPFilters(\''+monthId+'\')" style="font-size:11px;">✕ Clear</button>' +
     '<button class="btn btn-primary btn-sm" onclick="openDPEntryModal(\''+seg+'\',\''+monthId+'\',null)">＋ Add Entry</button>' +
@@ -8056,7 +8066,10 @@ function renderDPTable(seg, monthId) {
   html += '<thead><tr>';
   html += '<th style="'+thStyle+'">Sr. No.</th>';
   if (isAdmin) html += '<th style="'+thStyle+'">Created By</th>';
-  DP_COLS.forEach(function(c){ html += '<th style="'+thStyle+'">'+c.label+'</th>'; });
+  DP_COLS.forEach(function(c){
+    html += '<th style="'+thStyle+'">'+c.label+'</th>';
+    if (c.key === 'financier') html += '<th style="'+thStyle+'">Self Finance</th>';
+  });
   html += '<th style="'+thStyle+'width:70px;">Actions</th></tr></thead><tbody>';
 
   filtered.forEach(function(r, i) {
@@ -8084,6 +8097,10 @@ function renderDPTable(seg, monthId) {
           opts + '</select></td>';
       } else {
         html += '<td style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(dpVal(r[c.key])).replace(/"/g,"'")+'">'+v+'</td>';
+      }
+      if (c.key === 'financier') {
+        var isSelf = String(dpVal(r.isSelfFinance)) === 'true';
+        html += '<td style="padding:7px 12px;white-space:nowrap;'+(isSelf?'color:#a78bfa;font-weight:600;':'color:var(--text-muted);')+'">'+(isSelf?'Yes':'No')+'</td>';
       }
     });
     html += '<td style="padding:7px 8px;white-space:nowrap;">' +
@@ -8450,13 +8467,14 @@ function deleteDPVariant(product, modelIdx, variantIdx) {
 }
 
 // ── State-specific ESP overrides ──
+var _dpStateEspEditingState = null; // the ORIGINAL state name being edited, or null when adding fresh
+
 function openDPStateEspModal(product, model, variant) {
   document.getElementById('dpStateEspProduct').value = product;
   document.getElementById('dpStateEspModel').value = model;
   document.getElementById('dpStateEspVariant').value = variant;
   document.getElementById('dpStateEspTitle').textContent = '🌍 ' + product + ' / ' + model + ' / ' + variant;
-  document.getElementById('dpStateEspNewState').value = '';
-  document.getElementById('dpStateEspNewEsp').value = '';
+  cancelDPStateEspEdit();
   renderDPStateEspList();
   document.getElementById('dpStateEspOverlay').style.display = 'flex';
 }
@@ -8480,13 +8498,41 @@ function renderDPStateEspList() {
   var html = '<div style="display:grid;gap:6px;">';
   states.forEach(function(state) {
     var espFmt = isNaN(Number(overrides[state])) ? overrides[state] : Number(overrides[state]).toLocaleString('en-IN');
+    var stateEsc = escHtml(state).replace(/'/g,"\\'");
     html += '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">' +
       '<span style="font-size:13px;"><strong>'+escHtml(state)+'</strong> — ₹'+espFmt+'</span>' +
-      '<button class="btn btn-danger btn-sm" onclick="removeDPStateEspOverride(\''+escHtml(state).replace(/'/g,"\\'")+'\')" style="padding:1px 7px;font-size:10.5px;">🗑</button>' +
+      '<span style="white-space:nowrap;">' +
+        '<button class="btn btn-secondary btn-sm" onclick="editDPStateEspOverride(\''+stateEsc+'\')" style="padding:1px 7px;font-size:10.5px;">✏️</button> ' +
+        '<button class="btn btn-danger btn-sm" onclick="removeDPStateEspOverride(\''+stateEsc+'\')" style="padding:1px 7px;font-size:10.5px;">🗑</button>' +
+      '</span>' +
     '</div>';
   });
   html += '</div>';
   el.innerHTML = html;
+}
+
+function editDPStateEspOverride(state) {
+  var product = document.getElementById('dpStateEspProduct').value;
+  var model   = document.getElementById('dpStateEspModel').value;
+  var variant = document.getElementById('dpStateEspVariant').value;
+  var overrides = (_dpStateEspOverrides[product] && _dpStateEspOverrides[product][model] && _dpStateEspOverrides[product][model][variant]) || {};
+  if (!(state in overrides)) return;
+
+  _dpStateEspEditingState = state;
+  document.getElementById('dpStateEspNewState').value = state;
+  document.getElementById('dpStateEspNewEsp').value = overrides[state];
+  document.getElementById('dpStateEspSubmitBtn').textContent = '✓ Update';
+  document.getElementById('dpStateEspEditingName').textContent = state;
+  document.getElementById('dpStateEspEditingBanner').style.display = '';
+  document.getElementById('dpStateEspNewState').focus();
+}
+
+function cancelDPStateEspEdit() {
+  _dpStateEspEditingState = null;
+  document.getElementById('dpStateEspNewState').value = '';
+  document.getElementById('dpStateEspNewEsp').value = '';
+  document.getElementById('dpStateEspSubmitBtn').textContent = '＋ Add';
+  document.getElementById('dpStateEspEditingBanner').style.display = 'none';
 }
 
 function addDPStateEspOverride() {
@@ -8498,14 +8544,24 @@ function addDPStateEspOverride() {
   if (!state) { toast('⚠ Enter a state name'); return; }
   if (!esp)   { toast('⚠ Enter an ESP value'); return; }
 
+  var editingState = _dpStateEspEditingState;
+  var isRename = editingState && editingState !== state;
+
+  // Renaming the state itself (not just its ESP) means the old entry must be
+  // removed too, or it'd be left behind as a stale duplicate alongside the
+  // new one — this isn't just a value update in that case.
+  if (isRename && _dpStateEspOverrides[product] && _dpStateEspOverrides[product][model] && _dpStateEspOverrides[product][model][variant]) {
+    delete _dpStateEspOverrides[product][model][variant][editingState];
+    deleteDPIRRStateEspFromSheet(product, model, variant, editingState);
+  }
+
   _dpStateEspOverrides[product] = _dpStateEspOverrides[product] || {};
   _dpStateEspOverrides[product][model] = _dpStateEspOverrides[product][model] || {};
   _dpStateEspOverrides[product][model][variant] = _dpStateEspOverrides[product][model][variant] || {};
   _dpStateEspOverrides[product][model][variant][state] = esp;
 
   saveDPIRRStateEspToSheet(product, model, variant, state, esp);
-  document.getElementById('dpStateEspNewState').value = '';
-  document.getElementById('dpStateEspNewEsp').value = '';
+  cancelDPStateEspEdit();
   renderDPStateEspList();
   renderDPManageView();
   toast('✅ ' + state + ' override saved');
@@ -8519,6 +8575,7 @@ function removeDPStateEspOverride(state) {
     delete _dpStateEspOverrides[product][model][variant][state];
   }
   deleteDPIRRStateEspFromSheet(product, model, variant, state);
+  if (_dpStateEspEditingState === state) cancelDPStateEspEdit();
   renderDPStateEspList();
   renderDPManageView();
   toast('🗑 ' + state + ' override removed');
@@ -8687,10 +8744,18 @@ function runDPConfirm() {
 function exportDPView(seg, monthId) {
   var isAdmin = getDPUserIsAdmin();
   var rows = applyDPFilters(getDPVisibleRows(seg, monthId), monthId);
-  var header = ['Sr. No.'].concat(isAdmin ? ['Created By'] : []).concat(DP_COLS.map(function(c){ return c.label; }));
+  var header = ['Sr. No.'].concat(isAdmin ? ['Created By'] : []);
+  DP_COLS.forEach(function(c){
+    header.push(c.label);
+    if (c.key === 'financier') header.push('Self Finance');
+  });
   var aoa = [header];
   rows.forEach(function(r, i){
-    var line = [i+1].concat(isAdmin ? [dpVal(r.createdBy)] : []).concat(DP_COLS.map(function(c){ return dpVal(r[c.key]); }));
+    var line = [i+1].concat(isAdmin ? [dpVal(r.createdBy)] : []);
+    DP_COLS.forEach(function(c){
+      line.push(dpVal(r[c.key]));
+      if (c.key === 'financier') line.push(String(dpVal(r.isSelfFinance)) === 'true' ? 'Yes' : 'No');
+    });
     aoa.push(line);
   });
   var wb = XLSX.utils.book_new();
