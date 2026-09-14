@@ -1884,7 +1884,7 @@
     <div class="modal-body"><p id="dpConfirmMessage" style="color:var(--text);margin:0;"></p></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeDPConfirm()">Cancel</button>
-      <button class="btn btn-danger" onclick="runDPConfirm()">Delete</button>
+      <button class="btn btn-danger" id="dpConfirmBtn" onclick="runDPConfirm()">Delete</button>
     </div>
   </div>
 </div>
@@ -7362,9 +7362,13 @@ function getEligibleFinancierNames() {
 
 function parseDPDealerLabel(label) {
   label = String(label || '');
-  // Label is constructed as: name + ' (' + location + ')'
-  // Find the FIRST occurrence of the ' (' separator (location may itself contain parens)
-  var sepIdx = label.indexOf(' (');
+  // Label is constructed as: name + ' (' + location + ')'. The location is
+  // always the LAST parenthetical group — the dealer's own name can contain
+  // parentheses too (e.g. a legal suffix like "(OPC)"), so this must find the
+  // last ' (' in the string, not the first, or a name like
+  // "Evtria Trading (OPC) Pvt. Ltd. (Ranchi)" gets split at "(OPC)" instead
+  // of "(Ranchi)" and the dealer lookup silently fails to match anything.
+  var sepIdx = label.lastIndexOf(' (');
   if (sepIdx === -1 || !label.endsWith(')')) {
     return { name: label.trim(), location: '' };
   }
@@ -7805,7 +7809,9 @@ function saveDPEntry() {
             });
             renderDPView(seg, monthId);
             toast('✅ Changes applied to ' + siblings.length + ' duplicate ' + siblingWord + ' too');
-          }
+          },
+          '✓ Apply to ' + siblings.length + (siblings.length===1?' entry':' entries'),
+          'btn-primary'
         );
       }
     }
@@ -8726,8 +8732,11 @@ function handleDPModelExcelUpload(event) {
 }
 
 
-function openDPConfirm(message, fn) {
+function openDPConfirm(message, fn, confirmLabel, confirmClass) {
   document.getElementById('dpConfirmMessage').textContent = message;
+  var btn = document.getElementById('dpConfirmBtn');
+  btn.textContent = confirmLabel || 'Delete';
+  btn.className = 'btn ' + (confirmClass || 'btn-danger');
   _dpConfirmFn = fn;
   document.getElementById('dpConfirmOverlay').style.display = 'flex';
 }
