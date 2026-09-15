@@ -6705,6 +6705,7 @@ var DP_VF_STATUS_OPTS = ['Disbursement Pending','Disbursement Received','Invoici
   'Financier Feedback Pending','FI Initiated','FI Pending','SL Pending','Push Back SL','DP Pending',
   'Acknowledgement Pending','Push Back DO','DO Pending','DO Received','Dropped','Post Approval Dropped','Rejected','Self Finance','Hold','Next Month'];
 var DP_FUNDING_OPTS = ['ESP','ORP'];
+var DP_CUSTOMER_TYPE_OPTS = ['Captive','MLO/DCO','Small Fleet Operator','Medium Fleet Operator','Large Fleet Operator'];
 
 // Preserves legitimate falsy values (0, "0") as-is — only truly missing
 // (undefined/null) values fall back to ''. A plain `x || ''` incorrectly
@@ -6715,6 +6716,7 @@ var DP_COLS = [
   { key:'customerName',  label:'Customer Name',       type:'text',   numeric:false, required:true  },
   { key:'cibil',         label:'CIBIL/Credit Score',  type:'number', numeric:true,  required:false },
   { key:'creditRemarks', label:'Credit Remarks',      type:'text',   numeric:false, required:false },
+  { key:'customerType',  label:'Customer Type',       type:'select-customer-type', numeric:false, required:false },
   { key:'product',       label:'Product',             type:'select-product', numeric:false, required:true },
   { key:'model',         label:'Model',               type:'select-model', numeric:false, required:true  },
   { key:'variant',       label:'Variant',             type:'select-variant', numeric:false, required:true },
@@ -7469,6 +7471,12 @@ function openDPEntryModal(seg, monthId, idx) {
       })).join('');
       body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
         '<select class="form-select" id="'+fieldId+'">'+fnopts+'</select></div>';
+    } else if (col.type === 'select-customer-type') {
+      var ctopts = ['<option value="">— Select —</option>'].concat(DP_CUSTOMER_TYPE_OPTS.map(function(o){
+        return '<option value="'+escHtml(o)+'"'+(val===o?' selected':'')+'>'+escHtml(o)+'</option>';
+      })).join('');
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+        '<select class="form-select" id="'+fieldId+'">'+ctopts+'</select></div>';
     } else if (col.type === 'auto') {
       body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+' <span style="font-size:10px;color:var(--text-muted);">(auto)</span></label>' +
         '<input type="'+(col.numeric?'number':'text')+'" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" readonly style="opacity:0.75;cursor:not-allowed;"></div>';
