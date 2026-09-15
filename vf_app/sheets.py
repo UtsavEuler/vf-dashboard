@@ -55,10 +55,11 @@ WORKSHEETS = {
 DPIRR_MONTH_HEADERS = ["id", "label"]
 DPIRR_ENTRY_HEADERS = [
     "id", "monthId", "monthLabel", "srNo", "createdBy", "customerName", "cibil",
-    "creditRemarks", "product", "model", "variant", "dealerName", "state",
-    "city", "salesRm", "vfRm", "financier", "isSelfFinance", "cocoDodo",
-    "vfStatus", "remarks", "fundingType", "loanTenure", "irr", "esp", "orp",
-    "ltv", "downPayment", "discount", "effectiveDp",
+    "creditRemarks", "customerType", "product", "model", "variant",
+    "dealerName", "state", "city", "salesRm", "vfRm", "financier",
+    "isSelfFinance", "cocoDodo", "vfStatus", "remarks", "fundingType",
+    "loanTenure", "irr", "esp", "orp", "ltv", "downPayment", "discount",
+    "effectiveDp",
 ]
 DPIRR_PRODUCT_HEADERS = ["name"]
 DPIRR_MODEL_HEADERS = ["product", "name"]
