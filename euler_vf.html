@@ -7364,18 +7364,30 @@ function getEligibleFinancierNames() {
 
 function parseDPDealerLabel(label) {
   label = String(label || '');
-  // Label is constructed as: name + ' (' + location + ')'. The location is
-  // always the LAST parenthetical group — the dealer's own name can contain
-  // parentheses too (e.g. a legal suffix like "(OPC)"), so this must find the
-  // last ' (' in the string, not the first, or a name like
-  // "Evtria Trading (OPC) Pvt. Ltd. (Ranchi)" gets split at "(OPC)" instead
-  // of "(Ranchi)" and the dealer lookup silently fails to match anything.
-  var sepIdx = label.lastIndexOf(' (');
-  if (sepIdx === -1 || !label.endsWith(')')) {
+  // Label is constructed as: name + ' (' + location + ')'. Either half can
+  // independently contain its own parentheses — a name might have a legal
+  // suffix like "(OPC)", and a location might have a sub-area like
+  // "Pune (Swargate)" — so neither "first (" nor "last (" is a reliable
+  // separator on its own. Instead, walk back from the final ')' and track
+  // paren depth to find ITS matching '(' — that match is always the correct
+  // name/location boundary, regardless of what's nested on either side.
+  if (!label.endsWith(')')) {
     return { name: label.trim(), location: '' };
   }
-  var name = label.slice(0, sepIdx).trim();
-  var location = label.slice(sepIdx + 2, label.length - 1).trim();
+  var depth = 0;
+  var openIdx = -1;
+  for (var i = label.length - 1; i >= 0; i--) {
+    if (label[i] === ')') depth++;
+    else if (label[i] === '(') {
+      depth--;
+      if (depth === 0) { openIdx = i; break; }
+    }
+  }
+  if (openIdx <= 0) {
+    return { name: label.trim(), location: '' };
+  }
+  var name = label.slice(0, openIdx).trim();
+  var location = label.slice(openIdx + 1, label.length - 1).trim();
   return { name: name, location: location };
 }
 
@@ -7752,13 +7764,23 @@ function saveDPEntry() {
     toast('⚠ Must be greater than 0: ' + invalidPositiveFields.join(', '));
     return;
   }
-  // ORP (On-Road Price) is ESP plus additional charges (registration,
-  // insurance, etc.), so it should never come in below the Ex-Showroom Price.
+  // ORP (On-Road Price) is normally ESP plus additional charges (registration,
+  // insurance, etc.), so it's unusual for it to come in below the Ex-Showroom
+  // Price — but not necessarily wrong (e.g. a heavy discount), so this asks
+  // for confirmation rather than blocking the save outright.
   if (row.orp !== '' && row.esp !== '' && parseFloat(row.orp) < parseFloat(row.esp)) {
-    toast('⚠ ORP (₹' + row.orp + ') cannot be less than the Ex-Showroom Price (₹' + row.esp + ') for the selected variant');
+    openDPConfirm(
+      'On-Road Price (₹' + row.orp + ') is less than the Ex-Showroom Price (₹' + row.esp + ') for this variant. Are you sure you want to create this entry?',
+      function() { proceedWithDPEntrySave(row); },
+      '✓ Yes, Create Entry',
+      'btn-primary'
+    );
     return;
   }
+  proceedWithDPEntrySave(row);
+}
 
+function proceedWithDPEntrySave(row) {
   var seg = _dpEditTarget.seg, monthId = _dpEditTarget.monthId, idx = _dpEditTarget.idx;
   var arr = getDPEntries(seg, monthId);
   var monthObj = (_dpMonths[seg] || []).find(function(m){ return m.id === monthId; }) || {};
