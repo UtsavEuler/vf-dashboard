@@ -1864,9 +1864,15 @@
   <div class="modal" style="max-width:920px;max-height:88vh;overflow-y:auto;">
     <div class="modal-header"><div class="modal-title">📊 DP/IRR Analysis</div><button class="modal-close" onclick="closeDPAnalysisModal()">✕</button></div>
     <div class="modal-body">
-      <div class="form-group" style="margin:0 0 16px 0;max-width:260px;">
-        <label class="form-label">Scope</label>
-        <select class="form-select" id="dpAnalysisMonthFilter" onchange="renderDPAnalysisForSelectedMonth()"></select>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+        <div class="form-group" style="margin:0;max-width:260px;flex:1;">
+          <label class="form-label">Scope</label>
+          <select class="form-select" id="dpAnalysisMonthFilter" onchange="renderDPAnalysisForSelectedMonth()"></select>
+        </div>
+        <div class="form-group" style="margin:0;max-width:260px;flex:1;">
+          <label class="form-label">Product</label>
+          <select class="form-select" id="dpAnalysisProductFilter" onchange="renderDPAnalysisForSelectedMonth()"></select>
+        </div>
       </div>
       <div id="dpAnalysisBody"></div>
     </div>
@@ -7240,6 +7246,13 @@ function openDPAnalysisModal() {
   // Default to whichever month is currently active on the main dashboard.
   var defaultMonth = _dpActiveMonth.dp;
   sel.value = (defaultMonth && months.some(function(m){ return m.id === defaultMonth; })) ? defaultMonth : '__all__';
+
+  var productSel = document.getElementById('dpAnalysisProductFilter');
+  var productOpts = '<option value="__all__">All Products</option>' +
+    (_dpProducts || []).map(function(p){ return '<option value="'+escHtml(p)+'">'+escHtml(p)+'</option>'; }).join('');
+  productSel.innerHTML = productOpts;
+  productSel.value = '__all__'; // no obvious "currently active product" to default to, unlike month
+
   renderDPAnalysisForSelectedMonth();
   document.getElementById('dpAnalysisOverlay').style.display = 'flex';
 }
@@ -7247,7 +7260,15 @@ function openDPAnalysisModal() {
 function renderDPAnalysisForSelectedMonth() {
   var sel = document.getElementById('dpAnalysisMonthFilter');
   var monthId = (sel.value === '__all__') ? null : sel.value;
-  document.getElementById('dpAnalysisBody').innerHTML = renderDPAnalysisHtml(getAllVisibleDPEntries(monthId));
+  var entries = getAllVisibleDPEntries(monthId);
+
+  var productSel = document.getElementById('dpAnalysisProductFilter');
+  var product = (productSel && productSel.value !== '__all__') ? productSel.value : null;
+  if (product) {
+    entries = entries.filter(function(r) { return String(dpVal(r.product)).trim() === product; });
+  }
+
+  document.getElementById('dpAnalysisBody').innerHTML = renderDPAnalysisHtml(entries);
 }
 
 function closeDPAnalysisModal() {
