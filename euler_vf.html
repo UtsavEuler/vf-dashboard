@@ -7358,6 +7358,64 @@ function renderDPAnalysisHtml(entries) {
     '<tr><td style="'+tdStyle+'color:var(--text-muted);">Not Captured</td><td style="'+tdStyle+'">'+cibil.notCapturedCount+'</td><td style="'+tdStyle+'">—</td></tr>' +
     '</tbody></table></div></div>';
 
+  // ── 6. Customer Type split — based only on entries where it was actually
+  // captured, not the full dataset (matches how the CIBIL section handles
+  // "not captured" cases: shown as a count, excluded from the split itself).
+  var custTypeCapturedEntries = entries.filter(function(r){ return String(dpVal(r.customerType)).trim() !== ''; });
+  var custTypeCapturedCount = custTypeCapturedEntries.length;
+
+  var custTypeOverall = {};
+  custTypeCapturedEntries.forEach(function(r){
+    var ct = String(dpVal(r.customerType)).trim();
+    custTypeOverall[ct] = (custTypeOverall[ct]||0) + 1;
+  });
+  var custTypeOverallRows = Object.keys(custTypeOverall).map(function(ct){ return {name:ct, count:custTypeOverall[ct]}; })
+    .sort(function(a,b){ return b.count - a.count; });
+
+  // Per-product CAPTURED totals for the column %s — deliberately separate
+  // from section 1's byProduct, which includes entries with no Customer Type
+  // set at all and would understate the split within each product.
+  var capturedByProduct = {};
+  custTypeCapturedEntries.forEach(function(r){
+    var p = String(dpVal(r.product)).trim() || '(no product)';
+    capturedByProduct[p] = (capturedByProduct[p]||0) + 1;
+  });
+  var custTypeCross = computeDPCrossTab(custTypeCapturedEntries, 'customerType', { skipEmpty: true });
+
+  html += '<div style="'+sectionStyle+'"><div style="'+titleStyle+'">6. Customer Type Split</div>' +
+    '<div style="'+subStyle+'margin-bottom:12px;">Captured: '+custTypeCapturedCount+' of '+total+' entries — <strong style="color:var(--text);">'+(total?(custTypeCapturedCount/total*100).toFixed(1):'0.0')+'%</strong></div>';
+
+  if (custTypeCapturedCount) {
+    html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Overall (of captured cases)</div>' +
+      '<table style="'+tableStyle+'margin-bottom:16px;"><thead><tr><th style="'+thStyle+'">Customer Type</th><th style="'+thStyle+'">Count</th><th style="'+thStyle+'">%</th></tr></thead><tbody>' +
+      custTypeOverallRows.map(function(r){
+        return '<tr><td style="'+tdStyle+'">'+escHtml(r.name)+'</td>' +
+          '<td style="'+tdStyle+'">'+r.count+'</td><td style="'+tdStyle+'">'+(r.count/custTypeCapturedCount*100).toFixed(1)+'%</td></tr>';
+      }).join('') +
+      '</tbody></table>';
+
+    html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Product-wise (of captured cases; each cell shows count, and % within that product\'s captured total)</div>' +
+      '<div style="overflow-x:auto;"><table style="'+tableStyle+'"><thead><tr>' +
+      '<th style="'+thStyle+'">Customer Type</th>' +
+      custTypeCross.products.map(function(p){ return '<th style="'+thStyle+'">'+escHtml(p)+'</th>'; }).join('') +
+      '<th style="'+thStyle+'">Total</th></tr></thead><tbody>' +
+      custTypeCross.rows.map(function(r){
+        var overallPct = custTypeCapturedCount ? (r.total / custTypeCapturedCount * 100) : 0;
+        return '<tr><td style="'+tdStyle+'font-weight:600;">'+escHtml(r.name)+'</td>' +
+          custTypeCross.products.map(function(p){
+            var cellCount = r.byProduct[p]||0;
+            var colTotal = capturedByProduct[p] || 0;
+            var colPct = colTotal ? (cellCount/colTotal*100).toFixed(1)+'%' : '—';
+            return '<td style="'+tdStyle+'">'+cellCount+' <span style="color:var(--text-muted);font-size:10.5px;">('+colPct+')</span></td>';
+          }).join('') +
+          '<td style="'+tdStyle+'font-weight:600;">'+r.total+' <span style="font-weight:400;color:var(--text-muted);">('+overallPct.toFixed(1)+'%)</span></td></tr>';
+      }).join('') +
+      '</tbody></table></div>';
+  } else {
+    html += '<div style="'+subStyle+'">No entries have Customer Type captured yet.</div>';
+  }
+  html += '</div>';
+
   return html;
 }
 
