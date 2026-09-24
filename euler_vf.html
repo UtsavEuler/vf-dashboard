@@ -7440,7 +7440,7 @@ function getRetailingDealerNames() {
 }
 
 function getEligibleFinancierNames() {
-  var ok = ['active','onboarded','discussion - active'];
+  var ok = ['active','onboarded','discussion - active','discussion - initial','not started'];
   return (state.financiersMeta||[])
     .filter(function(m){ return ok.indexOf((m.status||'').toLowerCase()) > -1; })
     .map(function(m){ return m.name; })
