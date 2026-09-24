@@ -535,8 +535,15 @@
   .multi-filter-btn { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px 12px; font-size:12px; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:6px; min-width:120px; user-select:none; }
   .multi-filter-btn:hover { border-color:var(--accent); }
   .multi-filter-btn.active { border-color:var(--accent); background:var(--surface3); }
-  .multi-filter-dropdown { display:none; position:absolute; top:100%; left:0; z-index:200; background:var(--surface3); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow-md); min-width:180px; max-height:260px; overflow:hidden; padding:6px 0; flex-direction:column; }
+  .multi-filter-dropdown { display:none; position:absolute; top:100%; left:0; z-index:200; background:var(--surface3); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow-md); min-width:180px; max-height:260px; overflow:visible; padding:6px 0; flex-direction:column; }
   .multi-filter-dropdown.open { display:flex; }
+  /* The items list is always this dropdown's first child (Clear link is the
+     second). overflow:hidden on the dropdown itself was silently clipping
+     any items beyond max-height with NO way to scroll to them — anything
+     past what fit on screen was just gone. This scopes scrolling to the
+     items list alone, so the Clear link stays visible below it instead of
+     being pushed out of reach too. */
+  .multi-filter-dropdown > div:first-child { overflow-y:auto; max-height:210px; }
   .multi-filter-item { display:flex; align-items:center; gap:8px; padding:7px 14px; cursor:pointer; font-size:12px; color:var(--text); }
   .multi-filter-item:hover { background:var(--surface2); }
   .multi-filter-item input[type=checkbox] { accent-color:var(--accent); width:14px; height:14px; }
@@ -7546,7 +7553,7 @@ function openDPEntryModal(seg, monthId, idx) {
         '<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer;margin:0;">' +
           '<input type="checkbox" id="dpModal_isSelfFinance" onchange="onDPSelfFinanceToggle()"'+(isSelfFinanceChecked?' checked':'')+'> Self Finance' +
         '</label>' +
-        '<span style="font-size:11px;color:var(--text-muted);">(customer arranged their own financing — Financier may be unknown)</span>' +
+        '<span style="font-size:11px;color:var(--text-muted);">(customer arranged their own financing — still select who\'s carrying the loan)</span>' +
       '</div>' +
       '<div class="form-group" style="margin:0;"><label class="form-label" id="dpFinancierLabel">'+reqLabel(col)+'</label>' +
         '<select class="form-select" id="'+fieldId+'">'+fopts+'</select></div>';
@@ -7723,12 +7730,6 @@ function onDPVariantChange() {
 function onDPSelfFinanceToggle() {
   var cb = document.getElementById('dpModal_isSelfFinance');
   if (!cb) return;
-  var financierLabel = document.getElementById('dpFinancierLabel');
-  if (financierLabel) {
-    financierLabel.innerHTML = cb.checked
-      ? 'Financier <span style="font-size:10px;color:var(--text-muted);">(optional — Self Finance)</span>'
-      : 'Financier <span style="color:var(--flag);">*</span>';
-  }
   var irrLabel = document.getElementById('dpIrrLabel');
   if (irrLabel) {
     irrLabel.innerHTML = cb.checked
@@ -7815,11 +7816,13 @@ function saveDPEntry() {
     var el = document.getElementById('dpModal_' + col.key);
     var v = el ? el.value.trim() : '';
     row[col.key] = v;
-    // Loan Tenure is optional when Self Finance is on (tenure may not be known
-    // for a self-arranged loan), AND is mandatory only for entries created
-    // from now on — editing a pre-existing entry should never be blocked by it.
+    // Financier is required even when Self Finance is on — the entry still
+    // needs to record who's carrying the loan. IRR and Loan Tenure stay
+    // optional in that case (a self-arranged loan's terms may not be known),
+    // and Loan Tenure is mandatory only for entries created from now on —
+    // editing a pre-existing entry should never be blocked by it.
     var isRequired = col.required
-      && !((col.key === 'financier' || col.key === 'irr' || col.key === 'loanTenure') && isSelfFinance)
+      && !((col.key === 'irr' || col.key === 'loanTenure') && isSelfFinance)
       && !(col.key === 'loanTenure' && !isNewEntry);
     if (isRequired && !v) missing.push(col.label);
     if ((col.key === 'discount' || col.key === 'downPayment') && v !== '' && parseFloat(v) < 0) {
