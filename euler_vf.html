@@ -6766,7 +6766,8 @@ async function deleteDPIRRMonthFromSheet(id) {
 }
 async function saveDPIRREntryToSheet(entryObj) {
   setSaveStatus('saving');
-  try { await API.post('/api/dpirr_entries', entryObj); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.post('/api/dpirr_entries', entryObj); setSaveStatus('saved'); }
+  catch(e) { setSaveStatus('error'); throw e; }
 }
 async function saveDPIRREntriesBulkToSheet(entries) {
   setSaveStatus('saving');
@@ -7862,7 +7863,7 @@ function saveDPEntry() {
   proceedWithDPEntrySave(row);
 }
 
-function proceedWithDPEntrySave(row) {
+async function proceedWithDPEntrySave(row) {
   var seg = _dpEditTarget.seg, monthId = _dpEditTarget.monthId, idx = _dpEditTarget.idx;
   var arr = getDPEntries(seg, monthId);
   var monthObj = (_dpMonths[seg] || []).find(function(m){ return m.id === monthId; }) || {};
@@ -7881,17 +7882,28 @@ function proceedWithDPEntrySave(row) {
   }
   var wasBulk = bulkCount > 1;
 
+  // The local list is only ever mutated AFTER the save to the sheet actually
+  // succeeds — never speculatively beforehand. A save that fails silently
+  // while the UI still shows "✅ Entry saved" is exactly how an entry can
+  // look like it worked right up until the next refresh reveals it never
+  // really persisted at all.
   if (idx !== null) {
     var oldRow = arr[idx];
-    // Edit existing single entry — preserve original creator, never overwrite it
-    row['Sr. No.'] = arr[idx]['Sr. No.'];
-    row['_id'] = arr[idx]['_id'] || genDPId();
-    row['createdBy'] = arr[idx]['createdBy'] || getDPUserName();
-    arr[idx] = row;
+    row['Sr. No.'] = oldRow['Sr. No.'];
+    row['_id'] = oldRow['_id'] || genDPId();
+    row['createdBy'] = oldRow['createdBy'] || getDPUserName();
 
     var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'], isSelfFinance: row.isSelfFinance };
     DP_COLS.forEach(function(col) { payload[col.key] = row[col.key] || ''; });
-    saveDPIRREntryToSheet(payload);
+
+    try {
+      await saveDPIRREntryToSheet(payload);
+    } catch (e) {
+      toast('❌ Failed to save — please check your connection and try again. Your changes are still in the form.');
+      return;
+    }
+
+    arr[idx] = row;
 
     // Offer to propagate this edit's changed fields to other duplicate entries
     // (same Customer/Product/Model/Variant/Dealer) in the same month — e.g. a
@@ -7912,15 +7924,28 @@ function proceedWithDPEntrySave(row) {
           'This entry is a duplicate of ' + siblings.length + ' other ' + siblingWord +
           ' (same Customer/Product/Model/Variant/Dealer). Apply your change'+(changedFields.length===1?'':'s')+
           ' to ' + fieldLabels + ' on ' + (siblings.length===1?'that entry':'those entries') + ' too?',
-          function() {
-            siblings.forEach(function(sibling) {
+          async function() {
+            var failedNames = [];
+            for (var s = 0; s < siblings.length; s++) {
+              var sibling = siblings[s];
+              var oldSiblingVals = {};
+              changedFields.forEach(function(col) { oldSiblingVals[col.key] = sibling[col.key]; });
               changedFields.forEach(function(col) { sibling[col.key] = row[col.key]; });
               var sibPayload = { id: sibling['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: sibling['Sr. No.'], createdBy: sibling['createdBy'], isSelfFinance: sibling.isSelfFinance };
               DP_COLS.forEach(function(col) { sibPayload[col.key] = sibling[col.key] || ''; });
-              saveDPIRREntryToSheet(sibPayload);
-            });
+              try {
+                await saveDPIRREntryToSheet(sibPayload);
+              } catch (e) {
+                changedFields.forEach(function(col) { sibling[col.key] = oldSiblingVals[col.key]; }); // roll back locally too
+                failedNames.push(sibling.customerName || ('Sr. No. ' + sibling['Sr. No.']));
+              }
+            }
             renderDPView(seg, monthId);
-            toast('✅ Changes applied to ' + siblings.length + ' duplicate ' + siblingWord + ' too');
+            if (failedNames.length) {
+              toast('⚠ Applied to ' + (siblings.length - failedNames.length) + ' of ' + siblings.length + ' — failed for: ' + failedNames.join(', '));
+            } else {
+              toast('✅ Changes applied to ' + siblings.length + ' duplicate ' + siblingWord + ' too');
+            }
           },
           '✓ Apply to ' + siblings.length + (siblings.length===1?' entry':' entries'),
           'btn-primary'
@@ -7933,10 +7958,9 @@ function proceedWithDPEntrySave(row) {
     var newRows = [];
     for (var i = 0; i < bulkCount; i++) {
       var clone = Object.assign({}, row);
-      clone['Sr. No.'] = arr.length + 1;
+      clone['Sr. No.'] = arr.length + newRows.length + 1;
       clone['_id'] = genDPId();
       clone['createdBy'] = getDPUserName();
-      arr.push(clone);
       newRows.push(clone);
     }
     var bulkPayload = newRows.map(function(r) {
@@ -7944,20 +7968,30 @@ function proceedWithDPEntrySave(row) {
       DP_COLS.forEach(function(col) { p[col.key] = r[col.key] || ''; });
       return p;
     });
-    saveDPIRREntriesBulkToSheet(bulkPayload).catch(function() {
-      toast('⚠ Entries saved locally but failed to sync to Google Sheet — please retry.');
-    });
+    try {
+      await saveDPIRREntriesBulkToSheet(bulkPayload);
+    } catch (e) {
+      toast('❌ Failed to create entries — nothing was saved. Please try again.');
+      return;
+    }
+    newRows.forEach(function(r) { arr.push(r); });
 
   } else {
     // Single new entry
     row['Sr. No.'] = arr.length + 1;
     row['_id'] = genDPId();
     row['createdBy'] = getDPUserName();
-    arr.push(row);
 
     var payload2 = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'], isSelfFinance: row.isSelfFinance };
     DP_COLS.forEach(function(col) { payload2[col.key] = row[col.key] || ''; });
-    saveDPIRREntryToSheet(payload2);
+
+    try {
+      await saveDPIRREntryToSheet(payload2);
+    } catch (e) {
+      toast('❌ Failed to save — please check your connection and try again. Your changes are still in the form.');
+      return;
+    }
+    arr.push(row);
   }
 
   closeDPEntry();
