@@ -1878,7 +1878,11 @@
         </div>
         <div class="form-group" style="margin:0;max-width:260px;flex:1;">
           <label class="form-label">Product</label>
-          <select class="form-select" id="dpAnalysisProductFilter" onchange="renderDPAnalysisForSelectedMonth()"></select>
+          <div id="dpAnalysisProductFilterWrap"></div>
+        </div>
+        <div class="form-group" style="margin:0;max-width:260px;flex:1;">
+          <label class="form-label">VF RM</label>
+          <select class="form-select" id="dpAnalysisVfRmFilter" onchange="renderDPAnalysisForSelectedMonth()"></select>
         </div>
       </div>
       <div id="dpAnalysisBody"></div>
@@ -6699,7 +6703,7 @@ function initTAIFViews() {
 // ══════════════════════════════════════════════════════════════
 var _dpMonths      = { 'dp': [] };   // [{id, label}]
 var _dpData        = { 'dp': {} };   // monthId -> [entries]
-var _dpFilters     = {};             // monthId -> {dealer:[],product:[],model:[],financier:[],salesRm:[],vfRm:[],vfStatus:[],createdBy:[],selfFinance:[]}
+var _dpFilters     = {};             // monthId -> {dealer:[],product:[],model:[],financier:[],salesRm:[],vfRm:[],vfStatus:[],createdBy:[],selfFinance:[],customerType:[]}
 var _dpActiveMonth = { 'dp': null };
 var _dpEditTarget  = null; // {seg, monthId, idx}
 var _dpUsers = []; // [{name, isAdmin}] fetched from DPIRR_Users sheet
@@ -7128,7 +7132,7 @@ function getDPEntries(seg, monthId) {
 }
 
 function getDPFilters(monthId) {
-  if (!_dpFilters[monthId]) _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[], createdBy:[], selfFinance:[] };
+  if (!_dpFilters[monthId]) _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[], createdBy:[], selfFinance:[], customerType:[] };
   return _dpFilters[monthId];
 }
 
@@ -7255,14 +7259,66 @@ function openDPAnalysisModal() {
   var defaultMonth = _dpActiveMonth.dp;
   sel.value = (defaultMonth && months.some(function(m){ return m.id === defaultMonth; })) ? defaultMonth : '__all__';
 
-  var productSel = document.getElementById('dpAnalysisProductFilter');
-  var productOpts = '<option value="__all__">All Products</option>' +
-    (_dpProducts || []).map(function(p){ return '<option value="'+escHtml(p)+'">'+escHtml(p)+'</option>'; }).join('');
-  productSel.innerHTML = productOpts;
-  productSel.value = '__all__'; // no obvious "currently active product" to default to, unlike month
+  _dpAnalysisSelectedProducts = []; // reset to "All Products" each time the modal opens
+  renderDPAnalysisProductFilter();
+
+  var vfRmSel = document.getElementById('dpAnalysisVfRmFilter');
+  var vfRmNames = Array.from(new Set(
+    getAllVisibleDPEntries(null).map(function(r){ return String(dpVal(r.vfRm)).trim(); }).filter(Boolean)
+  )).sort();
+  var vfRmOpts = '<option value="__all__">All VF RMs</option>' +
+    vfRmNames.map(function(n){ return '<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>'; }).join('');
+  vfRmSel.innerHTML = vfRmOpts;
+  vfRmSel.value = '__all__';
 
   renderDPAnalysisForSelectedMonth();
   document.getElementById('dpAnalysisOverlay').style.display = 'flex';
+}
+
+// Multi-select Product filter for the Analysis modal — lets the user pick
+// several products at once (e.g. both 3WC and 3WP together to see the 3W
+// segment as a whole), reusing the same dropdown look and feel as the
+// Monthly Entries filter bar, but with its own state since this modal isn't
+// tied to a single month.
+var _dpAnalysisSelectedProducts = [];
+
+function renderDPAnalysisProductFilter() {
+  var wrap = document.getElementById('dpAnalysisProductFilterWrap');
+  if (!wrap) return;
+  var values = _dpProducts || [];
+  var selectedCount = _dpAnalysisSelectedProducts.length;
+  var btnLabel = selectedCount ? selectedCount + ' selected' : 'All Products';
+  wrap.innerHTML = '<div class="multi-filter-wrap" style="position:relative;">' +
+    '<div class="multi-filter-btn" id="dpAnalysisProductBtn" onclick="toggleDPFilter(\'dpAnalysisProductDd\',\'dpAnalysisProductBtn\')" style="width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+      escHtml(btnLabel) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>' +
+    '</div>' +
+    '<div class="multi-filter-dropdown" id="dpAnalysisProductDd" style="min-width:220px;">' +
+      '<input type="text" placeholder="Search..." oninput="filterDPDropdown(this,\'dpAnalysisProductDd\')" ' +
+        'style="margin:6px 8px 4px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;width:calc(100% - 16px);box-sizing:border-box;">' +
+      '<div id="dpAnalysisProductDd_items">' +
+        values.map(function(v){
+          var checked = _dpAnalysisSelectedProducts.indexOf(v) > -1;
+          return '<label class="multi-filter-item"><input type="checkbox" value="'+escHtml(v)+'" '+(checked?'checked':'')+' onchange="onDPAnalysisProductChange(this)"><span>'+escHtml(v)+'</span></label>';
+        }).join('') +
+      '</div>' +
+      '<div class="multi-filter-clear" onclick="clearDPAnalysisProductFilter()">✕ Clear (All Products)</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function onDPAnalysisProductChange(cb) {
+  var val = cb.value;
+  if (cb.checked) { if (_dpAnalysisSelectedProducts.indexOf(val) === -1) _dpAnalysisSelectedProducts.push(val); }
+  else { var i = _dpAnalysisSelectedProducts.indexOf(val); if (i > -1) _dpAnalysisSelectedProducts.splice(i, 1); }
+  var btn = document.getElementById('dpAnalysisProductBtn');
+  if (btn) btn.innerHTML = (_dpAnalysisSelectedProducts.length ? _dpAnalysisSelectedProducts.length+' selected' : 'All Products') + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
+  renderDPAnalysisForSelectedMonth();
+}
+
+function clearDPAnalysisProductFilter() {
+  _dpAnalysisSelectedProducts = [];
+  renderDPAnalysisProductFilter();
+  renderDPAnalysisForSelectedMonth();
 }
 
 function renderDPAnalysisForSelectedMonth() {
@@ -7270,10 +7326,14 @@ function renderDPAnalysisForSelectedMonth() {
   var monthId = (sel.value === '__all__') ? null : sel.value;
   var entries = getAllVisibleDPEntries(monthId);
 
-  var productSel = document.getElementById('dpAnalysisProductFilter');
-  var product = (productSel && productSel.value !== '__all__') ? productSel.value : null;
-  if (product) {
-    entries = entries.filter(function(r) { return String(dpVal(r.product)).trim() === product; });
+  if (_dpAnalysisSelectedProducts.length) {
+    entries = entries.filter(function(r) { return _dpAnalysisSelectedProducts.indexOf(String(dpVal(r.product)).trim()) > -1; });
+  }
+
+  var vfRmSel = document.getElementById('dpAnalysisVfRmFilter');
+  var vfRm = (vfRmSel && vfRmSel.value !== '__all__') ? vfRmSel.value : null;
+  if (vfRm) {
+    entries = entries.filter(function(r) { return String(dpVal(r.vfRm)).trim() === vfRm; });
   }
 
   document.getElementById('dpAnalysisBody').innerHTML = renderDPAnalysisHtml(entries);
@@ -7282,6 +7342,47 @@ function renderDPAnalysisForSelectedMonth() {
 function closeDPAnalysisModal() {
   document.getElementById('dpAnalysisOverlay').style.display = 'none';
 }
+
+// A lightweight, dependency-free donut chart: draws each slice as an arc of
+// a thick-stroked circle using stroke-dasharray/stroke-dashoffset, rotated so
+// the first slice starts at 12 o'clock. Takes [{label, value, color}]; slices
+// with a zero or negative value are skipped. Returns an <svg> + legend as one
+// HTML string.
+function renderDPDonutChart(slices, size) {
+  size = size || 150;
+  var r = size / 2 - 12;
+  var cx = size / 2, cy = size / 2;
+  var circumference = 2 * Math.PI * r;
+  var total = slices.reduce(function(s, x){ return s + (x.value > 0 ? x.value : 0); }, 0);
+
+  var arcs = '';
+  var legend = '';
+  var offset = 0;
+  if (total > 0) {
+    slices.forEach(function(s) {
+      if (!(s.value > 0)) return;
+      var frac = s.value / total;
+      var segLen = frac * circumference;
+      arcs += '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+s.color+'" stroke-width="22" ' +
+        'stroke-dasharray="'+segLen.toFixed(2)+' '+(circumference-segLen).toFixed(2)+'" ' +
+        'stroke-dashoffset="'+(-offset).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')">' +
+        '<title>'+escHtml(s.label)+': '+s.value+' ('+(frac*100).toFixed(1)+'%)</title></circle>';
+      offset += segLen;
+      legend += '<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin-bottom:5px;">' +
+        '<span style="width:10px;height:10px;border-radius:2px;background:'+s.color+';flex-shrink:0;"></span>' +
+        '<span style="color:var(--text);">'+escHtml(s.label)+'</span>' +
+        '<span style="color:var(--text-muted);">'+s.value+' ('+(frac*100).toFixed(1)+'%)</span></div>';
+    });
+  }
+
+  var svg = '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">' + arcs + '</svg>';
+  if (!total) return '<div style="'+  'font-size:12px;color:var(--text-muted);'+'">No data to chart yet.</div>';
+  return '<div style="display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap;">' +
+    '<div style="flex-shrink:0;">'+svg+'</div>' +
+    '<div style="min-width:160px;">'+legend+'</div></div>';
+}
+
+var DP_PIE_COLORS = ['#818cf8','#4ade80','#fbbf24','#f87171','#38bdf8','#c084fc','#fb923c','#a3e635','#94a3b8'];
 
 function renderDPAnalysisHtml(entries) {
   var sectionStyle = 'margin-bottom:24px;';
@@ -7364,7 +7465,15 @@ function renderDPAnalysisHtml(entries) {
     }).join('') +
     '<tr><td style="'+tdStyle+'color:#fbbf24;font-weight:600;">NTC (New To Credit)</td><td style="'+tdStyle+'">'+cibil.ntcCount+'</td><td style="'+tdStyle+'color:#fbbf24;">'+cibil.ntcPct.toFixed(1)+'%</td></tr>' +
     '<tr><td style="'+tdStyle+'color:var(--text-muted);">Not Captured</td><td style="'+tdStyle+'">'+cibil.notCapturedCount+'</td><td style="'+tdStyle+'">—</td></tr>' +
-    '</tbody></table></div></div>';
+    '</tbody></table></div>';
+  if (cibil.totalCaptured) {
+    var cibilPieSlices = cibil.rows.map(function(r, i){
+      return { label: r.label, value: r.count, color: DP_PIE_COLORS[i % DP_PIE_COLORS.length] };
+    });
+    cibilPieSlices.push({ label: 'NTC', value: cibil.ntcCount, color: '#fbbf24' });
+    html += '<div style="margin-top:12px;">' + renderDPDonutChart(cibilPieSlices) + '</div>';
+  }
+  html += '</div>';
 
   // ── 6. Customer Type split — based only on entries where it was actually
   // captured, not the full dataset (matches how the CIBIL section handles
@@ -7401,6 +7510,10 @@ function renderDPAnalysisHtml(entries) {
           '<td style="'+tdStyle+'">'+r.count+'</td><td style="'+tdStyle+'">'+(r.count/custTypeCapturedCount*100).toFixed(1)+'%</td></tr>';
       }).join('') +
       '</tbody></table>';
+
+    html += renderDPDonutChart(custTypeOverallRows.map(function(r, i){
+      return { label: r.name, value: r.count, color: DP_PIE_COLORS[i % DP_PIE_COLORS.length] };
+    })) + '<div style="margin-bottom:16px;"></div>';
 
     html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Product-wise (of captured cases; each cell shows count, and % within that product\'s captured total)</div>' +
       '<div style="overflow-x:auto;"><table style="'+tableStyle+'"><thead><tr>' +
@@ -8073,7 +8186,7 @@ function onDPFilterChange(monthId, field, cb) {
   else { var i = filters[field].indexOf(val); if (i > -1) filters[field].splice(i,1); }
   var btnId = 'dpMF_'+monthId+'_'+field+'_btn';
   var btn = document.getElementById(btnId);
-  var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status', createdBy:'Created By', selfFinance:'Self Finance' };
+  var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status', createdBy:'Created By', selfFinance:'Self Finance', customerType:'Customer Type' };
   if (btn) btn.innerHTML = (filters[field].length ? filters[field].length+' selected' : labels[field]||field) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
   var seg = monthId.split('_')[0];
   renderDPTable(seg, monthId);
@@ -8091,12 +8204,12 @@ function clearDPFilter(monthId, field, btnId, label) {
 }
 
 function clearAllDPFilters(monthId) {
-  _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[], createdBy:[], selfFinance:[] };
-  ['dealer','product','model','financier','salesRm','vfRm','vfStatus','createdBy','selfFinance'].forEach(function(f) {
+  _dpFilters[monthId] = { dealer:[], product:[], model:[], financier:[], salesRm:[], vfRm:[], vfStatus:[], createdBy:[], selfFinance:[], customerType:[] };
+  ['dealer','product','model','financier','salesRm','vfRm','vfStatus','createdBy','selfFinance','customerType'].forEach(function(f) {
     var dd = document.getElementById('dpMF_'+monthId+'_'+f+'_dd');
     if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked=false; });
     var btn = document.getElementById('dpMF_'+monthId+'_'+f+'_btn');
-    var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status', createdBy:'Created By', selfFinance:'Self Finance' };
+    var labels = { dealer:'Dealer Name', product:'Product', model:'Model', financier:'Financier', salesRm:'RM Name', vfRm:'VF Name', vfStatus:'VF Status', createdBy:'Created By', selfFinance:'Self Finance', customerType:'Customer Type' };
     if (btn) btn.innerHTML = (labels[f]||f) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
   });
   var searchEl = document.getElementById('dpSearch_'+monthId);
@@ -8125,6 +8238,7 @@ function applyDPFilters(rows, monthId) {
       var wantsNo  = filters.selfFinance.indexOf('No') > -1;
       if (!((wantsYes && isSelf) || (wantsNo && !isSelf))) return false;
     }
+    if (filters.customerType.length && filters.customerType.indexOf(String(dpVal(r.customerType)))   === -1) return false;
     return true;
   });
 }
@@ -8148,6 +8262,7 @@ function renderDPView(seg, monthId) {
     dpFilterDropdown(monthId, 'vfRm',      'VF Name',     uniq('vfRm'),      filters.vfRm) +
     dpFilterDropdown(monthId, 'vfStatus',  'VF Status',   uniq('vfStatus'),  filters.vfStatus) +
     dpFilterDropdown(monthId, 'selfFinance', 'Self Finance', ['Yes','No'], filters.selfFinance) +
+    dpFilterDropdown(monthId, 'customerType', 'Customer Type', uniq('customerType'), filters.customerType) +
     (isAdmin ? dpFilterDropdown(monthId, 'createdBy', 'Created By', uniq('createdBy'), filters.createdBy) : '') +
     '<button class="btn btn-secondary btn-sm" onclick="clearAllDPFilters(\''+monthId+'\')" style="font-size:11px;">✕ Clear</button>' +
     '<button class="btn btn-primary btn-sm" onclick="openDPEntryModal(\''+seg+'\',\''+monthId+'\',null)">＋ Add Entry</button>' +
