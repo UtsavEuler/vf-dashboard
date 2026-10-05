@@ -6724,6 +6724,17 @@ var DP_VF_STATUS_OPTS = ['Disbursement Pending','Disbursement Received','Invoici
 var DP_FUNDING_OPTS = ['ESP','ORP'];
 var DP_CUSTOMER_TYPE_OPTS = ['Captive','MLO/DCO','Small Fleet Operator','Medium Fleet Operator','Large Fleet Operator'];
 
+// 4WC products (Turbo and every Storm variant) shouldn't normally need an
+// Effective DP above this — when one does, the entry has to carry a Remark
+// explaining why, so unusually high down payments are justified, not silent.
+var DP_HIGH_EDP_LIMIT = 250000;
+function dpNeedsHighEdpRemark(product, effectiveDp) {
+  var p = String(product || '').trim().toLowerCase();
+  var is4wc = (p === 'turbo' || p.indexOf('storm') === 0);
+  var edp = parseFloat(effectiveDp);
+  return is4wc && !isNaN(edp) && edp > DP_HIGH_EDP_LIMIT;
+}
+
 // Preserves legitimate falsy values (0, "0") as-is — only truly missing
 // (undefined/null) values fall back to ''. A plain `x || ''` incorrectly
 // blanks out a genuine 0, e.g. Discount when no discount was given.
@@ -7400,16 +7411,65 @@ function renderDPAnalysisHtml(entries) {
   }
 
   // ── 1. Total entries by product ──
+  // Averages are computed only over entries that actually have a numeric
+  // value for that field — a blank IRR (common for self-financed entries) or
+  // blank Effective DP is excluded from both the sum and the count, rather
+  // than silently treated as 0, which would pull the average down wrongly.
+  function dpAvg(rows, field) {
+    var sum = 0, n = 0;
+    rows.forEach(function(r) {
+      var v = parseFloat(dpVal(r[field]));
+      if (!isNaN(v)) { sum += v; n++; }
+    });
+    return { avg: n ? sum / n : null, count: n };
+  }
+
+  function fmtPctCell(stat) {
+    return stat.avg !== null
+      ? stat.avg.toFixed(2)+'% <span style="color:var(--text-muted);font-size:10.5px;">(n='+stat.count+')</span>'
+      : '<span style="color:var(--text-muted);">—</span>';
+  }
+  function fmtRupeeCell(stat) {
+    return stat.avg !== null
+      ? '₹'+Math.round(stat.avg).toLocaleString('en-IN')+' <span style="color:var(--text-muted);font-size:10.5px;">(n='+stat.count+')</span>'
+      : '<span style="color:var(--text-muted);">—</span>';
+  }
+
   var byProduct = {};
-  entries.forEach(function(r){ var p = String(dpVal(r.product)).trim() || '(no product)'; byProduct[p] = (byProduct[p]||0)+1; });
-  var productRows = Object.keys(byProduct).map(function(p){ return {name:p, count:byProduct[p]}; })
-    .sort(function(a,b){ return b.count - a.count; });
+  var rowsByProduct = {};
+  entries.forEach(function(r){
+    var p = String(dpVal(r.product)).trim() || '(no product)';
+    byProduct[p] = (byProduct[p]||0)+1;
+    (rowsByProduct[p] = rowsByProduct[p] || []).push(r);
+  });
+  var productRows = Object.keys(byProduct).map(function(p){
+    var rows = rowsByProduct[p];
+    return {
+      name: p, count: byProduct[p],
+      irr: dpAvg(rows, 'irr'),
+      orp: dpAvg(rows, 'orp'),
+      downPayment: dpAvg(rows, 'downPayment'),
+      discount: dpAvg(rows, 'discount'),
+      effectiveDp: dpAvg(rows, 'effectiveDp'),
+      ltv: dpAvg(rows, 'ltv'),
+    };
+  }).sort(function(a,b){ return b.count - a.count; });
+
   html += '<div style="'+sectionStyle+'"><div style="'+titleStyle+'">1. Total Entries: '+total+'</div>' +
-    '<table style="'+tableStyle+'"><thead><tr><th style="'+thStyle+'">Product</th><th style="'+thStyle+'">Count</th><th style="'+thStyle+'">%</th></tr></thead><tbody>' +
+    '<div style="overflow-x:auto;"><table style="'+tableStyle+'"><thead><tr><th style="'+thStyle+'">Product</th><th style="'+thStyle+'">Count</th><th style="'+thStyle+'">%</th>' +
+    '<th style="'+thStyle+'">Avg IRR (%)</th><th style="'+thStyle+'">Avg ORP (₹)</th><th style="'+thStyle+'">Avg Down Payment (₹)</th>' +
+    '<th style="'+thStyle+'">Avg Discount (₹)</th><th style="'+thStyle+'">Avg Effective DP (₹)</th>' +
+    '<th style="'+thStyle+'">Avg LTV (₹)</th></tr></thead><tbody>' +
     productRows.map(function(r){
-      return '<tr><td style="'+tdStyle+'">'+escHtml(r.name)+'</td><td style="'+tdStyle+'">'+r.count+'</td><td style="'+tdStyle+'">'+(r.count/total*100).toFixed(1)+'%</td></tr>';
+      return '<tr><td style="'+tdStyle+'">'+escHtml(r.name)+'</td><td style="'+tdStyle+'">'+r.count+'</td><td style="'+tdStyle+'">'+(r.count/total*100).toFixed(1)+'%</td>' +
+        '<td style="'+tdStyle+'">'+fmtPctCell(r.irr)+'</td>' +
+        '<td style="'+tdStyle+'">'+fmtRupeeCell(r.orp)+'</td>' +
+        '<td style="'+tdStyle+'">'+fmtRupeeCell(r.downPayment)+'</td>' +
+        '<td style="'+tdStyle+'">'+fmtRupeeCell(r.discount)+'</td>' +
+        '<td style="'+tdStyle+'">'+fmtRupeeCell(r.effectiveDp)+'</td>' +
+        '<td style="'+tdStyle+'">'+fmtRupeeCell(r.ltv)+'</td></tr>';
     }).join('') +
-    '</tbody></table></div>';
+    '</tbody></table></div></div>';
 
   // ── 2. Top 10 financiers, product-wise ──
   var finCross = computeDPCrossTab(entries, 'financier', { skipEmpty: true, limit: 10 });
@@ -7627,7 +7687,8 @@ function openDPEntryModal(seg, monthId, idx) {
     var val = dpVal(row[col.key]);
     var fieldId = 'dpModal_' + col.key;
     if (col.type === 'text') {
-      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+      var textLabelId = col.key === 'remarks' ? ' id="dpRemarksLabel"' : '';
+      body += '<div class="form-group" style="margin:0;"><label class="form-label"'+textLabelId+'>'+reqLabel(col)+'</label>' +
         '<input type="text" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'"></div>';
     } else if (col.type === 'number') {
       var calcTrigger = (col.key === 'orp' || col.key === 'ltv' || col.key === 'discount') ? ' onchange="recalcDPFinancials()" oninput="recalcDPFinancials()"' : '';
@@ -7844,12 +7905,6 @@ function onDPVariantChange() {
 function onDPSelfFinanceToggle() {
   var cb = document.getElementById('dpModal_isSelfFinance');
   if (!cb) return;
-  var irrLabel = document.getElementById('dpIrrLabel');
-  if (irrLabel) {
-    irrLabel.innerHTML = cb.checked
-      ? 'IRR (%) <span style="font-size:10px;color:var(--text-muted);">(optional — Self Finance)</span>'
-      : 'IRR (%) <span style="color:var(--flag);">*</span>';
-  }
   var tenureLabel = document.getElementById('dpLoanTenureLabel');
   if (tenureLabel) {
     var isNewEntry = _dpEditTarget && _dpEditTarget.idx === null;
@@ -7903,6 +7958,19 @@ function recalcDPFinancials() {
       effDpEl.value = '';
     }
   }
+
+  // Remarks becomes mandatory (new entries only) when a 4WC product's
+  // Effective DP is unusually high — flag it on the label immediately so the
+  // user isn't surprised at save.
+  var remarksLabel = document.getElementById('dpRemarksLabel');
+  if (remarksLabel) {
+    var prodEl = document.getElementById('dpModal_product');
+    var isNewEntryForm = _dpEditTarget && _dpEditTarget.idx === null;
+    var needsRemark = isNewEntryForm && dpNeedsHighEdpRemark(prodEl ? prodEl.value : '', effDpEl ? effDpEl.value : '');
+    remarksLabel.innerHTML = needsRemark
+      ? 'Remarks <span style="color:var(--flag);">*</span> <span style="font-size:10px;color:var(--flag);">(required — Effective DP above ₹2,50,000, please justify)</span>'
+      : 'Remarks';
+  }
 }
 
 function closeDPEntry() {
@@ -7931,12 +7999,12 @@ function saveDPEntry() {
     var v = el ? el.value.trim() : '';
     row[col.key] = v;
     // Financier is required even when Self Finance is on — the entry still
-    // needs to record who's carrying the loan. IRR and Loan Tenure stay
+    // needs to record who's carrying the loan, and so does IRR. Loan Tenure stays
     // optional in that case (a self-arranged loan's terms may not be known),
     // and Loan Tenure is mandatory only for entries created from now on —
     // editing a pre-existing entry should never be blocked by it.
     var isRequired = col.required
-      && !((col.key === 'irr' || col.key === 'loanTenure') && isSelfFinance)
+      && !(col.key === 'loanTenure' && isSelfFinance)
       && !(col.key === 'loanTenure' && !isNewEntry);
     if (isRequired && !v) missing.push(col.label);
     if ((col.key === 'discount' || col.key === 'downPayment') && v !== '' && parseFloat(v) < 0) {
@@ -7948,6 +8016,10 @@ function saveDPEntry() {
       invalidPositiveFields.push(col.label);
     }
   });
+  // New entries only — editing a pre-existing entry is never blocked by this.
+  if (isNewEntry && dpNeedsHighEdpRemark(row.product, row.effectiveDp) && !String(row.remarks || '').trim()) {
+    missing.push('Remarks (Effective DP is above ₹2,50,000 — please justify why)');
+  }
   if (missing.length) {
     toast('⚠ Required: ' + missing.join(', '));
     return;
