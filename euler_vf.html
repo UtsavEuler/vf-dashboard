@@ -7748,7 +7748,8 @@ function openDPEntryModal(seg, monthId, idx) {
       var ctopts = ['<option value="">— Select —</option>'].concat(DP_CUSTOMER_TYPE_OPTS.map(function(o){
         return '<option value="'+escHtml(o)+'"'+(val===o?' selected':'')+'>'+escHtml(o)+'</option>';
       })).join('');
-      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+'</label>' +
+      var ctLabel = col.label + (idx === null ? ' <span style="color:var(--flag);">*</span>' : '');
+      body += '<div class="form-group" style="margin:0;"><label class="form-label">'+ctLabel+'</label>' +
         '<select class="form-select" id="'+fieldId+'">'+ctopts+'</select></div>';
     } else if (col.type === 'auto') {
       body += '<div class="form-group" style="margin:0;"><label class="form-label">'+reqLabel(col)+' <span style="font-size:10px;color:var(--text-muted);">(auto)</span></label>' +
@@ -8003,9 +8004,12 @@ function saveDPEntry() {
     // optional in that case (a self-arranged loan's terms may not be known),
     // and Loan Tenure is mandatory only for entries created from now on —
     // editing a pre-existing entry should never be blocked by it.
-    var isRequired = col.required
+    var isRequired = (col.required
       && !(col.key === 'loanTenure' && isSelfFinance)
-      && !(col.key === 'loanTenure' && !isNewEntry);
+      && !(col.key === 'loanTenure' && !isNewEntry))
+      // Customer Type is mandatory when adding a new entry only — entries
+      // created before it existed have it blank and must stay editable.
+      || (col.key === 'customerType' && isNewEntry);
     if (isRequired && !v) missing.push(col.label);
     if ((col.key === 'discount' || col.key === 'downPayment') && v !== '' && parseFloat(v) < 0) {
       negativeFields.push(col.label);
