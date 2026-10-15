@@ -48,6 +48,20 @@ WORKSHEETS = {
     # be exposed via the generic /api/<alias> routes, so routes.py owns explicit
     # handlers (GET/register/verify/change_pin) that filter it out.
     "dpirr_users": "DPIRR_Users",
+    # TA/IF (Trade Advance / Inventory Funding) tracker. Like the DP/IRR sheets
+    # these are created on first use (see AUTO_CREATE_HEADERS). Three small
+    # tables rather than one wide one, so a new financing partner is just a new
+    # row and a dealer with no partner mapped yet still exists.
+    "taif_partners": "TAIF_Partners",
+    "taif_dealers": "TAIF_Dealers",
+    # This tab must have a header cell named exactly "limitCr": the single limit,
+    # in INR crore (the status says whether it is a soft or a final approval). An
+    # earlier version of the page had two rupee columns, limitOffered and
+    # limitApproved. A live tab keeps whatever header row it already has, and a
+    # write to a column it lacks is silently dropped, so a tab created by that
+    # earlier version must have its header fixed by hand (or be deleted so it is
+    # re-created). diagnose_taif_sheets.py checks all three TA/IF tabs.
+    "taif_mapping": "TAIF_Mapping",
 }
 
 # DP/IRR column orders. Order matters: it is the on-sheet column order and the
@@ -66,6 +80,15 @@ DPIRR_MODEL_HEADERS = ["product", "name"]
 DPIRR_VARIANT_HEADERS = ["product", "model", "variant", "esp"]
 DPIRR_VARIANT_STATE_ESP_HEADERS = ["product", "model", "variant", "state", "esp"]
 DPIRR_USER_HEADERS = ["name", "pinHash", "isAdmin", "createdAt"]
+
+# TA/IF column orders — on-sheet layout, so part of the frozen contract.
+# facility is "TA" or "IF". limitCr is the single limit in INR crore (required by
+# the UI); the status says whether it is a soft approval (offered at dealer
+# evaluation) or the final sanctioned limit.
+TAIF_PARTNER_HEADERS = ["financier", "offersTA", "offersIF"]
+TAIF_DEALER_HEADERS = ["dealer", "location", "addedAt"]
+TAIF_MAPPING_HEADERS = ["dealer", "location", "facility", "financier", "status",
+                        "limitCr", "remarks", "updatedAt"]
 
 
 def hash_dpirr_pin(name, pin):
@@ -86,6 +109,9 @@ AUTO_CREATE_HEADERS = {
     "dpirr_variants": DPIRR_VARIANT_HEADERS,
     "dpirr_variant_state_esp": DPIRR_VARIANT_STATE_ESP_HEADERS,
     "dpirr_users": DPIRR_USER_HEADERS,
+    "taif_partners": TAIF_PARTNER_HEADERS,
+    "taif_dealers": TAIF_DEALER_HEADERS,
+    "taif_mapping": TAIF_MAPPING_HEADERS,
 }
 
 # Composite match keys per resource, exactly as the original server.py used them.
@@ -104,6 +130,11 @@ MATCH_KEYS = {
     "dpirr_variants": ["product", "model", "variant"],
     "dpirr_variant_state_esp": ["product", "model", "variant", "state"],
     "dpirr_users": ["name"],
+    "taif_partners": ["financier"],
+    "taif_dealers": ["dealer", "location"],
+    # One row per dealer x facility x partner: re-saving the same combination
+    # updates it, so a partner can never be double-mapped to a dealer's TA/IF.
+    "taif_mapping": ["dealer", "location", "facility", "financier"],
     "snapshots": ["snapshot_date"],
 }
 
@@ -116,7 +147,8 @@ READ_ALIASES = [a for a in WORKSHEETS.keys() if a != "dpirr_users"]
 UPSERT_ALIASES = ["fi_master", "dealer_master", "added_dealers", "onboarding",
                   "fi_policy", "dealer_health", "fi_policy_geo",
                   "dpirr_months", "dpirr_entries", "dpirr_products",
-                  "dpirr_models", "dpirr_variant_state_esp"]
+                  "dpirr_models", "dpirr_variant_state_esp",
+                  "taif_partners", "taif_dealers", "taif_mapping"]
 # dpirr_products / dpirr_models / dpirr_months are deliberately absent: their
 # DELETEs cascade into child rows, so routes.py owns explicit handlers for them.
 # dpirr_variants is deliberately absent too now: deleting a variant must also
@@ -126,7 +158,9 @@ UPSERT_ALIASES = ["fi_master", "dealer_master", "added_dealers", "onboarding",
 # to that name), so no historical record is ever silently destroyed.
 DELETE_ALIASES = ["fi_master", "dealer_master", "added_dealers", "onboarding",
                   "fi_policy_geo", "dpirr_entries", "snapshots", "dpirr_users",
-                  "dpirr_variant_state_esp"]
+                  "dpirr_variant_state_esp", "taif_partners", "taif_mapping"]
+# taif_dealers is deliberately absent: removing a dealer from TA/IF must also
+# remove that dealer's partner mappings, so routes.py owns that handler.
 
 # /api/bootstrap reads every listed sheet in ONE request. With 13 worksheets that
 # is 13+ sequential Google round-trips, which risks blowing the Vercel function

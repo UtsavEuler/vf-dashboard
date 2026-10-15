@@ -424,6 +424,31 @@ def create_app(config=None, adapter=None):
                             "error", started)
             raise
 
+    # ── TA/IF: the one shape the generic alias routes cannot express ──────
+    @app.route("/api/taif_dealers", methods=["DELETE"])
+    def taif_dealers_delete():
+        """Remove a dealer from TA/IF and cascade-delete its partner mappings.
+
+        Mappings go first, the dealer row second: if the second step fails the
+        dealer is still listed (with no mappings), which is visible and safe to
+        retry. The other order could strand hidden mappings that silently
+        reappear if the same dealer were added again. A fixed number of Sheets
+        calls whatever the mapping count (bulk_delete is one batched write).
+        """
+        started = time.monotonic()
+        dealer, location = _require(request.args, "dealer", "location")
+        try:
+            ad = _adapter()
+            ad.bulk_delete("taif_mapping", {"dealer": dealer, "location": location})
+            ad.delete("taif_dealers", {"dealer": dealer, "location": location})
+            _structured_log("/api/taif_dealers", "delete", "taif_dealers", "ok",
+                            started)
+            return jsonify({"ok": True})
+        except Exception:
+            _structured_log("/api/taif_dealers", "delete", "taif_dealers",
+                            "error", started)
+            raise
+
     # ── DP/IRR user identity (PIN-protected, no full login) ────────────────
     # These endpoints return {"ok": False, "error": "..."} with a normal 200 for
     # every *expected* business outcome (wrong PIN, unknown name, duplicate
