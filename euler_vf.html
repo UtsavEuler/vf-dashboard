@@ -1960,6 +1960,7 @@
       <div style="font-size:11px;color:var(--text-muted);margin-top:12px;line-height:1.6;">Amounts are in ₹ crore. Type is the funding program: TA (trade advance) or IF (inventory funding); a partner that offers both has a row for each. Approved is the total of mappings with status Approved, Activated is the total with status Activated, and Total is Approved plus Activated. Dealers mapped counts every dealer mapped to that partner for that program, whatever the status; the All partners row counts each dealer once. In the insights, unique dealers are counted once per program even if several partners approved or activated them.</div>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-primary" id="taifSummaryXlsBtn" onclick="downloadTAIFSummary()" title="Download this summary, with the dealer-wise detail on a second tab, as an Excel file you can email">⬇ Download Excel</button>
       <button class="btn btn-secondary" onclick="closeTAIFSummaryModal()">Close</button>
     </div>
   </div>
@@ -6441,13 +6442,17 @@ function taifResetFilters() {
 function clearTAIFFilters() { taifResetFilters(); renderTAIF(); }
 
 // ── Rendering ──
+// A dealer row shows only HOW MANY partners are mapped under a program. A dealer's
+// limits are spread over several statuses (in process, approved, activated...), so
+// one amount on the row would mislead; the amounts are in the expanded panel and
+// the Summary.
+// A dealer's row shows only HOW MANY partners are mapped for the program. A dealer's
+// limits are spread over several statuses (Soft Approved / Approved / Activated / in
+// process), so one amount per row would blur them; each limit is shown next to its own
+// status when the row is opened.
 function taifFacilitySummary(list, mappingFiltered) {
   if (!list.length) return '<span style="color:var(--text-muted);">' + (mappingFiltered ? '—' : 'No partner mapped') + '</span>';
-  var t = taifLimitTotals(list);
-  var s = list.length + (list.length === 1 ? ' partner' : ' partners');
-  if (t.finalCr > 0) s += ' <span style="color:var(--text-muted);">· ' + taifCr(t.finalCr) + ' approved</span>';
-  if (t.softCr > 0) s += ' <span style="color:var(--text-muted);">· ' + taifCr(t.softCr) + ' soft</span>';
-  return s;
+  return list.length + (list.length === 1 ? ' partner' : ' partners');
 }
 
 // A program the Type filter has switched off is shown as a dash, not "No partner mapped".
@@ -6508,10 +6513,12 @@ function renderTAIFList() {
   var rows = taifApplyFilters(all);
   _taifRows = rows;
 
+  // Counts only, like the dealer rows: limits sit under several statuses, so a single
+  // "approved" figure here would mislead. Amounts are in the panels and the Summary.
   var parts = TAIF_FACILITIES.filter(function(f) { return taifFacilityShown(f.key); }).map(function(f) {
-    var n = 0, app = 0;
-    rows.forEach(function(r) { n += r.maps[f.key].length; app += taifLimitTotals(r.maps[f.key]).finalCr; });
-    return f.key + ': ' + n + ' mapping' + (n === 1 ? '' : 's') + (app > 0 ? ' · ' + taifCr(app) + ' approved' : '');
+    var n = 0;
+    rows.forEach(function(r) { n += r.maps[f.key].length; });
+    return f.key + ': ' + n + ' mapping' + (n === 1 ? '' : 's');
   });
   taifEl('taifSummary').textContent = all.length
     ? rows.length + ' of ' + all.length + ' dealer' + (all.length === 1 ? '' : 's') + ' · ' + parts.join(' · ') +
@@ -7003,6 +7010,197 @@ function openTAIFSummaryModal() {
   taifEl('taifSummaryOverlay').style.display = 'flex';
 }
 function closeTAIFSummaryModal() { taifEl('taifSummaryOverlay').style.display = 'none'; }
+
+// ── Summary: Excel download ──
+// The page's own Excel library (SheetJS Community) cannot style cells, and these
+// files are meant to be emailed, so they use ExcelJS: black header rows with white
+// bold text, real numbers (so recipients can sort and sum), column widths, and
+// landscape fit-to-width printing. It is loaded from the same CDN as the other
+// library, only when someone clicks Download.
+var TAIF_EXCELJS_URLS = [
+  'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js',
+  'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'      // same pinned version, a second source if the first is blocked or down
+];
+var _taifExcelJsPromise = null;
+function taifLoadExcelJS() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if (_taifExcelJsPromise) return _taifExcelJsPromise;
+  _taifExcelJsPromise = new Promise(function(resolve, reject) {
+    var i = 0;
+    function next() {
+      if (i >= TAIF_EXCELJS_URLS.length) { _taifExcelJsPromise = null; reject(new Error('could not load the Excel library')); return; }   // cleared, so a retry starts again
+      var el = document.createElement('script'), settled = false;
+      var timer = setTimeout(function() { if (!settled) { settled = true; next(); } }, 15000);
+      el.src = TAIF_EXCELJS_URLS[i++];
+      el.onload = function() { if (settled) return; settled = true; clearTimeout(timer); if (window.ExcelJS) resolve(window.ExcelJS); else next(); };
+      el.onerror = function() { if (settled) return; settled = true; clearTimeout(timer); next(); };
+      document.head.appendChild(el);
+    }
+    next();
+  });
+  return _taifExcelJsPromise;
+}
+
+function taifDateStamp(d) {
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+}
+
+// ── Raw dealer-wise detail (the workbook's second tab) ──
+// One row per partner mapped to a dealer for a program, for the same program choice as
+// the summary. Only dealers currently tracked on the page are listed, so it always
+// agrees with it. A dealer with no partner mapped has no row (nothing to list).
+function taifDetailRows(facility) {
+  var out = [];
+  taifBuildRows().forEach(function(r) {
+    ['TA', 'IF'].forEach(function(f) {
+      if (facility && f !== facility) return;
+      r.maps[f].forEach(function(m) {
+        out.push({ dealer: r.dealer, location: r.location, state: r.state, zone: r.zone, facility: f,
+                   partner: String(m.financier == null ? '' : m.financier).trim(), status: taifCanonStatus(m.status),
+                   limitCr: taifNum(m.limitCr) });
+      });
+    });
+  });
+  // Dealer by dealer; inside a dealer TA before IF; inside that, partner A to Z.
+  out.sort(function(a, b) {
+    return taifByName(a.dealer, b.dealer) || taifByName(a.location, b.location) ||
+           ((a.facility === b.facility) ? 0 : (a.facility === 'TA' ? -1 : 1)) || taifByName(a.partner, b.partner);
+  });
+  return out;
+}
+
+// Builds the workbook from the same figures the Summary shows (including its
+// Facility choice). Takes ExcelJS as an argument so it holds no hidden dependency.
+function taifBuildSummaryWorkbook(ExcelJS, facility, generatedAt) {
+  var data = taifSummaryData(facility);
+  var taTot = taifSummaryData('TA').total, ifTot = taifSummaryData('IF').total;
+  var facLabel = facility === 'TA' ? 'Trade advance (TA)' : (facility === 'IF' ? 'Inventory funding (IF)' : 'All (TA and IF)');
+  var rd = function(x) { return Math.round(x * 1e6) / 1e6; };       // 0.1 + 0.2 should not become 0.30000000000000004
+  var CR = '#,##0.00##;-#,##0.00##;"-"', INT = '0';
+  var BLACK = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF000000' } };
+  var GREY = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+
+  var wb = new ExcelJS.Workbook();
+  wb.creator = 'Euler VF Dashboard';
+  var ws = wb.addWorksheet('TA-IF Summary', { pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+  [38, 20, 15, 17, 17, 17, 17, 17].forEach(function(w, i) { ws.getColumn(i + 1).width = w; });
+
+  function header(values) {
+    var row = ws.addRow(values);
+    row.height = 32;
+    for (var i = 1; i <= values.length; i++) {
+      var c = row.getCell(i);
+      c.fill = BLACK;
+      c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      c.alignment = { vertical: 'middle', horizontal: i === 1 ? 'left' : 'center', wrapText: true };
+    }
+    return row;
+  }
+  function note(text, opts) {
+    var row = ws.addRow([text]);
+    row.getCell(1).font = Object.assign({ color: { argb: 'FF666666' } }, opts || {});
+    return row;
+  }
+
+  ws.addRow(['TA/IF summary by financing partner']).getCell(1).font = { bold: true, size: 14 };
+  var when = generatedAt.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+  note('Generated: ' + when);
+  note('Funding program shown: ' + facLabel);
+  note('Amounts are in ₹ crore. Approved = mappings with status Approved; Activated = status Activated; Total = Approved + Activated.');
+  note('The dealer-wise detail behind these figures is on the "Dealer details" tab.');
+  ws.addRow([]);
+
+  header(['Financing partner', 'Type', 'Dealers mapped', 'Approved (₹ cr.)', 'Approved: dealers', 'Activated (₹ cr.)', 'Activated: dealers', 'Total (₹ cr.)']);
+  function dataRow(r, bold) {
+    var row = ws.addRow([r.partner, r.facility, r.dealers, rd(r.apprCr), r.apprDealers, rd(r.actCr), r.actDealers, rd(r.totalCr)]);
+    [3, 5, 7].forEach(function(i) { row.getCell(i).numFmt = INT; });
+    [4, 6, 8].forEach(function(i) { row.getCell(i).numFmt = CR; });
+    for (var i = 1; i <= 8; i++) {
+      var c = row.getCell(i);
+      c.alignment = { horizontal: i === 1 ? 'left' : 'center' };
+      if (bold) { c.font = { bold: true }; c.fill = GREY; c.border = { top: { style: 'thin', color: { argb: 'FF000000' } } }; }
+    }
+    return row;
+  }
+  // The file orders table 1 differently from the screen: TA partners first, then IF,
+  // and inside each program the biggest Total first (ties A to Z). The All partners row stays last.
+  var fileRows = data.rows.slice().sort(function(a, b) {
+    var ta = a.facility === 'TA' ? 0 : 1, tb = b.facility === 'TA' ? 0 : 1;
+    return (ta - tb) || (rd(b.totalCr) - rd(a.totalCr)) || taifByName(a.partner, b.partner);
+  });
+  fileRows.forEach(function(r) { dataRow(r, false); });
+  dataRow(data.total, true);
+
+  ws.addRow([]);
+  ws.addRow(['Insights by program']).getCell(1).font = { bold: true, size: 12 };
+  header(['Program', 'Total approved limit (₹ cr.)', 'Unique dealers (approved)', 'Total activated limit (₹ cr.)', 'Unique dealers (activated)']);
+  [['Trade advance (TA)', taTot], ['Inventory funding (IF)', ifTot]].forEach(function(p) {
+    var t = p[1];
+    var row = ws.addRow([p[0], rd(t.apprCr), t.apprDealers, rd(t.actCr), t.actDealers]);
+    row.getCell(2).numFmt = CR; row.getCell(4).numFmt = CR; row.getCell(3).numFmt = INT; row.getCell(5).numFmt = INT;
+    for (var i = 1; i <= 5; i++) row.getCell(i).alignment = { horizontal: i === 1 ? 'left' : 'center' };
+  });
+  note('Unique dealers are counted once per program, even if several partners approved or activated them.', { italic: true });
+
+  // ── second tab: dealer-wise detail ──
+  var det = taifDetailRows(facility);
+  var ds = wb.addWorksheet('Dealer details', {
+    views: [{ state: 'frozen', ySplit: 1 }],
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  [7, 34, 16, 18, 10, 8, 34, 20, 15].forEach(function(w, i) { ds.getColumn(i + 1).width = w; });
+  var DCOLS = ['Sr. No.', 'Dealer', 'Location', 'State', 'Zone', 'Type', 'Financing partner', 'Status', 'Limit (₹ cr.)'];
+  var CENTRED = { 1: true, 6: true, 9: true };       // Sr. No., Type and Limit are centred; text columns read better left
+  var dh = ds.addRow(DCOLS);
+  dh.height = 28;
+  for (var hc = 1; hc <= DCOLS.length; hc++) {
+    var hcell = dh.getCell(hc);
+    hcell.fill = BLACK;
+    hcell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    hcell.alignment = { vertical: 'middle', horizontal: CENTRED[hc] ? 'center' : 'left', wrapText: true };
+  }
+  det.forEach(function(d, i) {
+    var row = ds.addRow([i + 1, d.dealer, d.location, d.state, d.zone, d.facility, d.partner, d.status,
+                         d.limitCr === null ? null : rd(d.limitCr)]);
+    row.getCell(1).numFmt = INT;
+    row.getCell(9).numFmt = '#,##0.00##';           // raw data: a limit of 0 reads 0.00, not a dash that could look like "blank"
+    for (var c = 1; c <= DCOLS.length; c++) {
+      row.getCell(c).alignment = { vertical: 'middle', horizontal: CENTRED[c] ? 'center' : 'left' };
+    }
+  });
+  if (det.length) ds.autoFilter = 'A1:I' + (det.length + 1);
+  else ds.addRow(['No partner mappings to list.']).getCell(1).font = { color: { argb: 'FF666666' }, italic: true };
+  return wb;
+}
+
+function taifSaveBlob(blob, fileName) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1500);
+}
+
+async function downloadTAIFSummary() {
+  var fac = taifEl('taifSummaryFacility').value;
+  if (!taifSummaryData(fac).rows.length) { toast('Nothing to export yet — there are no partners or mappings.'); return; }
+  var btn = taifEl('taifSummaryXlsBtn');
+  var label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Preparing…';
+  try {
+    var ExcelJS = await taifLoadExcelJS();
+    var now = new Date();
+    var buf = await taifBuildSummaryWorkbook(ExcelJS, fac, now).xlsx.writeBuffer();
+    var name = 'Euler_TA_IF_Summary_' + taifDateStamp(now) + '.xlsx';
+    taifSaveBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name);
+    toast('✅ Downloaded: ' + name);
+  } catch (e) {
+    toast('❌ Could not create the Excel file — please check your connection and try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = label;
+  }
+}
 
 // Clicking the dimmed backdrop closes a modal, like every other dialog here.
 [['taifAddDealerOverlay', closeTAIFAddDealerModal], ['taifMappingOverlay', closeTAIFMappingModal],
