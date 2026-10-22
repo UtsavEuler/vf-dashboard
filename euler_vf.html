@@ -560,6 +560,12 @@
   .taif-row { cursor:pointer; }
   .taif-row:hover td { background: var(--surface2); }
   .taif-panel { background: var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  #taifBusy { position:fixed; inset:0; z-index:1000; align-items:center; justify-content:center; background:rgba(8,10,20,0); transition:background .15s; cursor:progress; }
+  #taifBusy.show { background:rgba(8,10,20,0.55); }
+  .taif-busy-card { opacity:0; transform:translateY(6px); transition:opacity .15s, transform .15s; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:22px 30px; min-width:260px; max-width:340px; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,0.45); }
+  #taifBusy.show .taif-busy-card { opacity:1; transform:none; }
+  .taif-busy-msg { font-size:14px; font-weight:600; color:var(--text); }
+  .taif-busy-sub { font-size:12px; color:var(--text-muted); margin-top:6px; }
   .taif-dd-item { padding:9px 12px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border); }
   .taif-dd-item:last-child { border-bottom:none; }
   .taif-dd-item:hover, .taif-dd-item.active { background: var(--surface2); }
@@ -1872,6 +1878,15 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeDPAnalysisModal()">Close</button>
     </div>
+  </div>
+</div>
+
+<!-- TA/IF: "working" overlay, shown while an action is being processed at the backend -->
+<div id="taifBusy" role="status" aria-live="polite" style="display:none;">
+  <div class="taif-busy-card">
+    <div class="loader-spinner" aria-hidden="true" style="margin:0 auto 14px;"></div>
+    <div id="taifBusyMsg" class="taif-busy-msg">Working…</div>
+    <div id="taifBusySub" class="taif-busy-sub"></div>
   </div>
 </div>
 
@@ -6252,12 +6267,49 @@ function taifKey(o) { return String(o.dealer == null ? '' : o.dealer).trim() + '
 function taifQuery(obj) { return Object.keys(obj).map(function(k){ return k + '=' + encodeURIComponent(obj[k]); }).join('&'); }
 function taifByName(a, b) { return String(a).localeCompare(String(b)); }
 
-// Wraps a request so the header save indicator reflects it; rethrows on failure
-// so every caller can decide what an honest failure looks like.
-async function taifTrack(promise) {
+// ── "Working…" overlay ──
+// While anything is being processed at the backend the page is covered by a loader that
+// says what is happening, so nobody has to wonder whether a click did anything or click
+// twice. It blocks clicks the instant it starts; the dimming and the card fade in only
+// after 150 ms, so an action that answers at once doesn't flash. After 8 s the text
+// changes to say it is still going. A counter lets overlapping actions share it.
+var _taifBusyCount = 0, _taifBusyShowTimer = null, _taifBusySlowTimer = null;
+function taifIsBusy() { return _taifBusyCount > 0; }
+function taifBusyStart(message) {
+  var el = taifEl('taifBusy');
+  _taifBusyCount++;
+  if (el) {
+    taifEl('taifBusyMsg').textContent = message || 'Working…';
+    el.style.display = 'flex';
+    if (_taifBusyCount === 1) {
+      taifEl('taifBusySub').textContent = 'Please wait, this can take a few seconds.';
+      clearTimeout(_taifBusyShowTimer); clearTimeout(_taifBusySlowTimer);
+      _taifBusyShowTimer = setTimeout(function() { el.classList.add('show'); }, 150);
+      _taifBusySlowTimer = setTimeout(function() { taifEl('taifBusySub').textContent = 'Still working… please keep this page open.'; }, 8000);
+    }
+  }
+  var ended = false;
+  return function done() {                                  // safe to call more than once
+    if (ended) return;
+    ended = true;
+    _taifBusyCount = Math.max(0, _taifBusyCount - 1);
+    if (_taifBusyCount === 0 && el) {
+      clearTimeout(_taifBusyShowTimer); clearTimeout(_taifBusySlowTimer);
+      el.classList.remove('show');
+      el.style.display = 'none';
+    }
+  };
+}
+
+// Wraps a request: the header save indicator, the "Working…" overlay with a message
+// saying what is happening, and a rethrow on failure so each caller can decide what an
+// honest failure looks like. The overlay is gone before the caller shows its result.
+async function taifTrack(promise, message) {
+  var done = taifBusyStart(message);
   setSaveStatus('saving');
   try { var res = await promise; setSaveStatus('saved'); return res; }
   catch (e) { setSaveStatus('error'); throw e; }
+  finally { done(); }
 }
 
 function taifStatusBadge(status) {
@@ -6655,12 +6707,13 @@ document.addEventListener('click', function(e) {
 });
 
 async function saveTAIFDealer() {
+  if (taifIsBusy()) return;                 // already working: ignore a second click or Enter
   var d = _taifDealerPick || _taifDealerChoices[taifEl('taifAddDealerInput').value.trim()];
   if (!d) { toast('⚠ Pick a dealer from the list'); renderTAIFDealerList(); return; }
   var btn = taifEl('taifAddDealerBtn');
   btn.disabled = true;
   var row = { dealer: d.dealer, location: d.location, addedAt: new Date().toISOString() };
-  try { await taifTrack(API.post('/api/taif_dealers', row)); }
+  try { await taifTrack(API.post('/api/taif_dealers', row), 'Adding dealer…'); }
   catch (e) { btn.disabled = false; toast('❌ Failed to add the dealer — please check your connection and try again.'); return; }
   btn.disabled = false;
   state.taifDealers.push(row);
@@ -6679,7 +6732,8 @@ function removeTAIFDealer(i) {
     'Remove "' + r.dealer + ' (' + r.location + ')" from TA/IF? ' +
       (n ? 'Its ' + n + ' partner mapping' + (n === 1 ? '' : 's') + ' will be deleted too. ' : '') + 'This can\'t be undone.',
     async function() {
-      try { await taifTrack(API.delete('/api/taif_dealers?' + taifQuery({ dealer: r.dealer, location: r.location }))); }
+      if (taifIsBusy()) return;
+      try { await taifTrack(API.delete('/api/taif_dealers?' + taifQuery({ dealer: r.dealer, location: r.location })), 'Removing dealer and its mappings…'); }
       catch (e) { toast('❌ Failed to remove the dealer — nothing was changed. Please try again.'); return; }
       var k = taifKey(r);
       state.taifDealers = state.taifDealers.filter(function(d) { return taifKey(d) !== k; });
@@ -6737,7 +6791,7 @@ function closeTAIFMappingModal() { taifEl('taifMappingOverlay').style.display = 
 
 async function saveTAIFMapping() {
   var ctx = _taifMapCtx;
-  if (!ctx) return;
+  if (!ctx || taifIsBusy()) return;
   var financier = ctx.existing ? String(ctx.existing.financier) : taifEl('taifMapPartner').value;
   if (!financier) { toast('⚠ Choose a financing partner'); return; }
   var status = taifEl('taifMapStatus').value;
@@ -6754,7 +6808,7 @@ async function saveTAIFMapping() {
   };
   var btn = taifEl('taifMappingSaveBtn');
   btn.disabled = true;
-  try { await taifTrack(API.post('/api/taif_mapping', row)); }
+  try { await taifTrack(API.post('/api/taif_mapping', row), 'Saving mapping…'); }
   catch (e) { btn.disabled = false; toast('❌ Failed to save — please check your connection and try again. Your changes are still in the form.'); return; }
   btn.disabled = false;
   var k = taifKey(row), at = -1;
@@ -6775,7 +6829,8 @@ function removeTAIFMapping(rowIdx, facility, mi) {
     'Remove the ' + m.financier + ' ' + facility + ' mapping for "' + r.dealer + ' (' + r.location + ')"? This can\'t be undone.',
     async function() {
       var q = taifQuery({ dealer: r.dealer, location: r.location, facility: facility, financier: String(m.financier) });
-      try { await taifTrack(API.delete('/api/taif_mapping?' + q)); }
+      if (taifIsBusy()) return;
+      try { await taifTrack(API.delete('/api/taif_mapping?' + q), 'Removing mapping…'); }
       catch (e) { toast('❌ Failed to remove the mapping — nothing was changed. Please try again.'); return; }
       state.taifMapping = state.taifMapping.filter(function(x) { return x !== m; });
       renderTAIF();
@@ -6825,6 +6880,7 @@ function renderTAIFPartnersModal() {
 }
 
 async function addTAIFPartner() {
+  if (taifIsBusy()) return;
   var name = taifEl('taifNewPartner').value.replace(/\s+/g, ' ').trim();
   var ta = taifEl('taifNewPartnerTA').checked, ifc = taifEl('taifNewPartnerIF').checked;
   if (!name) { toast('⚠ Enter the partner\'s name'); return; }
@@ -6836,7 +6892,7 @@ async function addTAIFPartner() {
   if (dup) { toast('⚠ ' + name + ' is already in the partner list'); return; }
   if (!ta && !ifc) { toast('⚠ Tick at least one: TA or IF'); return; }
   var row = { financier: name, offersTA: ta ? 'true' : 'false', offersIF: ifc ? 'true' : 'false' };
-  try { await taifTrack(API.post('/api/taif_partners', row)); }
+  try { await taifTrack(API.post('/api/taif_partners', row), 'Adding partner…'); }
   catch (e) { toast('❌ Failed to add the partner — please check your connection and try again.'); return; }
   state.taifPartners.push(row);
   renderTAIFPartnersModal();
@@ -6848,9 +6904,10 @@ async function addTAIFPartner() {
 async function toggleTAIFPartnerFlag(i, field, checked) {
   var p = _taifPartnerList[i];
   if (!p) return;
+  if (taifIsBusy()) { renderTAIFPartnersModal(); return; }   // busy: put the tick back as it was
   var row = { financier: String(p.financier), offersTA: taifTrue(p.offersTA) ? 'true' : 'false', offersIF: taifTrue(p.offersIF) ? 'true' : 'false' };
   row[field] = checked ? 'true' : 'false';
-  try { await taifTrack(API.post('/api/taif_partners', row)); }
+  try { await taifTrack(API.post('/api/taif_partners', row), 'Updating partner…'); }
   catch (e) { toast('❌ Failed to update — nothing was changed. Please try again.'); renderTAIFPartnersModal(); return; }
   p.offersTA = row.offersTA; p.offersIF = row.offersIF;   // same object as in state.taifPartners
   renderTAIFPartnersModal();
@@ -6865,7 +6922,8 @@ function removeTAIFPartner(i) {
   if (n) { toast('⚠ ' + name + ' is mapped to ' + n + ' dealer facilit' + (n === 1 ? 'y' : 'ies') + ' — remove those mappings first'); return; }
   openDPConfirm('Remove ' + name + ' from the TA/IF partner list?',
     async function() {
-      try { await taifTrack(API.delete('/api/taif_partners?' + taifQuery({ financier: name }))); }
+      if (taifIsBusy()) return;
+      try { await taifTrack(API.delete('/api/taif_partners?' + taifQuery({ financier: name })), 'Removing partner…'); }
       catch (e) { toast('❌ Failed to remove the partner — nothing was changed. Please try again.'); return; }
       state.taifPartners = state.taifPartners.filter(function(x) { return x !== p; });
       renderTAIFPartnersModal();
@@ -7185,9 +7243,11 @@ function taifSaveBlob(blob, fileName) {
 async function downloadTAIFSummary() {
   var fac = taifEl('taifSummaryFacility').value;
   if (!taifSummaryData(fac).rows.length) { toast('Nothing to export yet — there are no partners or mappings.'); return; }
+  if (taifIsBusy()) return;
   var btn = taifEl('taifSummaryXlsBtn');
   var label = btn.textContent;
   btn.disabled = true; btn.textContent = 'Preparing…';
+  var doneBusy = taifBusyStart('Preparing the Excel file…');
   try {
     var ExcelJS = await taifLoadExcelJS();
     var now = new Date();
@@ -7198,6 +7258,7 @@ async function downloadTAIFSummary() {
   } catch (e) {
     toast('❌ Could not create the Excel file — please check your connection and try again.');
   } finally {
+    doneBusy();
     btn.disabled = false; btn.textContent = label;
   }
 }
