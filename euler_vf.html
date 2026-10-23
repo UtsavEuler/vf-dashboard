@@ -1972,7 +1972,7 @@
       </div>
       <div id="taifSummaryTable"></div>
       <div id="taifSummaryInsights"></div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:12px;line-height:1.6;">Amounts are in ₹ crore. Type is the funding program: TA (trade advance) or IF (inventory funding); a partner that offers both has a row for each. Approved is the total of mappings with status Approved, Activated is the total with status Activated, and Total is Approved plus Activated. Dealers mapped counts every dealer mapped to that partner for that program, whatever the status; the All partners row counts each dealer once. In the insights, unique dealers are counted once per program even if several partners approved or activated them.</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:12px;line-height:1.6;">Amounts are in ₹ crore. Type is the funding program: TA (trade advance) or IF (inventory funding); a partner that offers both has a row for each. Pipeline is the total of mappings still in process (status Docs pending, Partial Docs Pending, Under review or Soft Approved), Approved is the total with status Approved, Activated is the total with status Activated, and Total is Approved plus Activated (Pipeline is not part of it). Dealers mapped counts every dealer mapped to that partner for that program, whatever the status; the All partners row counts each dealer once. In the insights, unique dealers are counted once per program even if several partners have them in pipeline, approved or activated.</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary" id="taifSummaryXlsBtn" onclick="downloadTAIFSummary()" title="Download this summary, with the dealer-wise detail on a second tab, as an Excel file you can email">⬇ Download Excel</button>
@@ -6251,6 +6251,12 @@ function taifCr(n) { return '₹' + taifNumCr(n) + ' cr'; }
 // Statuses whose limit is a final sanction; "Soft Approved" is the partner's
 // indicative figure. The two are totalled separately.
 var TAIF_FINAL_STATUSES = ['Approved', 'Activated'];
+// Pipeline = mappings still being worked on: every status in the standard list EXCEPT these
+// six. Working it out by exclusion means a status added to the list later counts as pipeline
+// automatically. A status that is not in the list at all (an old leftover such as "Disbursed")
+// is not guessed at: it is counted in none of Pipeline / Approved / Activated.
+var TAIF_NOT_PIPELINE = ['Approved', 'Activated', 'Not started', 'Rejected', 'Dealer not interested', 'On hold'];
+function taifIsPipeline(status) { return TAIF_STATUSES.indexOf(status) > -1 && TAIF_NOT_PIPELINE.indexOf(status) === -1; }
 var TAIF_MAX_LIMIT_CR = 1000;   // catches a rupee amount typed into the crore box
 function taifLimitTotals(list) {
   var finalCr = 0, softCr = 0;
@@ -6945,7 +6951,7 @@ function taifSummaryData(facility) {
   var parts = {};
   function bucket(name, fac) {
     var k = name + '\u0001' + fac;
-    if (!parts[k]) parts[k] = { partner: name, facility: fac, all: {}, appr: {}, act: {}, apprCr: 0, actCr: 0 };
+    if (!parts[k]) parts[k] = { partner: name, facility: fac, all: {}, pipe: {}, appr: {}, act: {}, pipeCr: 0, apprCr: 0, actCr: 0 };
     return parts[k];
   }
   // Every partner is listed for each program it offers (even with nothing mapped).
@@ -6957,7 +6963,7 @@ function taifSummaryData(facility) {
       if (taifTrue(p[f === 'TA' ? 'offersTA' : 'offersIF'])) bucket(n, f);
     });
   });
-  var tot = { all: {}, appr: {}, act: {}, apprCr: 0, actCr: 0 };
+  var tot = { all: {}, pipe: {}, appr: {}, act: {}, pipeCr: 0, apprCr: 0, actCr: 0 };
   state.taifMapping.forEach(function(m) {
     var f = String(m.facility == null ? '' : m.facility).trim().toUpperCase();
     if (f !== 'TA' && f !== 'IF') return;
@@ -6967,16 +6973,18 @@ function taifSummaryData(facility) {
     var name = String(m.financier == null ? '' : m.financier).trim();
     if (!name) return;
     var b = bucket(name, f);
-    var st = String(m.status == null ? '' : m.status).trim();
+    var st = taifCanonStatus(m.status);              // same tidy-up of case and the old "Soft approval" name as everywhere else
     var v = taifNum(m.limitCr) || 0;
     b.all[k] = true; tot.all[k] = true;
     if (st === 'Approved') { b.appr[k] = true; tot.appr[k] = true; b.apprCr += v; tot.apprCr += v; }
     else if (st === 'Activated') { b.act[k] = true; tot.act[k] = true; b.actCr += v; tot.actCr += v; }
+    else if (taifIsPipeline(st)) { b.pipe[k] = true; tot.pipe[k] = true; b.pipeCr += v; tot.pipeCr += v; }
   });
   function shape(name, fac, b) {
     return { partner: name, facility: fac, dealers: Object.keys(b.all).length,
+             pipeDealers: Object.keys(b.pipe).length, pipeCr: b.pipeCr,
              apprDealers: Object.keys(b.appr).length, apprCr: b.apprCr,
-             actDealers: Object.keys(b.act).length, actCr: b.actCr, totalCr: b.apprCr + b.actCr };
+             actDealers: Object.keys(b.act).length, actCr: b.actCr, totalCr: b.apprCr + b.actCr };   // Total = Approved + Activated; Pipeline is not sanctioned money, so it is not in it
   }
   var rows = Object.keys(parts).map(function(k) { return shape(parts[k].partner, parts[k].facility, parts[k]); });
   // Biggest partner first (Approved + Activated across both programs); a partner's
@@ -7019,6 +7027,7 @@ function renderTAIFSummary() {
     '<th style="' + thS + 'text-align:left;">Financing partner</th>' +
     '<th style="' + thS + 'text-align:left;">Type</th>' +
     '<th style="' + thS + 'text-align:right;">Dealers mapped</th>' +
+    '<th style="' + thS + 'text-align:right;">Pipeline (₹ cr.)</th>' +
     '<th style="' + thS + 'text-align:right;">Approved (₹ cr.)</th>' +
     '<th style="' + thS + 'text-align:right;">Activated (₹ cr.)</th>' +
     '<th style="' + thS + 'text-align:right;">Total (₹ cr.)</th></tr></thead><tbody>';
@@ -7026,6 +7035,7 @@ function renderTAIFSummary() {
     html += '<tr><td style="' + tdS + 'font-weight:600;">' + escHtml(r.partner) + '</td>' +
       '<td style="' + tdS + '">' + taifTypeBadge(r.facility) + '</td>' +
       '<td style="' + tdS + 'text-align:right;">' + r.dealers + '</td>' +
+      '<td style="' + tdS + 'text-align:right;">' + taifSummaryCell(r.pipeCr, r.pipeDealers) + '</td>' +
       '<td style="' + tdS + 'text-align:right;">' + taifSummaryCell(r.apprCr, r.apprDealers) + '</td>' +
       '<td style="' + tdS + 'text-align:right;">' + taifSummaryCell(r.actCr, r.actDealers) + '</td>' +
       '<td style="' + tdS + 'text-align:right;font-weight:600;">' + taifSummaryTotalCell(r) + '</td></tr>';
@@ -7034,6 +7044,7 @@ function renderTAIFSummary() {
   html += '<tr><td style="' + totS + '">' + escHtml(t.partner) + '</td>' +
     '<td style="' + totS + '">' + taifTypeBadge(t.facility) + '</td>' +
     '<td style="' + totS + 'text-align:right;">' + t.dealers + '</td>' +
+    '<td style="' + totS + 'text-align:right;">' + taifSummaryCell(t.pipeCr, t.pipeDealers) + '</td>' +
     '<td style="' + totS + 'text-align:right;">' + taifSummaryCell(t.apprCr, t.apprDealers) + '</td>' +
     '<td style="' + totS + 'text-align:right;">' + taifSummaryCell(t.actCr, t.actDealers) + '</td>' +
     '<td style="' + totS + 'text-align:right;">' + taifSummaryTotalCell(t) + '</td></tr>';
@@ -7055,6 +7066,7 @@ function taifInsightsHtml() {
     var t = taifSummaryData(f[0]).total;
     return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' + taifTypeBadge(f[0]) + '<span style="font-size:13px;font-weight:700;">' + f[1] + '</span></div>' +
+      line('Total pipeline limit', t.pipeCr, t.pipeDealers) +
       line('Total approved limit', t.apprCr, t.apprDealers) +
       line('Total activated limit', t.actCr, t.actDealers) + '</div>';
   });
@@ -7142,7 +7154,7 @@ function taifBuildSummaryWorkbook(ExcelJS, facility, generatedAt) {
   var wb = new ExcelJS.Workbook();
   wb.creator = 'Euler VF Dashboard';
   var ws = wb.addWorksheet('TA-IF Summary', { pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
-  [38, 20, 15, 17, 17, 17, 17, 17].forEach(function(w, i) { ws.getColumn(i + 1).width = w; });
+  [38, 20, 15, 17, 17, 17, 17, 17, 17, 17].forEach(function(w, i) { ws.getColumn(i + 1).width = w; });
 
   function header(values) {
     var row = ws.addRow(values);
@@ -7166,15 +7178,16 @@ function taifBuildSummaryWorkbook(ExcelJS, facility, generatedAt) {
   note('Generated: ' + when);
   note('Funding program shown: ' + facLabel);
   note('Amounts are in ₹ crore. Approved = mappings with status Approved; Activated = status Activated; Total = Approved + Activated.');
+  note('Pipeline = mappings still in process (status Docs pending, Partial Docs Pending, Under review or Soft Approved). It is not part of Total.');
   note('The dealer-wise detail behind these figures is on the "Dealer details" tab.');
   ws.addRow([]);
 
-  header(['Financing partner', 'Type', 'Dealers mapped', 'Approved (₹ cr.)', 'Approved: dealers', 'Activated (₹ cr.)', 'Activated: dealers', 'Total (₹ cr.)']);
+  header(['Financing partner', 'Type', 'Dealers mapped', 'Pipeline (₹ cr.)', 'Pipeline: dealers', 'Approved (₹ cr.)', 'Approved: dealers', 'Activated (₹ cr.)', 'Activated: dealers', 'Total (₹ cr.)']);
   function dataRow(r, bold) {
-    var row = ws.addRow([r.partner, r.facility, r.dealers, rd(r.apprCr), r.apprDealers, rd(r.actCr), r.actDealers, rd(r.totalCr)]);
-    [3, 5, 7].forEach(function(i) { row.getCell(i).numFmt = INT; });
-    [4, 6, 8].forEach(function(i) { row.getCell(i).numFmt = CR; });
-    for (var i = 1; i <= 8; i++) {
+    var row = ws.addRow([r.partner, r.facility, r.dealers, rd(r.pipeCr), r.pipeDealers, rd(r.apprCr), r.apprDealers, rd(r.actCr), r.actDealers, rd(r.totalCr)]);
+    [3, 5, 7, 9].forEach(function(i) { row.getCell(i).numFmt = INT; });
+    [4, 6, 8, 10].forEach(function(i) { row.getCell(i).numFmt = CR; });
+    for (var i = 1; i <= 10; i++) {
       var c = row.getCell(i);
       c.alignment = { horizontal: i === 1 ? 'left' : 'center' };
       if (bold) { c.font = { bold: true }; c.fill = GREY; c.border = { top: { style: 'thin', color: { argb: 'FF000000' } } }; }
@@ -7192,14 +7205,15 @@ function taifBuildSummaryWorkbook(ExcelJS, facility, generatedAt) {
 
   ws.addRow([]);
   ws.addRow(['Insights by program']).getCell(1).font = { bold: true, size: 12 };
-  header(['Program', 'Total approved limit (₹ cr.)', 'Unique dealers (approved)', 'Total activated limit (₹ cr.)', 'Unique dealers (activated)']);
+  header(['Program', 'Total pipeline limit (₹ cr.)', 'Unique dealers (pipeline)', 'Total approved limit (₹ cr.)', 'Unique dealers (approved)', 'Total activated limit (₹ cr.)', 'Unique dealers (activated)']);
   [['Trade advance (TA)', taTot], ['Inventory funding (IF)', ifTot]].forEach(function(p) {
     var t = p[1];
-    var row = ws.addRow([p[0], rd(t.apprCr), t.apprDealers, rd(t.actCr), t.actDealers]);
-    row.getCell(2).numFmt = CR; row.getCell(4).numFmt = CR; row.getCell(3).numFmt = INT; row.getCell(5).numFmt = INT;
-    for (var i = 1; i <= 5; i++) row.getCell(i).alignment = { horizontal: i === 1 ? 'left' : 'center' };
+    var row = ws.addRow([p[0], rd(t.pipeCr), t.pipeDealers, rd(t.apprCr), t.apprDealers, rd(t.actCr), t.actDealers]);
+    [2, 4, 6].forEach(function(i) { row.getCell(i).numFmt = CR; });
+    [3, 5, 7].forEach(function(i) { row.getCell(i).numFmt = INT; });
+    for (var i = 1; i <= 7; i++) row.getCell(i).alignment = { horizontal: i === 1 ? 'left' : 'center' };
   });
-  note('Unique dealers are counted once per program, even if several partners approved or activated them.', { italic: true });
+  note('Unique dealers are counted once per program, even if several partners have them in pipeline, approved or activated.', { italic: true });
 
   // ── second tab: dealer-wise detail ──
   var det = taifDetailRows(facility);
