@@ -2512,9 +2512,11 @@ async function saveOnboarding(dealer, location, financier) {
   try { await API.post('/api/onboarding', row); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
 }
 
+// Throws if the server does not confirm the delete, so the caller can tell the user and leave the screen as it was.
 async function deleteOnboarding(dealer, location, financier) {
   setSaveStatus('saving');
-  try { await API.delete(`/api/onboarding?dealer=${encodeURIComponent(dealer)}&location=${encodeURIComponent(location)}&financier=${encodeURIComponent(financier)}`); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
+  try { await API.delete(`/api/onboarding?dealer=${encodeURIComponent(dealer)}&location=${encodeURIComponent(location)}&financier=${encodeURIComponent(financier)}`); setSaveStatus('saved'); }
+  catch(e) { setSaveStatus('error'); throw e; }
 }
 
 async function saveFIPolicyToSheet(fiName, productKey) {
@@ -2568,7 +2570,9 @@ function getDealerFinanciers(d, location) {
 }
 function getInitials(n) { return n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function escJs(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+// Every use of escJs is a value inside a quoted JS string inside a double-quoted inline handler (onclick="f('...')"),
+// so it escapes for BOTH: the JS string first, then the HTML attribute (a " or & in a name would otherwise break the button).
+function escJs(s) { return escHtml(String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")); }
 function toast(msg) {
   const el = document.getElementById("toast");
   document.getElementById("toastMsg").textContent = msg;
@@ -2879,7 +2883,7 @@ function renderFinancierList(dealerName, fins, dealerLocation) {
       return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;border:1px solid ${border};background:${bg};color:${color};letter-spacing:0.3px;">${p.label}${catStr}</span>`;
     }).join('');
     return `
-      <div class="fin-row" id="finrow_${CSS.escape(dealerName)}_${CSS.escape(finName)}">
+      <div class="fin-row" id="${escHtml('finrow_' + CSS.escape(dealerName) + '_' + CSS.escape(finName))}">
         <div class="fin-row-header" style="cursor:default;">
           <div class="fin-row-name">${escHtml(finName)}</div>
           <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">${productBadges}</div>
@@ -3037,18 +3041,40 @@ function saveFinancier() {
   toast(editFinancier ? finName+" updated." : finName+" added to "+dealerName+".");
 }
 
-function removeFinancier(dealerName, finName, dealerLocation) {
+// Remove a financier from ONE dealer. The server is asked first and the screen changes only after it has
+// confirmed, so a failure can never look like a success (it used to say "removed" and quietly leave the row).
+// The dealer is the card that was clicked: its name AND its location. Looking it up by name alone picked the
+// first dealer with that name, which deleted another dealer's mapping when two dealers share a name.
+var _finRemoveBusy = false;
+async function removeFinancier(dealerName, finName, dealerLocation) {
+  if (_finRemoveBusy) return;                               // a click is already being processed
   if (!confirm('Remove ' + finName + ' from ' + dealerName + '?')) return;
-  const dk3 = dealerKey(dealerName, dealerLocation || (state.addedDealers.find(d => d.dealer === dealerName && (d.location||'') === (dealerLocation||'')) || state.addedDealers.find(d => d.dealer === dealerName) || {}).location || '');
+  let loc = dealerLocation || '';
+  if (!loc) {                                               // no location from the card: use a name lookup only if it can't be ambiguous
+    const sameName = state.addedDealers.filter(d => d.dealer === dealerName);
+    if (sameName.length === 1) loc = sameName[0].location || '';
+  }
+  if (!loc) {
+    toast('⚠ Cannot remove ' + finName + ': ' + dealerName + ' has no location on record, so the server cannot tell which row to delete. Add its location in the sheet first.');
+    return;
+  }
+  _finRemoveBusy = true;
+  try {
+    await deleteOnboarding(dealerName, loc, finName);
+  } catch (e) {
+    toast('❌ Could not remove ' + finName + ' from ' + dealerName + ' — nothing was changed' + (e && e.status ? ' (server error ' + e.status + ')' : '') + '. Please try again.');
+    return;
+  } finally {
+    _finRemoveBusy = false;
+  }
+  const dk3 = dealerKey(dealerName, loc);
   if (state.mapping[dk3]) {
     delete state.mapping[dk3][finName];
     if (!Object.keys(state.mapping[dk3]).length) delete state.mapping[dk3];
   }
-  openDealerCards.add(dealerName);
-  const loc2 = (state.addedDealers.find(d=>d.dealer===dealerName)||{}).location||"";
-  deleteOnboarding(dealerName, loc2, finName);
+  openDealerCards.add(dealerKey(dealerName, loc));          // keep this dealer's card open (it is tracked by name + location)
   renderAll();
-  toast(finName+" removed from "+dealerName+".");
+  toast(finName + " removed from " + dealerName + ".");
 }
 
 
