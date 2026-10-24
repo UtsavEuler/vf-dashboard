@@ -6248,7 +6248,7 @@ var TAIF_FACILITIES = [
   { key: 'IF', label: 'Inventory funding (IF)' }
 ];
 var TAIF_STATUSES = ['Not started', 'Docs pending', 'Partial Docs Pending', 'Under review', 'Soft Approved',
-                     'Approved', 'Activated', 'Rejected', 'Dealer not interested', 'On hold'];
+                     'Approved', 'Activated', 'Rejected', 'Dealer not interested', 'On hold', 'Dropped after Approval'];
 // "Soft Approved" was first called "Soft approval". Rows saved under the old name
 // are read as the new one (and re-saved under it the next time they are edited),
 // so renaming a status never strands existing data. Matching is case-insensitive.
@@ -6262,7 +6262,7 @@ function taifCanonStatus(v) {
 var TAIF_STATUS_COLORS = {
   'Not started': '#94a3b8', 'Docs pending': '#f59e0b', 'Partial Docs Pending': '#facc15', 'Under review': '#38bdf8',
   'Soft Approved': '#818cf8', 'Approved': '#4ade80', 'Activated': '#22c55e',
-  'Rejected': '#f87171', 'Dealer not interested': '#a8a29e', 'On hold': '#fb923c'
+  'Rejected': '#f87171', 'Dealer not interested': '#a8a29e', 'On hold': '#fb923c', 'Dropped after Approval': '#f472b6'
 };
 
 // A partner name may use letters (any language, incl. combining vowel signs), digits, spaces and the few
@@ -6288,10 +6288,11 @@ function taifCr(n) { return '₹' + taifNumCr(n) + ' cr'; }
 // indicative figure. The two are totalled separately.
 var TAIF_FINAL_STATUSES = ['Approved', 'Activated'];
 // Pipeline = mappings still being worked on: every status in the standard list EXCEPT these
-// six. Working it out by exclusion means a status added to the list later counts as pipeline
+// seven (the last three, like Rejected, are cases that are over: "Dropped after Approval" was approved and then
+// dropped, so its limit is neither pipeline nor approved). Working it out by exclusion means a status added to the list later counts as pipeline
 // automatically. A status that is not in the list at all (an old leftover such as "Disbursed")
 // is not guessed at: it is counted in none of Pipeline / Approved / Activated.
-var TAIF_NOT_PIPELINE = ['Approved', 'Activated', 'Not started', 'Rejected', 'Dealer not interested', 'On hold'];
+var TAIF_NOT_PIPELINE = ['Approved', 'Activated', 'Not started', 'Rejected', 'Dealer not interested', 'On hold', 'Dropped after Approval'];
 function taifIsPipeline(status) { return TAIF_STATUSES.indexOf(status) > -1 && TAIF_NOT_PIPELINE.indexOf(status) === -1; }
 var TAIF_MAX_LIMIT_CR = 1000;   // catches a rupee amount typed into the crore box
 function taifLimitTotals(list) {
