@@ -1743,7 +1743,7 @@
     <div class="modal-body" id="dpEntryBody"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeDPEntry()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveDPEntry()">Save</button>
+      <button class="btn btn-primary" id="dpEntrySaveBtn" onclick="saveDPEntry()">Save</button>
     </div>
   </div>
 </div>
@@ -6344,6 +6344,10 @@ async function taifTrack(promise, message) {
   finally { done(); }
 }
 
+// The overlay is page-wide, so other pages (DP/IRR) share it under neutral names.
+function appBusyStart(message) { return taifBusyStart(message); }
+function appIsBusy() { return taifIsBusy(); }
+
 function taifStatusBadge(status) {
   var s = String(status == null ? '' : status).trim();
   if (!s) return '<span style="color:var(--text-muted);">—</span>';
@@ -7340,6 +7344,7 @@ var DP_CUSTOMER_TYPE_OPTS = ['Captive','MLO/DCO','Small Fleet Operator','Medium 
 // Effective DP above this — when one does, the entry has to carry a Remark
 // explaining why, so unusually high down payments are justified, not silent.
 var DP_HIGH_EDP_LIMIT = 250000;
+var DP_MAX_IRR = 30;          // IRR (%) above this is refused when an entry is created or edited
 function dpNeedsHighEdpRemark(product, effectiveDp) {
   var p = String(product || '').trim().toLowerCase();
   var is4wc = (p === 'turbo' || p.indexOf('storm') === 0);
@@ -8306,8 +8311,17 @@ function openDPEntryModal(seg, monthId, idx) {
       var calcTrigger = (col.key === 'orp' || col.key === 'ltv' || col.key === 'discount') ? ' onchange="recalcDPFinancials()" oninput="recalcDPFinancials()"' : '';
       var labelId = col.key === 'irr' ? ' id="dpIrrLabel"' : (col.key === 'loanTenure' ? ' id="dpLoanTenureLabel"' : '');
       var minAttr = col.key === 'discount' ? ' min="0"' : (col.key === 'loanTenure' ? ' min="1"' : '');
-      body += '<div class="form-group" style="margin:0;"><label class="form-label"'+labelId+'>'+reqLabel(col)+'</label>' +
-        '<input type="number" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" step="any"'+minAttr+calcTrigger+'></div>';
+      var irrLabelNote = '', irrHint = '', irrBorder = '';
+      if (col.key === 'irr') {
+        minAttr = ' max="' + DP_MAX_IRR + '"';
+        calcTrigger = ' oninput="onDPIrrInput()" onchange="onDPIrrInput()"';
+        irrLabelNote = ' <span style="font-size:10px;color:var(--text-muted);">(max ' + DP_MAX_IRR + ')</span>';
+        var irrOver = val !== '' && parseFloat(val) > DP_MAX_IRR;          // an old entry may already be over: say so straight away
+        irrHint = '<div id="dpIrrHint" style="display:' + (irrOver ? 'block' : 'none') + ';font-size:11px;color:var(--flag);margin-top:4px;">IRR cannot be more than ' + DP_MAX_IRR + '%</div>';
+        irrBorder = irrOver ? ' style="border-color:var(--flag);"' : '';
+      }
+      body += '<div class="form-group" style="margin:0;"><label class="form-label"'+labelId+'>'+reqLabel(col)+irrLabelNote+'</label>' +
+        '<input type="number" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" step="any"'+minAttr+calcTrigger+irrBorder+'>' + irrHint + '</div>';
     } else if (col.type === 'calc') {
       body += '<div class="form-group" style="margin:0;"><label class="form-label">'+col.label+' <span style="font-size:10px;color:var(--text-muted);">(calculated)</span></label>' +
         '<input type="number" class="form-select" id="'+fieldId+'" value="'+escHtml(val)+'" step="any" readonly style="opacity:0.75;cursor:not-allowed;"></div>';
@@ -8591,8 +8605,18 @@ function closeDPEntry() {
   _dpEditTarget = null;
 }
 
+// Live feedback while typing IRR: a red box and a line of text as soon as it goes over the limit.
+function onDPIrrInput() {
+  var el = document.getElementById('dpModal_irr'), hint = document.getElementById('dpIrrHint');
+  if (!el || !hint) return;
+  var over = el.value !== '' && parseFloat(el.value) > DP_MAX_IRR;
+  hint.style.display = over ? 'block' : 'none';
+  el.style.borderColor = over ? 'var(--flag)' : '';
+}
+
 function saveDPEntry() {
   if (!_dpEditTarget) return;
+  if (appIsBusy()) return;                                  // a save is already being processed: ignore a repeat click
   if (_dpEditTarget.idx === null && !getDPUserName()) {
     toast('⚠ Please identify yourself before adding an entry');
     closeDPEntry();
@@ -8603,6 +8627,7 @@ function saveDPEntry() {
   var missing = [];
   var negativeFields = [];
   var invalidPositiveFields = [];
+  var irrTooHigh = false;
   var isSelfFinanceEl = document.getElementById('dpModal_isSelfFinance');
   var isSelfFinance = !!(isSelfFinanceEl && isSelfFinanceEl.checked);
   row.isSelfFinance = isSelfFinance ? 'true' : 'false';
@@ -8631,6 +8656,11 @@ function saveDPEntry() {
     if (col.key === 'loanTenure' && v !== '' && parseFloat(v) <= 0) {
       invalidPositiveFields.push(col.label);
     }
+    // IRR may not exceed DP_MAX_IRR (30). Applies when creating AND when editing, so a
+    // mistyped 120 for 12.0 can't get in, and an old entry above the limit has to be corrected on its next edit.
+    if (col.key === 'irr' && v !== '' && parseFloat(v) > DP_MAX_IRR) {
+      irrTooHigh = true;
+    }
   });
   // New entries only — editing a pre-existing entry is never blocked by this.
   if (isNewEntry && dpNeedsHighEdpRemark(row.product, row.effectiveDp) && !String(row.remarks || '').trim()) {
@@ -8646,6 +8676,12 @@ function saveDPEntry() {
   }
   if (invalidPositiveFields.length) {
     toast('⚠ Must be greater than 0: ' + invalidPositiveFields.join(', '));
+    return;
+  }
+  if (irrTooHigh) {
+    toast('⚠ IRR cannot be more than ' + DP_MAX_IRR + '%');
+    var irrEl = document.getElementById('dpModal_irr');
+    if (irrEl) { irrEl.focus(); onDPIrrInput(); }
     return;
   }
   // ORP (On-Road Price) is normally ESP plus additional charges (registration,
@@ -8664,7 +8700,26 @@ function saveDPEntry() {
   proceedWithDPEntrySave(row);
 }
 
+// Every save (a new entry, several new entries, or an edit) goes through here. While the server is working the
+// page is covered by the same "working" overlay TA/IF uses, the Save button is disabled, and a repeat click is
+// ignored. Without this a second click started a second save, which created a second entry.
 async function proceedWithDPEntrySave(row) {
+  if (appIsBusy()) return;
+  var editing = !!_dpEditTarget && _dpEditTarget.idx !== null;
+  var count = 1;
+  if (!editing) {
+    var multiCb0 = document.getElementById('dpModal_createMultiple'), countEl0 = document.getElementById('dpModal_multiCount');
+    var n0 = parseInt(countEl0 ? countEl0.value : '', 10);
+    if (multiCb0 && multiCb0.checked && n0 >= 2 && n0 <= 50) count = n0;
+  }
+  var saveBtn = document.getElementById('dpEntrySaveBtn');
+  if (saveBtn) saveBtn.disabled = true;
+  var doneBusy = appBusyStart(editing ? 'Saving changes…' : (count > 1 ? 'Creating ' + count + ' entries…' : 'Saving entry…'));
+  try { await proceedWithDPEntrySaveNow(row); }
+  finally { doneBusy(); if (saveBtn) saveBtn.disabled = false; }
+}
+
+async function proceedWithDPEntrySaveNow(row) {
   var seg = _dpEditTarget.seg, monthId = _dpEditTarget.monthId, idx = _dpEditTarget.idx;
   var arr = getDPEntries(seg, monthId);
   var monthObj = (_dpMonths[seg] || []).find(function(m){ return m.id === monthId; }) || {};
@@ -8726,6 +8781,8 @@ async function proceedWithDPEntrySave(row) {
           ' (same Customer/Product/Model/Variant/Dealer). Apply your change'+(changedFields.length===1?'':'s')+
           ' to ' + fieldLabels + ' on ' + (siblings.length===1?'that entry':'those entries') + ' too?',
           async function() {
+            var doneProp = appBusyStart('Applying to ' + siblings.length + ' duplicate ' + siblingWord + '…');
+            try {
             var failedNames = [];
             for (var s = 0; s < siblings.length; s++) {
               var sibling = siblings[s];
@@ -8747,6 +8804,7 @@ async function proceedWithDPEntrySave(row) {
             } else {
               toast('✅ Changes applied to ' + siblings.length + ' duplicate ' + siblingWord + ' too');
             }
+            } finally { doneProp(); }
           },
           '✓ Apply to ' + siblings.length + (siblings.length===1?' entry':' entries'),
           'btn-primary'
