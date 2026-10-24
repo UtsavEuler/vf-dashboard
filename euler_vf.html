@@ -3045,19 +3045,29 @@ function saveFinancier() {
 // confirmed, so a failure can never look like a success (it used to say "removed" and quietly leave the row).
 // The dealer is the card that was clicked: its name AND its location. Looking it up by name alone picked the
 // first dealer with that name, which deleted another dealer's mapping when two dealers share a name.
+//
+// The question "Remove X?" is asked in the page's OWN dialog, never the browser's confirm(): this dashboard runs
+// inside an embedded frame (Jarvis) whose sandbox lacks "allow-modals", so the browser ignores confirm() and
+// answers "no" on the user's behalf, and the Remove button silently did nothing. Do not use confirm / alert / prompt.
 var _finRemoveBusy = false;
-async function removeFinancier(dealerName, finName, dealerLocation) {
-  if (_finRemoveBusy) return;                               // a click is already being processed
-  if (!confirm('Remove ' + finName + ' from ' + dealerName + '?')) return;
+function removeFinancier(dealerName, finName, dealerLocation) {
+  if (_finRemoveBusy) return;                               // a removal is already being processed
   let loc = dealerLocation || '';
   if (!loc) {                                               // no location from the card: use a name lookup only if it can't be ambiguous
     const sameName = state.addedDealers.filter(d => d.dealer === dealerName);
     if (sameName.length === 1) loc = sameName[0].location || '';
   }
-  if (!loc) {
+  if (!loc) {                                               // refuse before asking, rather than ask and then refuse
     toast('⚠ Cannot remove ' + finName + ': ' + dealerName + ' has no location on record, so the server cannot tell which row to delete. Add its location in the sheet first.');
     return;
   }
+  openDPConfirm('Remove ' + finName + ' from ' + dealerName + ' (' + loc + ')?',
+    function() { removeFinancierNow(dealerName, finName, loc); },
+    'Remove', 'btn-danger');
+}
+
+async function removeFinancierNow(dealerName, finName, loc) {
+  if (_finRemoveBusy) return;
   _finRemoveBusy = true;
   try {
     await deleteOnboarding(dealerName, loc, finName);
