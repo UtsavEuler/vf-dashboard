@@ -74,6 +74,11 @@ DPIRR_ENTRY_HEADERS = [
     "isSelfFinance", "cocoDodo", "vfStatus", "remarks", "fundingType",
     "loanTenure", "irr", "esp", "orp", "ltv", "downPayment", "discount",
     "effectiveDp",
+    # Turbo only: 'true' = a high DP (above Rs 2 lakh) is the customer's own choice,
+    # 'false' = it is due to a low LTV approved by the financier, blank = not applicable.
+    # A live DPIRR_Entries tab needs a header cell with exactly this name: a column the
+    # tab lacks is silently dropped on save (diagnose_sheet_headers.py checks for it).
+    "highDpByCustomer",
 ]
 DPIRR_PRODUCT_HEADERS = ["name"]
 DPIRR_MODEL_HEADERS = ["product", "name"]
