@@ -7356,8 +7356,8 @@ var DP_CUSTOMER_TYPE_OPTS = ['Captive','MLO/DCO','Small Fleet Operator','Medium 
 // explaining why, so unusually high down payments are justified, not silent.
 var DP_HIGH_EDP_LIMIT = 250000;
 var DP_MAX_IRR = 30;          // IRR (%) above this is refused when an entry is created or edited
-var DP_HIGH_DP_ASK_LIMIT = 200000;   // Turbo only: above this Effective DP (₹2 lakh) the user must say WHY it is so high
-// A Turbo entry whose Effective DP is above ₹2 lakh must record whether that is the customer's own choice or
+var DP_HIGH_DP_ASK_LIMIT = 175000;   // Turbo only: above this Effective DP (₹1.75 lakh) the user must say WHY it is so high
+// A Turbo entry whose Effective DP is above ₹1.75 lakh must record whether that is the customer's own choice or
 // because the financier approved a low LTV. highDpByCustomer: 'true' = the customer is willingly paying it,
 // 'false' = it is due to the low LTV. It is stored ONLY when the question applies (Turbo and above the limit);
 // otherwise it is blank, so "not applicable" can never be mistaken for "answered No".
@@ -7366,10 +7366,17 @@ function dpHighDpApplies(product, effectiveDp) {
   var edp = parseFloat(effectiveDp);
   return dpIsTurbo(product) && !isNaN(edp) && edp > DP_HIGH_DP_ASK_LIMIT;
 }
-function dpResolveHighDpAnswer(product, effectiveDp, toggleEl, storedValue) {
-  if (!dpHighDpApplies(product, effectiveDp)) return '';
-  if (toggleEl) return toggleEl.checked ? 'true' : 'false';
-  return storedValue || '';                                 // no toggle on this form (an old entry): keep what was stored
+// What the user has chosen in the form: the toggle (new entries, and entries already answered) or the Yes / No pair
+// (an old entry that has never been answered: neither is pre-selected, so "not answered" stays distinguishable).
+function dpReadHighDpAnswer() {
+  var cb = document.getElementById('dpModal_highDpByCustomer');
+  if (cb) return cb.checked ? 'true' : 'false';
+  var picked = document.querySelector('input[name="dpHighDpChoice"]:checked');
+  return picked ? picked.value : '';
+}
+// '' = the question does not apply (not Turbo, or not above the limit) or it applies and is still unanswered.
+function dpResolveHighDpAnswer(product, effectiveDp, answer) {
+  return dpHighDpApplies(product, effectiveDp) ? (answer || '') : '';
 }
 function dpRupees(n) { return '₹' + Math.round(n).toLocaleString('en-IN'); }          // IRR (%) above this is refused when an entry is created or edited
 function dpNeedsHighEdpRemark(product, effectiveDp) {
@@ -8410,19 +8417,31 @@ function openDPEntryModal(seg, monthId, idx) {
     }
   });
 
-  // Turbo only: why is the Effective DP above ₹2 lakh? Shown for every new entry (revealed only for Turbo) and, when
-  // editing, only for an entry that already carries an answer, so an old entry is never given an answer nobody chose.
+  // Turbo only: why is the Effective DP above ₹1.75 lakh? Shown (revealed only for Turbo) on every new entry and every edit.
+  //  - new entry, or an entry already answered: a toggle (new entries start at No).
+  //  - an OLD entry that was never answered: a Yes / No pair with nothing pre-selected, and the answer is REQUIRED
+  //    to save it while the question applies. The user has to choose; nothing is filled in on their behalf.
   var highDpStored = String(row.highDpByCustomer || '');
-  if (idx === null || highDpStored === 'true' || highDpStored === 'false') {
-    body += '<div id="dpHighDpWrap" style="display:none;grid-column:1 / -1;margin:0;padding:10px 12px;border:1px solid var(--border);border-radius:8px;">' +
-      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin:0;">' +
+  var highDpPending = idx !== null && highDpStored !== 'true' && highDpStored !== 'false';
+  var highDpLimitTxt = dpRupees(DP_HIGH_DP_ASK_LIMIT);
+  body += '<div id="dpHighDpWrap" data-pending="' + (highDpPending ? '1' : '0') + '" style="display:none;grid-column:1 / -1;margin:0;padding:10px 12px;border:1px solid var(--border);border-radius:8px;">';
+  if (highDpPending) {
+    body += '<div style="font-size:13px;color:var(--text);font-weight:600;">Why is the DP high? <span style="color:var(--flag);">*</span></div>' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin:6px 0 0;">' +
+        '<input type="radio" name="dpHighDpChoice" value="true" onchange="updateDPHighDpToggle()"> Yes, the customer is willingly paying this higher DP</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin:4px 0 0;">' +
+        '<input type="radio" name="dpHighDpChoice" value="false" onchange="updateDPHighDpToggle()"> No, it is high because of a low LTV approved by the financier</label>';
+  } else {
+    body += '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin:0;">' +
         '<input type="checkbox" id="dpModal_highDpByCustomer" onchange="updateDPHighDpToggle()"' + (highDpStored === 'true' ? ' checked' : '') + '> ' +
         'Customer is willingly paying this high DP: <span id="dpHighDpState" style="font-weight:700;">No</span>' +
-      '</label>' +
-      '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.5;">Applies only when the Effective DP is above ₹2,00,000. Turn it ON if the customer chooses to pay it; leave it OFF if the DP is high because the financier approved a low LTV.</div>' +
+      '</label>';
+  }
+  body += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.5;">Applies only when the Effective DP is above ' + highDpLimitTxt + '. ' +
+      (highDpPending ? 'Choose Yes if the customer chooses to pay it, or No if the DP is high because the financier approved a low LTV.'
+                     : 'Turn it ON if the customer chooses to pay it; leave it OFF if the DP is high because the financier approved a low LTV.') + '</div>' +
       '<div id="dpHighDpWarn" style="display:none;margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.45);color:#f59e0b;font-size:12px;line-height:1.5;"></div>' +
     '</div>';
-  }
 
   body += '</div>';
 
@@ -8451,22 +8470,29 @@ function openDPEntryModal(seg, monthId, idx) {
 }
 
 // Shows the toggle for Turbo only (any variant), keeps its "Yes / No" word in step, and shows the warning while the
-// Effective DP is above ₹2 lakh. Runs whenever the product, the financier or the amounts change.
+// Effective DP is above ₹1.75 lakh. Runs whenever the product, the financier or the amounts change.
 function updateDPHighDpToggle() {
   var wrap = document.getElementById('dpHighDpWrap');
   if (!wrap) return;
   var prodEl = document.getElementById('dpModal_product'), edpEl = document.getElementById('dpModal_effectiveDp');
   var cb = document.getElementById('dpModal_highDpByCustomer'), stateEl = document.getElementById('dpHighDpState');
+  var pending = wrap.getAttribute('data-pending') === '1';
   var product = prodEl ? prodEl.value : '', edp = edpEl ? edpEl.value : '';
-  wrap.style.display = dpIsTurbo(product) ? 'block' : 'none';
+  // An old entry that was never answered shows the (required) question only while it actually applies, so editing
+  // an old Turbo entry that is at or below the limit is not cluttered with a question it does not need.
+  var applies = dpHighDpApplies(product, edp);
+  wrap.style.display = dpIsTurbo(product) && (!pending || applies) ? 'block' : 'none';
   if (stateEl && cb) stateEl.textContent = cb.checked ? 'Yes' : 'No';
   var warn = document.getElementById('dpHighDpWarn');
   if (!warn) return;
   if (dpHighDpApplies(product, edp)) {
     var finEl = document.getElementById('dpModal_financier');
     var fin = finEl && finEl.value ? finEl.value : 'the chosen financier';
-    warn.textContent = '⚠ Effective DP is ' + dpRupees(parseFloat(edp)) + ', above ₹2,00,000. Please confirm the reason: is the customer willingly paying this higher DP, or is it because ' + fin +
-      ' approved a low LTV? Turn the toggle ON if it is the customer\'s choice, or leave it OFF if it is due to the low LTV.';
+    var limitTxt = dpRupees(DP_HIGH_DP_ASK_LIMIT);
+    warn.textContent = pending
+      ? '⚠ Effective DP is ' + dpRupees(parseFloat(edp)) + ', above ' + limitTxt + '. This entry was saved before the question existed, so it must be answered now before it can be saved: is the customer willingly paying this higher DP, or is it because ' + fin + ' approved a low LTV?'
+      : '⚠ Effective DP is ' + dpRupees(parseFloat(edp)) + ', above ' + limitTxt + '. Please confirm the reason: is the customer willingly paying this higher DP, or is it because ' + fin +
+        ' approved a low LTV? Turn the toggle ON if it is the customer\'s choice, or leave it OFF if it is due to the low LTV.';
     warn.style.display = 'block';
   } else {
     warn.style.display = 'none';
@@ -8699,8 +8725,6 @@ function saveDPEntry() {
   var isSelfFinance = !!(isSelfFinanceEl && isSelfFinanceEl.checked);
   row.isSelfFinance = isSelfFinance ? 'true' : 'false';
   var isNewEntry = _dpEditTarget.idx === null;
-  var highDpStored = '';
-  if (!isNewEntry) { var storedRow = getDPEntries(_dpEditTarget.seg, _dpEditTarget.monthId)[_dpEditTarget.idx]; highDpStored = storedRow ? String(storedRow.highDpByCustomer || '') : ''; }
   DP_COLS.forEach(function(col) {
     var el = document.getElementById('dpModal_' + col.key);
     var v = el ? el.value.trim() : '';
@@ -8747,7 +8771,14 @@ function saveDPEntry() {
     toast('⚠ Must be greater than 0: ' + invalidPositiveFields.join(', '));
     return;
   }
-  row.highDpByCustomer = dpResolveHighDpAnswer(row.product, row.effectiveDp, document.getElementById('dpModal_highDpByCustomer'), highDpStored);
+  row.highDpByCustomer = dpResolveHighDpAnswer(row.product, row.effectiveDp, dpReadHighDpAnswer());
+  if (!isNewEntry && dpHighDpApplies(row.product, row.effectiveDp) && !row.highDpByCustomer) {
+    // An existing Turbo entry above the limit that was never answered: the person editing it must answer first.
+    toast('⚠ Please answer: is the high DP (' + dpRupees(parseFloat(row.effectiveDp)) + ') the customer\'s own choice, or due to a low LTV approved by the financier?');
+    var firstRadio = document.querySelector('input[name="dpHighDpChoice"]'); if (firstRadio) firstRadio.focus();
+    updateDPHighDpToggle();
+    return;
+  }
   if (irrTooHigh) {
     toast('⚠ IRR cannot be more than ' + DP_MAX_IRR + '%');
     var irrEl = document.getElementById('dpModal_irr');
@@ -8770,7 +8801,7 @@ function saveDPEntry() {
   dpSaveAfterChecks(row);
 }
 
-// The last question before a NEW Turbo entry with an Effective DP above ₹2 lakh is saved: echo back the answer given
+// The last question before a NEW Turbo entry with an Effective DP above ₹1.75 lakh is saved: echo back the answer given
 // to "why is the DP so high?" and ask the user to confirm it. The toggle defaults to No (low LTV), so without this a user
 // who ignored the warning would silently record "not the customer's choice".
 function dpSaveAfterChecks(row) {
@@ -8779,7 +8810,7 @@ function dpSaveAfterChecks(row) {
     var answer = row.highDpByCustomer === 'true'
       ? 'the customer is willingly paying this higher DP'
       : 'NOT the customer\'s choice: it is because ' + (row.financier || 'the financier') + ' approved a low LTV';
-    openDPConfirm('Effective DP is ' + dpRupees(parseFloat(row.effectiveDp)) + ', above ₹2,00,000. You have marked it as: ' + answer + '. Is that correct?',
+    openDPConfirm('Effective DP is ' + dpRupees(parseFloat(row.effectiveDp)) + ', above ' + dpRupees(DP_HIGH_DP_ASK_LIMIT) + '. You have marked it as: ' + answer + '. Is that correct?',
       function() { proceedWithDPEntrySave(row); }, 'Yes, that is correct', 'btn-primary');
     return;
   }
@@ -9130,7 +9161,9 @@ function updateDPVfStatusInline(selectEl, seg, monthId, idx) {
   selectEl.style.background = col + '22';
 
   var monthObj = (_dpMonths[seg] || []).find(function(m){ return m.id === monthId; }) || {};
-  var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'] || '' };
+  // Every column must be sent: the sheet blanks any column that is missing from a save.
+  var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'] || '',
+                  isSelfFinance: row.isSelfFinance || 'false', highDpByCustomer: row.highDpByCustomer || '' };
   DP_COLS.forEach(function(c) { payload[c.key] = row[c.key] || ''; });
   saveDPIRREntryToSheet(payload);
   toast('✅ VF Status updated');
@@ -9168,7 +9201,7 @@ function renderDPTable(seg, monthId) {
   DP_COLS.forEach(function(c){
     html += '<th style="'+thStyle+'">'+c.label+'</th>';
     if (c.key === 'financier') html += '<th style="'+thStyle+'">Self Finance</th>';
-    if (c.key === 'effectiveDp') html += '<th style="'+thStyle+'" title="Turbo, Effective DP above ₹2 lakh: Yes = the customer is willingly paying it; No = it is because of a low LTV approved by the financier">High DP by Customer</th>';
+    if (c.key === 'effectiveDp') html += '<th style="'+thStyle+'" title="Turbo, Effective DP above ₹1.75 lakh: Yes = the customer is willingly paying it; No = it is because of a low LTV approved by the financier">High DP by Customer</th>';
   });
   html += '<th style="'+thStyle+'width:70px;">Actions</th></tr></thead><tbody>';
 
@@ -9204,7 +9237,8 @@ function renderDPTable(seg, monthId) {
       }
       if (c.key === 'effectiveDp') {
         var hdp = String(dpVal(r.highDpByCustomer));
-        html += '<td style="padding:7px 12px;white-space:nowrap;'+(hdp==='true'?'color:#4ade80;font-weight:600;':(hdp==='false'?'color:#f59e0b;font-weight:600;':'color:var(--text-muted);'))+'">'+(hdp==='true'?'Yes':(hdp==='false'?'No':'—'))+'</td>';
+        var hdpPending = hdp !== 'true' && hdp !== 'false' && dpHighDpApplies(dpVal(r.product), dpVal(r.effectiveDp));   // question applies, nobody has answered yet
+        html += '<td style="padding:7px 12px;white-space:nowrap;'+(hdp==='true'?'color:#4ade80;font-weight:600;':(hdp==='false'?'color:#f59e0b;font-weight:600;':(hdpPending?'color:#f87171;font-weight:600;':'color:var(--text-muted);')))+'"'+(hdpPending?' title="Edit this entry and answer why the DP is high"':'')+'>'+(hdp==='true'?'Yes':(hdp==='false'?'No':(hdpPending?'Pending':'—')))+'</td>';
       }
     });
     html += '<td style="padding:7px 8px;white-space:nowrap;">' +
@@ -9863,7 +9897,7 @@ function exportDPView(seg, monthId) {
     DP_COLS.forEach(function(c){
       line.push(dpVal(r[c.key]));
       if (c.key === 'financier') line.push(String(dpVal(r.isSelfFinance)) === 'true' ? 'Yes' : 'No');
-      if (c.key === 'effectiveDp') { var hdpX = String(dpVal(r.highDpByCustomer)); line.push(hdpX === 'true' ? 'Yes' : (hdpX === 'false' ? 'No' : '')); }
+      if (c.key === 'effectiveDp') { var hdpX = String(dpVal(r.highDpByCustomer)); line.push(hdpX === 'true' ? 'Yes' : (hdpX === 'false' ? 'No' : (dpHighDpApplies(dpVal(r.product), dpVal(r.effectiveDp)) ? 'Pending' : ''))); }
     });
     aoa.push(line);
   });
