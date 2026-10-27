@@ -2422,7 +2422,7 @@ async function loadState() {
       entries.forEach(function(e) {
         if (!e || !e.id || !e.monthId) return;
         if (!_dpData.dp[e.monthId]) _dpData.dp[e.monthId] = [];
-        var row = { '_id': e.id, 'Sr. No.': e.srNo || (_dpData.dp[e.monthId].length + 1), 'createdBy': e.createdBy || '', 'isSelfFinance': e.isSelfFinance || 'false' };
+        var row = { '_id': e.id, 'Sr. No.': e.srNo || (_dpData.dp[e.monthId].length + 1), 'createdBy': e.createdBy || '', 'isSelfFinance': e.isSelfFinance || 'false', 'highDpByCustomer': String(e.highDpByCustomer == null ? '' : e.highDpByCustomer).trim().toLowerCase() };
         DP_COLS.forEach(function(c) { row[c.key] = dpVal(e[c.key]); });
         _dpData.dp[e.monthId].push(row);
       });
@@ -7356,6 +7356,22 @@ var DP_CUSTOMER_TYPE_OPTS = ['Captive','MLO/DCO','Small Fleet Operator','Medium 
 // explaining why, so unusually high down payments are justified, not silent.
 var DP_HIGH_EDP_LIMIT = 250000;
 var DP_MAX_IRR = 30;          // IRR (%) above this is refused when an entry is created or edited
+var DP_HIGH_DP_ASK_LIMIT = 200000;   // Turbo only: above this Effective DP (₹2 lakh) the user must say WHY it is so high
+// A Turbo entry whose Effective DP is above ₹2 lakh must record whether that is the customer's own choice or
+// because the financier approved a low LTV. highDpByCustomer: 'true' = the customer is willingly paying it,
+// 'false' = it is due to the low LTV. It is stored ONLY when the question applies (Turbo and above the limit);
+// otherwise it is blank, so "not applicable" can never be mistaken for "answered No".
+function dpIsTurbo(product) { return String(product || '').trim().toLowerCase() === 'turbo'; }   // the product, so every Turbo variant counts
+function dpHighDpApplies(product, effectiveDp) {
+  var edp = parseFloat(effectiveDp);
+  return dpIsTurbo(product) && !isNaN(edp) && edp > DP_HIGH_DP_ASK_LIMIT;
+}
+function dpResolveHighDpAnswer(product, effectiveDp, toggleEl, storedValue) {
+  if (!dpHighDpApplies(product, effectiveDp)) return '';
+  if (toggleEl) return toggleEl.checked ? 'true' : 'false';
+  return storedValue || '';                                 // no toggle on this form (an old entry): keep what was stored
+}
+function dpRupees(n) { return '₹' + Math.round(n).toLocaleString('en-IN'); }          // IRR (%) above this is refused when an entry is created or edited
 function dpNeedsHighEdpRemark(product, effectiveDp) {
   var p = String(product || '').trim().toLowerCase();
   var is4wc = (p === 'turbo' || p.indexOf('storm') === 0);
@@ -8368,7 +8384,7 @@ function openDPEntryModal(seg, monthId, idx) {
         '<span style="font-size:11px;color:var(--text-muted);">(customer arranged their own financing — still select who\'s carrying the loan)</span>' +
       '</div>' +
       '<div class="form-group" style="margin:0;"><label class="form-label" id="dpFinancierLabel">'+reqLabel(col)+'</label>' +
-        '<select class="form-select" id="'+fieldId+'">'+fopts+'</select></div>';
+        '<select class="form-select" id="'+fieldId+'" onchange="updateDPHighDpToggle()">'+fopts+'</select></div>';
     } else if (col.type === 'select-status') {
       var sopts = ['<option value="">— Select Status —</option>'].concat(DP_VF_STATUS_OPTS.map(function(o){
         return '<option value="'+o+'"'+(val===o?' selected':'')+'>'+o+'</option>';
@@ -8394,6 +8410,20 @@ function openDPEntryModal(seg, monthId, idx) {
     }
   });
 
+  // Turbo only: why is the Effective DP above ₹2 lakh? Shown for every new entry (revealed only for Turbo) and, when
+  // editing, only for an entry that already carries an answer, so an old entry is never given an answer nobody chose.
+  var highDpStored = String(row.highDpByCustomer || '');
+  if (idx === null || highDpStored === 'true' || highDpStored === 'false') {
+    body += '<div id="dpHighDpWrap" style="display:none;grid-column:1 / -1;margin:0;padding:10px 12px;border:1px solid var(--border);border-radius:8px;">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin:0;">' +
+        '<input type="checkbox" id="dpModal_highDpByCustomer" onchange="updateDPHighDpToggle()"' + (highDpStored === 'true' ? ' checked' : '') + '> ' +
+        'Customer is willingly paying this high DP: <span id="dpHighDpState" style="font-weight:700;">No</span>' +
+      '</label>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.5;">Applies only when the Effective DP is above ₹2,00,000. Turn it ON if the customer chooses to pay it; leave it OFF if the DP is high because the financier approved a low LTV.</div>' +
+      '<div id="dpHighDpWarn" style="display:none;margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.45);color:#f59e0b;font-size:12px;line-height:1.5;"></div>' +
+    '</div>';
+  }
+
   body += '</div>';
 
   if (idx === null) {
@@ -8414,9 +8444,33 @@ function openDPEntryModal(seg, monthId, idx) {
   document.getElementById('dpEntryBody').innerHTML = body;
   document.getElementById('dpEntryOverlay').style.display = 'flex';
   recalcDPFinancials();
+  updateDPHighDpToggle();
   onDPSelfFinanceToggle();
 
   // If editing and dealer already set, ensure auto fields populated (already are from row)
+}
+
+// Shows the toggle for Turbo only (any variant), keeps its "Yes / No" word in step, and shows the warning while the
+// Effective DP is above ₹2 lakh. Runs whenever the product, the financier or the amounts change.
+function updateDPHighDpToggle() {
+  var wrap = document.getElementById('dpHighDpWrap');
+  if (!wrap) return;
+  var prodEl = document.getElementById('dpModal_product'), edpEl = document.getElementById('dpModal_effectiveDp');
+  var cb = document.getElementById('dpModal_highDpByCustomer'), stateEl = document.getElementById('dpHighDpState');
+  var product = prodEl ? prodEl.value : '', edp = edpEl ? edpEl.value : '';
+  wrap.style.display = dpIsTurbo(product) ? 'block' : 'none';
+  if (stateEl && cb) stateEl.textContent = cb.checked ? 'Yes' : 'No';
+  var warn = document.getElementById('dpHighDpWarn');
+  if (!warn) return;
+  if (dpHighDpApplies(product, edp)) {
+    var finEl = document.getElementById('dpModal_financier');
+    var fin = finEl && finEl.value ? finEl.value : 'the chosen financier';
+    warn.textContent = '⚠ Effective DP is ' + dpRupees(parseFloat(edp)) + ', above ₹2,00,000. Please confirm the reason: is the customer willingly paying this higher DP, or is it because ' + fin +
+      ' approved a low LTV? Turn the toggle ON if it is the customer\'s choice, or leave it OFF if it is due to the low LTV.';
+    warn.style.display = 'block';
+  } else {
+    warn.style.display = 'none';
+  }
 }
 
 function onDPCreateMultipleToggle() {
@@ -8597,6 +8651,8 @@ function recalcDPFinancials() {
     }
   }
 
+  updateDPHighDpToggle();
+
   // Remarks becomes mandatory (new entries only) when a 4WC product's
   // Effective DP is unusually high — flag it on the label immediately so the
   // user isn't surprised at save.
@@ -8643,6 +8699,8 @@ function saveDPEntry() {
   var isSelfFinance = !!(isSelfFinanceEl && isSelfFinanceEl.checked);
   row.isSelfFinance = isSelfFinance ? 'true' : 'false';
   var isNewEntry = _dpEditTarget.idx === null;
+  var highDpStored = '';
+  if (!isNewEntry) { var storedRow = getDPEntries(_dpEditTarget.seg, _dpEditTarget.monthId)[_dpEditTarget.idx]; highDpStored = storedRow ? String(storedRow.highDpByCustomer || '') : ''; }
   DP_COLS.forEach(function(col) {
     var el = document.getElementById('dpModal_' + col.key);
     var v = el ? el.value.trim() : '';
@@ -8689,6 +8747,7 @@ function saveDPEntry() {
     toast('⚠ Must be greater than 0: ' + invalidPositiveFields.join(', '));
     return;
   }
+  row.highDpByCustomer = dpResolveHighDpAnswer(row.product, row.effectiveDp, document.getElementById('dpModal_highDpByCustomer'), highDpStored);
   if (irrTooHigh) {
     toast('⚠ IRR cannot be more than ' + DP_MAX_IRR + '%');
     var irrEl = document.getElementById('dpModal_irr');
@@ -8702,10 +8761,26 @@ function saveDPEntry() {
   if (row.orp !== '' && row.esp !== '' && parseFloat(row.orp) < parseFloat(row.esp)) {
     openDPConfirm(
       'On-Road Price (₹' + row.orp + ') is less than the Ex-Showroom Price (₹' + row.esp + ') for this variant. Are you sure you want to create this entry?',
-      function() { proceedWithDPEntrySave(row); },
+      function() { dpSaveAfterChecks(row); },
       '✓ Yes, Create Entry',
       'btn-primary'
     );
+    return;
+  }
+  dpSaveAfterChecks(row);
+}
+
+// The last question before a NEW Turbo entry with an Effective DP above ₹2 lakh is saved: echo back the answer given
+// to "why is the DP so high?" and ask the user to confirm it. The toggle defaults to No (low LTV), so without this a user
+// who ignored the warning would silently record "not the customer's choice".
+function dpSaveAfterChecks(row) {
+  var isNew = !!_dpEditTarget && _dpEditTarget.idx === null;
+  if (isNew && dpHighDpApplies(row.product, row.effectiveDp)) {
+    var answer = row.highDpByCustomer === 'true'
+      ? 'the customer is willingly paying this higher DP'
+      : 'NOT the customer\'s choice: it is because ' + (row.financier || 'the financier') + ' approved a low LTV';
+    openDPConfirm('Effective DP is ' + dpRupees(parseFloat(row.effectiveDp)) + ', above ₹2,00,000. You have marked it as: ' + answer + '. Is that correct?',
+      function() { proceedWithDPEntrySave(row); }, 'Yes, that is correct', 'btn-primary');
     return;
   }
   proceedWithDPEntrySave(row);
@@ -8760,7 +8835,7 @@ async function proceedWithDPEntrySaveNow(row) {
     row['_id'] = oldRow['_id'] || genDPId();
     row['createdBy'] = oldRow['createdBy'] || getDPUserName();
 
-    var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'], isSelfFinance: row.isSelfFinance };
+    var payload = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'], isSelfFinance: row.isSelfFinance, highDpByCustomer: row.highDpByCustomer || '' };
     DP_COLS.forEach(function(col) { payload[col.key] = row[col.key] || ''; });
 
     try {
@@ -8800,7 +8875,7 @@ async function proceedWithDPEntrySaveNow(row) {
               var oldSiblingVals = {};
               changedFields.forEach(function(col) { oldSiblingVals[col.key] = sibling[col.key]; });
               changedFields.forEach(function(col) { sibling[col.key] = row[col.key]; });
-              var sibPayload = { id: sibling['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: sibling['Sr. No.'], createdBy: sibling['createdBy'], isSelfFinance: sibling.isSelfFinance };
+              var sibPayload = { id: sibling['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: sibling['Sr. No.'], createdBy: sibling['createdBy'], isSelfFinance: sibling.isSelfFinance, highDpByCustomer: sibling.highDpByCustomer || '' };
               DP_COLS.forEach(function(col) { sibPayload[col.key] = sibling[col.key] || ''; });
               try {
                 await saveDPIRREntryToSheet(sibPayload);
@@ -8834,7 +8909,7 @@ async function proceedWithDPEntrySaveNow(row) {
       newRows.push(clone);
     }
     var bulkPayload = newRows.map(function(r) {
-      var p = { id: r['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: r['Sr. No.'], createdBy: r['createdBy'], isSelfFinance: r.isSelfFinance };
+      var p = { id: r['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: r['Sr. No.'], createdBy: r['createdBy'], isSelfFinance: r.isSelfFinance, highDpByCustomer: r.highDpByCustomer || '' };
       DP_COLS.forEach(function(col) { p[col.key] = r[col.key] || ''; });
       return p;
     });
@@ -8852,7 +8927,7 @@ async function proceedWithDPEntrySaveNow(row) {
     row['_id'] = genDPId();
     row['createdBy'] = getDPUserName();
 
-    var payload2 = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'], isSelfFinance: row.isSelfFinance };
+    var payload2 = { id: row['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: row['Sr. No.'], createdBy: row['createdBy'], isSelfFinance: row.isSelfFinance, highDpByCustomer: row.highDpByCustomer || '' };
     DP_COLS.forEach(function(col) { payload2[col.key] = row[col.key] || ''; });
 
     try {
@@ -9093,6 +9168,7 @@ function renderDPTable(seg, monthId) {
   DP_COLS.forEach(function(c){
     html += '<th style="'+thStyle+'">'+c.label+'</th>';
     if (c.key === 'financier') html += '<th style="'+thStyle+'">Self Finance</th>';
+    if (c.key === 'effectiveDp') html += '<th style="'+thStyle+'" title="Turbo, Effective DP above ₹2 lakh: Yes = the customer is willingly paying it; No = it is because of a low LTV approved by the financier">High DP by Customer</th>';
   });
   html += '<th style="'+thStyle+'width:70px;">Actions</th></tr></thead><tbody>';
 
@@ -9125,6 +9201,10 @@ function renderDPTable(seg, monthId) {
       if (c.key === 'financier') {
         var isSelf = String(dpVal(r.isSelfFinance)) === 'true';
         html += '<td style="padding:7px 12px;white-space:nowrap;'+(isSelf?'color:#a78bfa;font-weight:600;':'color:var(--text-muted);')+'">'+(isSelf?'Yes':'No')+'</td>';
+      }
+      if (c.key === 'effectiveDp') {
+        var hdp = String(dpVal(r.highDpByCustomer));
+        html += '<td style="padding:7px 12px;white-space:nowrap;'+(hdp==='true'?'color:#4ade80;font-weight:600;':(hdp==='false'?'color:#f59e0b;font-weight:600;':'color:var(--text-muted);'))+'">'+(hdp==='true'?'Yes':(hdp==='false'?'No':'—'))+'</td>';
       }
     });
     html += '<td style="padding:7px 8px;white-space:nowrap;">' +
@@ -9775,6 +9855,7 @@ function exportDPView(seg, monthId) {
   DP_COLS.forEach(function(c){
     header.push(c.label);
     if (c.key === 'financier') header.push('Self Finance');
+    if (c.key === 'effectiveDp') header.push('High DP by Customer');
   });
   var aoa = [header];
   rows.forEach(function(r, i){
@@ -9782,6 +9863,7 @@ function exportDPView(seg, monthId) {
     DP_COLS.forEach(function(c){
       line.push(dpVal(r[c.key]));
       if (c.key === 'financier') line.push(String(dpVal(r.isSelfFinance)) === 'true' ? 'Yes' : 'No');
+      if (c.key === 'effectiveDp') { var hdpX = String(dpVal(r.highDpByCustomer)); line.push(hdpX === 'true' ? 'Yes' : (hdpX === 'false' ? 'No' : '')); }
     });
     aoa.push(line);
   });
