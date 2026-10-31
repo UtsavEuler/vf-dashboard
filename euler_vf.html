@@ -1984,11 +1984,11 @@
 <!-- DP/IRR Generic Confirm Modal (product/model delete) -->
 <div class="modal-overlay" id="dpConfirmOverlay" style="display:none;">
   <div class="modal" style="max-width:380px;">
-    <div class="modal-header"><div class="modal-title">⚠ Confirm</div><button class="modal-close" onclick="closeDPConfirm()">✕</button></div>
+    <div class="modal-header"><div class="modal-title">⚠ Confirm</div><button class="modal-close" onclick="dismissDPConfirm()">✕</button></div>
 
     <div class="modal-body"><p id="dpConfirmMessage" style="color:var(--text);margin:0;"></p></div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeDPConfirm()">Cancel</button>
+      <button class="btn btn-secondary" onclick="dismissDPConfirm()">Cancel</button>
       <button class="btn btn-danger" id="dpConfirmBtn" onclick="runDPConfirm()">Delete</button>
     </div>
   </div>
@@ -7341,6 +7341,7 @@ var DP_PRODUCT_OPTS = ['Storm','Turbo','3WC','3WP'];
 var _dpProducts      = DP_PRODUCT_OPTS.slice(); // mutable, managed via Manage Products view
 var _dpProductModels = {};                       // productName -> [{name, esp}]
 _dpProducts.forEach(function(p){ _dpProductModels[p] = []; });
+var _dpConfirmDismissFn = null;                  // optional follow-up when a confirm is cancelled
 var _dpConfirmFn     = null;                     // pending confirm callback for product/model delete
 var _dpUploadTargetProduct = null;               // product currently targeted for bulk Excel upload
 var _dpManageExpanded = {};                      // productName -> boolean, tracks collapse state (default collapsed)
@@ -7377,6 +7378,20 @@ function dpReadHighDpAnswer() {
 // '' = the question does not apply (not Turbo, or not above the limit) or it applies and is still unanswered.
 function dpResolveHighDpAnswer(product, effectiveDp, answer) {
   return dpHighDpApplies(product, effectiveDp) ? (answer || '') : '';
+}
+// Down Payment is ORP − LTV and Effective DP is Down Payment − Discount (what the entry form itself calculates). The table
+// shows what is STORED, so a row whose LTV (or ORP / Discount) was changed afterwards, e.g. directly in the sheet, can show
+// figures that no longer agree with each other. Returns {dp, edp}: null when fine, else {stored, expected}. ±₹1 is rounding.
+function dpFigureCheck(r) {
+  var orp = parseFloat(dpVal(r.orp)), ltv = parseFloat(dpVal(r.ltv)), disc = parseFloat(dpVal(r.discount));
+  var dp = parseFloat(dpVal(r.downPayment)), edp = parseFloat(dpVal(r.effectiveDp));
+  var out = { dp: null, edp: null };
+  var expDp = (!isNaN(orp) && !isNaN(ltv)) ? orp - ltv : null;
+  if (expDp !== null && !isNaN(dp) && Math.abs(dp - expDp) > 1) out.dp = { stored: dp, expected: expDp };
+  var baseDp = expDp !== null ? expDp : (!isNaN(dp) ? dp : null);
+  var expEdp = (baseDp !== null && !isNaN(disc)) ? baseDp - disc : null;
+  if (expEdp !== null && !isNaN(edp) && Math.abs(edp - expEdp) > 1) out.edp = { stored: edp, expected: expEdp };
+  return out;
 }
 function dpRupees(n) { return '₹' + Math.round(n).toLocaleString('en-IN'); }          // IRR (%) above this is refused when an entry is created or edited
 function dpNeedsHighEdpRemark(product, effectiveDp) {
@@ -7434,6 +7449,18 @@ async function saveDPIRREntryToSheet(entryObj) {
   setSaveStatus('saving');
   try { await API.post('/api/dpirr_entries', entryObj); setSaveStatus('saved'); }
   catch(e) { setSaveStatus('error'); throw e; }
+}
+// Sets the "why is the DP high?" answer on many entries in ONE request (the server does one batched write however many ids).
+async function saveDPIRRHighDpToSheet(ids, value) {
+  setSaveStatus('saving');
+  try {
+    var res = await API.post('/api/dpirr_entries_high_dp', { ids: ids, highDpByCustomer: value });
+    setSaveStatus('saved');
+    return res;
+  } catch (e) {
+    setSaveStatus('error');
+    throw e;
+  }
 }
 async function saveDPIRREntriesBulkToSheet(entries) {
   setSaveStatus('saving');
@@ -7540,7 +7567,7 @@ function initDPIRR() {
   (function(){ var o=document.getElementById('dpVariantModalOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPVariantModal(); }); })();
   (function(){ var o=document.getElementById('dpStateEspOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPStateEspModal(); }); })();
   (function(){ var o=document.getElementById('dpAnalysisOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPAnalysisModal(); }); })();
-  (function(){ var o=document.getElementById('dpConfirmOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPConfirm(); }); })();
+  (function(){ var o=document.getElementById('dpConfirmOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) dismissDPConfirm(); }); })();
   (function(){ var o=document.getElementById('dpChangePinOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPChangePinModal(); }); })();
   (function(){ var o=document.getElementById('dpDeleteUserOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDeleteUserConfirm(); }); })();
   (function(){ var o=document.getElementById('dpUserSwitchOverlay'); if(o) o.addEventListener('click',function(e){ if(e.target===e.currentTarget) closeDPUserSwitchModal(); }); })();
@@ -8817,6 +8844,41 @@ function dpSaveAfterChecks(row) {
   proceedWithDPEntrySave(row);
 }
 
+// A customer can buy many vehicles and finance them with several financiers, each offering a different loan (so a different
+// DP). The answer to "why is the DP high?" therefore belongs to one customer + ONE financier: after an entry is answered,
+// offer that same answer to the customer's other Turbo entries with the SAME financier whose Effective DP is also above the
+// limit. Entries financed by another financier, and entries at or below the limit, are never touched.
+function dpNormKey(v) { return String(v || '').trim().toLowerCase(); }
+function dpOfferHighDpAnswer(seg, monthId, row) {
+  var ans = String(row.highDpByCustomer || '');
+  var cust = dpNormKey(row.customerName), fin = dpNormKey(row.financier);
+  if ((ans !== 'true' && ans !== 'false') || !cust || !fin) return;
+  var targets = getDPEntries(seg, monthId).filter(function(r) {
+    return r !== row && dpNormKey(r.customerName) === cust && dpNormKey(r.financier) === fin &&
+           dpHighDpApplies(r.product, r.effectiveDp) && String(r.highDpByCustomer || '') !== ans;
+  });
+  if (!targets.length) return;
+  var unanswered = targets.filter(function(r){ return !r.highDpByCustomer; }).length, different = targets.length - unanswered;
+  var n = targets.length, word = n === 1 ? 'entry' : 'entries';
+  var detail = unanswered && different ? ' (' + unanswered + ' not answered yet, ' + different + ' answered differently)'
+             : (different ? ' (answered differently)' : ' (not answered yet)');
+  var answerTxt = ans === 'true' ? 'the customer is willingly paying this higher DP' : 'NOT the customer\'s choice: it is because ' + row.financier + ' approved a low LTV';
+  openDPConfirm(
+    row.customerName + ' has ' + n + ' other Turbo ' + word + ' financed by ' + row.financier + ' with an Effective DP above ' + dpRupees(DP_HIGH_DP_ASK_LIMIT) + detail +
+    '. Mark ' + (n === 1 ? 'it' : 'them') + ' too as: ' + answerTxt + '? Entries financed by other financiers are not changed.',
+    async function() {
+      var ids = targets.map(function(r){ return r['_id']; }), done = appBusyStart('Applying to ' + n + ' ' + word + '…');
+      try {
+        try { await saveDPIRRHighDpToSheet(ids, ans); }
+        catch (e) { toast('❌ Failed to apply the answer — nothing was changed. Please try again.'); return; }
+        targets.forEach(function(r){ r.highDpByCustomer = ans; });          // local state changes only after the sheet accepted it
+        renderDPView(seg, monthId);
+        toast('✅ Answer applied to ' + n + ' more ' + word + ' for ' + row.customerName + ' (' + row.financier + ')');
+      } finally { done(); }
+    },
+    '✓ Apply to ' + n + ' ' + word, 'btn-primary');
+}
+
 // Every save (a new entry, several new entries, or an edit) goes through here. While the server is working the
 // page is covered by the same "working" overlay TA/IF uses, the Save button is disabled, and a repeat click is
 // ignored. Without this a second click started a second save, which created a second entry.
@@ -8885,13 +8947,21 @@ async function proceedWithDPEntrySaveNow(row) {
     var changedFields = DP_COLS.filter(function(col) {
       return String(dpVal(oldRow[col.key])) !== String(dpVal(row[col.key]));
     });
+    // The "why is the DP high?" answer is NOT copied by this duplicate prompt (a "duplicate" ignores the financier, and
+    // the answer belongs to one customer + financier). It is offered separately, below, to that group only. What this
+    // prompt does do is re-check each duplicate's stored answer: if its Effective DP is no longer above the limit the
+    // answer is cleared rather than left stale.
+    var answerGiven = !!row.highDpByCustomer && row.highDpByCustomer !== String(oldRow.highDpByCustomer || '');
+    var offerAnswerToGroup = function() { if (answerGiven) dpOfferHighDpAnswer(seg, monthId, row); };
     var dupKey = getDPDuplicateKey(row);
+    var dupPromptShown = false;
     if (changedFields.length && dupKey.replace(/\|/g,'')) {
       var siblings = arr.filter(function(r, i) {
         return i !== idx && getDPDuplicateKey(r) === dupKey;
       });
       if (siblings.length) {
         var fieldLabels = changedFields.map(function(c){ return c.label; }).join(', ');
+        dupPromptShown = true;
         var siblingWord = siblings.length===1 ? 'entry' : 'entries';
         openDPConfirm(
           'This entry is a duplicate of ' + siblings.length + ' other ' + siblingWord +
@@ -8905,13 +8975,16 @@ async function proceedWithDPEntrySaveNow(row) {
               var sibling = siblings[s];
               var oldSiblingVals = {};
               changedFields.forEach(function(col) { oldSiblingVals[col.key] = sibling[col.key]; });
+              var oldSiblingAnswer = sibling.highDpByCustomer;
               changedFields.forEach(function(col) { sibling[col.key] = row[col.key]; });
+              sibling.highDpByCustomer = dpResolveHighDpAnswer(sibling.product, sibling.effectiveDp, oldSiblingAnswer);
               var sibPayload = { id: sibling['_id'], monthId: monthId, monthLabel: monthObj.label || '', srNo: sibling['Sr. No.'], createdBy: sibling['createdBy'], isSelfFinance: sibling.isSelfFinance, highDpByCustomer: sibling.highDpByCustomer || '' };
               DP_COLS.forEach(function(col) { sibPayload[col.key] = sibling[col.key] || ''; });
               try {
                 await saveDPIRREntryToSheet(sibPayload);
               } catch (e) {
                 changedFields.forEach(function(col) { sibling[col.key] = oldSiblingVals[col.key]; }); // roll back locally too
+                sibling.highDpByCustomer = oldSiblingAnswer;
                 failedNames.push(sibling.customerName || ('Sr. No. ' + sibling['Sr. No.']));
               }
             }
@@ -8922,12 +8995,15 @@ async function proceedWithDPEntrySaveNow(row) {
               toast('✅ Changes applied to ' + siblings.length + ' duplicate ' + siblingWord + ' too');
             }
             } finally { doneProp(); }
+            offerAnswerToGroup();
           },
           '✓ Apply to ' + siblings.length + (siblings.length===1?' entry':' entries'),
-          'btn-primary'
+          'btn-primary',
+          offerAnswerToGroup          // declining the duplicate prompt still leads on to the customer + financier question
         );
       }
     }
+    if (!dupPromptShown) offerAnswerToGroup();
 
   } else if (wasBulk) {
     // Create N identical entries in one shot
@@ -9217,6 +9293,7 @@ function renderDPTable(seg, monthId) {
       (isDup ? ' <span title="Possible duplicate — same Customer/Product/Model/Variant/Dealer as another row" style="font-size:10px;color:#fbbf24;">⚠</span>' : '') +
       '</td>';
     if (isAdmin) html += '<td style="padding:7px 12px;white-space:nowrap;color:var(--text-muted);">'+escHtml(r.createdBy||'—')+'</td>';
+    var figChk = dpFigureCheck(r);
     DP_COLS.forEach(function(c){
       var v = String(dpVal(r[c.key]));
       if (c.key === 'vfStatus') {
@@ -9229,7 +9306,14 @@ function renderDPTable(seg, monthId) {
           'style="background:'+statusCol+'22;color:'+statusCol+';border:1px solid '+statusCol+'44;border-radius:4px;padding:3px 6px;font-size:11px;white-space:nowrap;max-width:170px;">' +
           opts + '</select></td>';
       } else {
-        html += '<td style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(dpVal(r[c.key])).replace(/"/g,"'")+'">'+v+'</td>';
+        var figBad = (c.key === 'downPayment' && figChk.dp) || (c.key === 'effectiveDp' && figChk.edp);
+        if (figBad) {
+          var figTitle = (c.key === 'downPayment' ? 'Stored Down Payment ' : 'Stored Effective DP ') + dpRupees(figBad.stored) + ' does not match ORP, LTV and Discount, which give ' + dpRupees(figBad.expected) +
+            '. Edit this entry and save to recalculate it (check which LTV is correct first).';
+          html += '<td class="dp-fig-mismatch" style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f87171;font-weight:600;" title="'+figTitle.replace(/"/g,"'")+'">⚠ '+v+'</td>';
+        } else {
+          html += '<td style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+String(dpVal(r[c.key])).replace(/"/g,"'")+'">'+v+'</td>';
+        }
       }
       if (c.key === 'financier') {
         var isSelf = String(dpVal(r.isSelfFinance)) === 'true';
@@ -9248,9 +9332,11 @@ function renderDPTable(seg, monthId) {
   });
 
   var dupRowCount = filtered.filter(function(r){ var k=getDPDuplicateKey(r); return k.replace(/\|/g,'') && dupCounts[k] > 1; }).length;
+  var figRowCount = filtered.filter(function(r){ var f = dpFigureCheck(r); return f.dp || f.edp; }).length;
   html += '</tbody></table></div>';
   html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">'+filtered.length+' of '+visibleRows.length+' records' +
     (dupRowCount ? ' &nbsp;·&nbsp; <span style="color:#fbbf24;">⚠ '+dupRowCount+' possible duplicate'+(dupRowCount===1?'':'s')+'</span>' : '') +
+    (figRowCount ? ' &nbsp;·&nbsp; <span id="dpFigMismatchNote" style="color:#f87171;" title="Down Payment / Effective DP stored in the sheet does not match ORP − LTV − Discount. Hover the red figures for details.">⚠ '+figRowCount+' row'+(figRowCount===1?'':'s')+' with mismatched Down Payment / Effective DP</span>' : '') +
     '</div>';
   el.innerHTML = html;
 }
@@ -9864,7 +9950,8 @@ function handleDPModelExcelUpload(event) {
 }
 
 
-function openDPConfirm(message, fn, confirmLabel, confirmClass) {
+function openDPConfirm(message, fn, confirmLabel, confirmClass, onDismiss) {
+  _dpConfirmDismissFn = onDismiss || null;
   document.getElementById('dpConfirmMessage').textContent = message;
   var btn = document.getElementById('dpConfirmBtn');
   btn.textContent = confirmLabel || 'Delete';
@@ -9875,6 +9962,13 @@ function openDPConfirm(message, fn, confirmLabel, confirmClass) {
 function closeDPConfirm() {
   document.getElementById('dpConfirmOverlay').style.display = 'none';
   _dpConfirmFn = null;
+  _dpConfirmDismissFn = null;
+}
+// Cancel button, the ✕ and a click outside the box: close, then run the caller's follow-up if it gave one.
+function dismissDPConfirm() {
+  var after = _dpConfirmDismissFn;
+  closeDPConfirm();
+  if (after) after();
 }
 function runDPConfirm() {
   var fn = _dpConfirmFn;
