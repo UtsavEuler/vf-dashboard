@@ -508,6 +508,26 @@ class GoogleSheetsAdapter:
 
         Two reads plus ONE batched write, whatever the match count.
         """
+        return self._bulk_patch(
+            alias, lambda row, headers: _row_matches(row, headers, match_keys),
+            data_dict)
+
+    def bulk_update_by_ids(self, alias, id_key, ids, data_dict):
+        """Apply data_dict's fields to EVERY row whose `id_key` cell is one of
+        `ids`, leaving every other column as it is. Returns the rows updated.
+
+        Two reads plus ONE batched write, whatever the number of ids.
+        """
+        wanted = {str(i) for i in ids}
+        return self._bulk_patch(
+            alias,
+            lambda row, headers: (row[headers.index(id_key)]
+                                  if id_key in headers
+                                  and headers.index(id_key) < len(row)
+                                  else "") in wanted,
+            data_dict)
+
+    def _bulk_patch(self, alias, row_wanted, data_dict):
         worksheet = self._ws_for(alias)
 
         def _do():
@@ -515,7 +535,7 @@ class GoogleSheetsAdapter:
             all_vals = worksheet.get_all_values()
             updated = {}
             for i, row in enumerate(all_vals[1:], start=2):
-                if not _row_matches(row, headers, match_keys):
+                if not row_wanted(row, headers):
                     continue
                 # Always write exactly len(headers) columns — never depend on the
                 # sheet's provisioned column count, which is often wider.

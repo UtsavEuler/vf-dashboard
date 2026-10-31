@@ -240,6 +240,30 @@ def create_app(config=None, adapter=None):
                             "error", started)
             raise
 
+    @app.route("/api/dpirr_entries_high_dp", methods=["POST"])
+    def dpirr_entries_high_dp():
+        """Set the "high DP by customer" answer on many entries in one batched
+        write (one customer + financier's entries are answered together)."""
+        started = time.monotonic()
+        body = _json_body()
+        ids = body.get("ids")
+        value = str(body.get("highDpByCustomer", "")).strip().lower()
+        if (not isinstance(ids, list) or not ids or len(ids) > 500
+                or not all(isinstance(i, str) and i.strip() for i in ids)):
+            raise ValidationError("ids must be a non-empty list of entry ids")
+        if value not in ("true", "false"):
+            raise ValidationError("highDpByCustomer must be true or false")
+        try:
+            updated = _adapter().bulk_update_by_ids(
+                "dpirr_entries", "id", ids, {"highDpByCustomer": value})
+            _structured_log("/api/dpirr_entries_high_dp", "write",
+                            "dpirr_entries", "ok", started)
+            return jsonify({"ok": True, "result": {"updated": updated}})
+        except Exception:
+            _structured_log("/api/dpirr_entries_high_dp", "write",
+                            "dpirr_entries", "error", started)
+            raise
+
     @app.route("/api/dpirr_variants_bulk", methods=["POST"])
     def dpirr_variants_bulk():
         """Bulk upsert a product's models + variants in a fixed number of Sheets
