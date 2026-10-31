@@ -8063,6 +8063,7 @@ function openDPAnalysisModal() {
   sel.value = (defaultMonth && months.some(function(m){ return m.id === defaultMonth; })) ? defaultMonth : '__all__';
 
   _dpAnalysisSelectedProducts = []; // reset to "All Products" each time the modal opens
+  _dpAnalysisExcludeWilling = false;
   renderDPAnalysisProductFilter();
 
   var vfRmSel = document.getElementById('dpAnalysisVfRmFilter');
@@ -8084,6 +8085,7 @@ function openDPAnalysisModal() {
 // Monthly Entries filter bar, but with its own state since this modal isn't
 // tied to a single month.
 var _dpAnalysisSelectedProducts = [];
+var _dpAnalysisExcludeWilling = false;      // option under table 1: leave out willingly-paid high-DP entries (adds table 1A)
 
 function renderDPAnalysisProductFilter() {
   var wrap = document.getElementById('dpAnalysisProductFilterWrap');
@@ -8115,6 +8117,11 @@ function onDPAnalysisProductChange(cb) {
   else { var i = _dpAnalysisSelectedProducts.indexOf(val); if (i > -1) _dpAnalysisSelectedProducts.splice(i, 1); }
   var btn = document.getElementById('dpAnalysisProductBtn');
   if (btn) btn.innerHTML = (_dpAnalysisSelectedProducts.length ? _dpAnalysisSelectedProducts.length+' selected' : 'All Products') + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
+  renderDPAnalysisForSelectedMonth();
+}
+
+function onDPAnalysisExcludeToggle(on) {
+  _dpAnalysisExcludeWilling = !!on;
   renderDPAnalysisForSelectedMonth();
 }
 
@@ -8227,41 +8234,85 @@ function renderDPAnalysisHtml(entries) {
       : '<span style="color:var(--text-muted);">—</span>';
   }
 
-  var byProduct = {};
-  var rowsByProduct = {};
-  entries.forEach(function(r){
-    var p = String(dpVal(r.product)).trim() || '(no product)';
-    byProduct[p] = (byProduct[p]||0)+1;
-    (rowsByProduct[p] = rowsByProduct[p] || []).push(r);
-  });
-  var productRows = Object.keys(byProduct).map(function(p){
-    var rows = rowsByProduct[p];
-    return {
-      name: p, count: byProduct[p],
-      irr: dpAvg(rows, 'irr'),
-      orp: dpAvg(rows, 'orp'),
-      downPayment: dpAvg(rows, 'downPayment'),
-      discount: dpAvg(rows, 'discount'),
-      effectiveDp: dpAvg(rows, 'effectiveDp'),
-      ltv: dpAvg(rows, 'ltv'),
-    };
-  }).sort(function(a,b){ return b.count - a.count; });
+  // One row per product, with the averages, for any list of entries. Used for the full table (1) and, when the option below
+  // is switched on, for the table that leaves out the willingly-paid high-DP entries (1A).
+  function buildProductRows(list) {
+    var byProduct = {}, rowsByProduct = {};
+    list.forEach(function(r){
+      var p = String(dpVal(r.product)).trim() || '(no product)';
+      byProduct[p] = (byProduct[p]||0)+1;
+      (rowsByProduct[p] = rowsByProduct[p] || []).push(r);
+    });
+    return Object.keys(byProduct).map(function(p){
+      var rows = rowsByProduct[p];
+      return {
+        name: p, count: byProduct[p],
+        irr: dpAvg(rows, 'irr'),
+        orp: dpAvg(rows, 'orp'),
+        downPayment: dpAvg(rows, 'downPayment'),
+        discount: dpAvg(rows, 'discount'),
+        effectiveDp: dpAvg(rows, 'effectiveDp'),
+        ltv: dpAvg(rows, 'ltv'),
+      };
+    }).sort(function(a,b){ return b.count - a.count; });
+  }
+  // excludedByProduct (optional) adds an "Excluded" column.
+  function productTableHtml(productRows, pctBase, excludedByProduct) {
+    return '<div style="overflow-x:auto;"><table style="'+tableStyle+'"><thead><tr><th style="'+thStyle+'">Product</th><th style="'+thStyle+'">Count</th>' +
+      (excludedByProduct ? '<th style="'+thStyle+'">Excluded</th>' : '') + '<th style="'+thStyle+'">%</th>' +
+      '<th style="'+thStyle+'">Avg IRR (%)</th><th style="'+thStyle+'">Avg ORP (₹)</th><th style="'+thStyle+'">Avg Down Payment (₹)</th>' +
+      '<th style="'+thStyle+'">Avg Discount (₹)</th><th style="'+thStyle+'">Avg Effective DP (₹)</th>' +
+      '<th style="'+thStyle+'">Avg LTV (₹)</th></tr></thead><tbody>' +
+      productRows.map(function(r){
+        return '<tr><td style="'+tdStyle+'">'+escHtml(r.name)+'</td><td style="'+tdStyle+'">'+r.count+'</td>' +
+          (excludedByProduct ? '<td style="'+tdStyle+'color:var(--text-muted);">'+(excludedByProduct[r.name]||0)+'</td>' : '') +
+          '<td style="'+tdStyle+'">'+(pctBase ? (r.count/pctBase*100).toFixed(1) : '0.0')+'%</td>' +
+          '<td style="'+tdStyle+'">'+fmtPctCell(r.irr)+'</td>' +
+          '<td style="'+tdStyle+'">'+fmtRupeeCell(r.orp)+'</td>' +
+          '<td style="'+tdStyle+'">'+fmtRupeeCell(r.downPayment)+'</td>' +
+          '<td style="'+tdStyle+'">'+fmtRupeeCell(r.discount)+'</td>' +
+          '<td style="'+tdStyle+'">'+fmtRupeeCell(r.effectiveDp)+'</td>' +
+          '<td style="'+tdStyle+'">'+fmtRupeeCell(r.ltv)+'</td></tr>';
+      }).join('') +
+      '</tbody></table></div>';
+  }
 
   html += '<div style="'+sectionStyle+'"><div style="'+titleStyle+'">1. Total Entries: '+total+'</div>' +
-    '<div style="overflow-x:auto;"><table style="'+tableStyle+'"><thead><tr><th style="'+thStyle+'">Product</th><th style="'+thStyle+'">Count</th><th style="'+thStyle+'">%</th>' +
-    '<th style="'+thStyle+'">Avg IRR (%)</th><th style="'+thStyle+'">Avg ORP (₹)</th><th style="'+thStyle+'">Avg Down Payment (₹)</th>' +
-    '<th style="'+thStyle+'">Avg Discount (₹)</th><th style="'+thStyle+'">Avg Effective DP (₹)</th>' +
-    '<th style="'+thStyle+'">Avg LTV (₹)</th></tr></thead><tbody>' +
-    productRows.map(function(r){
-      return '<tr><td style="'+tdStyle+'">'+escHtml(r.name)+'</td><td style="'+tdStyle+'">'+r.count+'</td><td style="'+tdStyle+'">'+(r.count/total*100).toFixed(1)+'%</td>' +
-        '<td style="'+tdStyle+'">'+fmtPctCell(r.irr)+'</td>' +
-        '<td style="'+tdStyle+'">'+fmtRupeeCell(r.orp)+'</td>' +
-        '<td style="'+tdStyle+'">'+fmtRupeeCell(r.downPayment)+'</td>' +
-        '<td style="'+tdStyle+'">'+fmtRupeeCell(r.discount)+'</td>' +
-        '<td style="'+tdStyle+'">'+fmtRupeeCell(r.effectiveDp)+'</td>' +
-        '<td style="'+tdStyle+'">'+fmtRupeeCell(r.ltv)+'</td></tr>';
-    }).join('') +
-    '</tbody></table></div></div>';
+    productTableHtml(buildProductRows(entries), total, null) + '</div>';
+
+  // ── 1A. Option: leave out the entries where a high DP was the customer's own choice ──
+  // A customer who willingly pays a DP above the limit is not a sign of what the financier's terms require, but a few of
+  // them pull the average DP up a lot. Switch this on to see the averages without those entries. Entries marked "low LTV
+  // by the financier" are kept (that high DP is the financier's doing), and so are the ones nobody has answered yet,
+  // because they are not KNOWN to be willing.
+  var willingHigh = entries.filter(function(r){
+    return dpHighDpApplies(dpVal(r.product), dpVal(r.effectiveDp)) && String(dpVal(r.highDpByCustomer)) === 'true';
+  });
+  var unansweredHigh = entries.filter(function(r){
+    var a = String(dpVal(r.highDpByCustomer));
+    return dpHighDpApplies(dpVal(r.product), dpVal(r.effectiveDp)) && a !== 'true' && a !== 'false';
+  }).length;
+  html += '<div style="margin:-8px 0 24px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);">' +
+    '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--text);cursor:pointer;">' +
+      '<input type="checkbox" id="dpAnalysisExcludeWilling" style="margin-top:2px;"' + (_dpAnalysisExcludeWilling ? ' checked' : '') + ' onchange="onDPAnalysisExcludeToggle(this.checked)">' +
+      '<span>Exclude entries where the Effective DP is above ' + dpRupees(DP_HIGH_DP_ASK_LIMIT) + ' and the customer paid it willingly ' +
+        '<span style="color:var(--text-muted);">(' + willingHigh.length + ' of ' + total + ' entries match)</span></span></label>' +
+    (unansweredHigh ? '<div style="font-size:11px;color:#f59e0b;margin:6px 0 0 24px;">' + unansweredHigh + ' more ' + (unansweredHigh === 1 ? 'entry is' : 'entries are') + ' above the limit but not answered yet (shown as Pending), so ' + (unansweredHigh === 1 ? 'it is' : 'they are') + ' kept in.</div>' : '') +
+    '</div>';
+  if (_dpAnalysisExcludeWilling) {
+    var keptEntries = entries.filter(function(r){ return willingHigh.indexOf(r) === -1; });
+    var excludedByProduct = {};
+    willingHigh.forEach(function(r){ var pn = String(dpVal(r.product)).trim() || '(no product)'; excludedByProduct[pn] = (excludedByProduct[pn]||0) + 1; });
+    html += '<div style="'+sectionStyle+'"><div style="'+titleStyle+'">1A. Excluding willingly-paid DP above ' + dpRupees(DP_HIGH_DP_ASK_LIMIT) + ': ' + keptEntries.length + ' of ' + total + ' entries <span style="font-weight:400;color:var(--text-muted);">(' + willingHigh.length + ' excluded)</span></div>';
+    if (!willingHigh.length) {
+      html += '<div style="'+subStyle+'">No entries are marked as a willingly-paid high DP here, so the averages are the same as in table 1.</div>';
+    } else if (!keptEntries.length) {
+      html += '<div style="'+subStyle+'">Every entry here is a willingly-paid high DP, so nothing is left to average.</div>';
+    } else {
+      html += productTableHtml(buildProductRows(keptEntries), keptEntries.length, excludedByProduct);
+    }
+    html += '</div>';
+  }
 
   // ── 2. Top 10 financiers, product-wise ──
   var finCross = computeDPCrossTab(entries, 'financier', { skipEmpty: true, limit: 10 });
