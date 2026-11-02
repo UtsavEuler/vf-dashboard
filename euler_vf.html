@@ -2343,6 +2343,9 @@ async function loadState() {
     state.addedDealers = adM.map(d => ({
       dealer: d.dealer, location: d.location, rm: d.rm||'', vfPoc: d.vfPoc||''
     }));
+    // The Dealer Dashboard keeps its own copy of each dealer's RM and VF POC, taken from the Dealer Master when the dealer was
+    // added. The Dealer Master is the source of truth, so refresh the copy now: a POC changed there is picked up here too.
+    syncAddedDealersFromMaster(false);
 
     // FI Onboarding → rebuild mapping object
     state.mapping = {};
@@ -2484,6 +2487,26 @@ async function loadState() {
 }
 
 // ── SAVE FUNCTIONS (individual operations) ────────────────────
+// Copies the current RM (Sales) and VF POC of each dealer in the Dealer Master onto its Dealer Dashboard entry. A blank value
+// in the master never wipes what the dashboard already has. With persist=true the changed entries are also saved to the
+// Added_Dealers sheet (one write per dealer that actually changed). Returns the entries that changed.
+function syncAddedDealersFromMaster(persist) {
+  var norm = function(v) { return String(v || '').trim().toLowerCase(); };
+  var masterByKey = {};
+  (state.dealersMaster || []).forEach(function(m) { masterByKey[norm(m.dealerName) + '||' + norm(m.location)] = m; });
+  var changed = [];
+  (state.addedDealers || []).forEach(function(d) {
+    var m = masterByKey[norm(d.dealer) + '||' + norm(d.location)];
+    if (!m) return;
+    var poc = String(m.vfPoc || '').trim(), rm = String(m.rmSales || '').trim(), did = false;
+    if (poc && poc !== d.vfPoc) { d.vfPoc = poc; did = true; }
+    if (rm && rm !== d.rm) { d.rm = rm; did = true; }
+    if (did) changed.push(d);
+  });
+  if (persist) changed.forEach(function(d) { saveAddedDealer(d); });
+  return changed;
+}
+
 async function saveAddedDealer(dealerObj) {
   setSaveStatus('saving');
   try { await API.post('/api/added_dealers', dealerObj); setSaveStatus('saved'); } catch(e) { setSaveStatus('error'); }
@@ -4498,6 +4521,8 @@ function saveDealerMaster() {
   closeDealerMasterModal();
   saveDealerMasterToSheet(record);
   renderDealerMaster();
+  // The Dealer Dashboard shows its own copy of this dealer's VF POC and RM: bring it in line with what was just saved.
+  if (syncAddedDealersFromMaster(true).length) renderAll();
 }
 
 function confirmRemoveDealerMaster(idx) {
