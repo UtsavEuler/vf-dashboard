@@ -537,6 +537,12 @@
   .multi-filter-btn.active { border-color:var(--accent); background:var(--surface3); }
   .multi-filter-dropdown { display:none; position:absolute; top:100%; left:0; z-index:200; background:var(--surface3); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow-md); min-width:180px; max-height:260px; overflow:visible; padding:6px 0; flex-direction:column; }
   .multi-filter-dropdown.open { display:flex; }
+  .dp-an-tab { background:none; border:none; border-bottom:2px solid transparent; color:var(--text-muted); font:inherit; font-size:13px; font-weight:600; padding:8px 14px; cursor:pointer; margin-bottom:-1px; }
+  .dp-an-tab:hover { color:var(--text); }
+  .dp-an-tab.active { color:var(--accent, #818cf8); border-bottom-color:var(--accent, #818cf8); }
+  .dp-an-pill { background:var(--surface2); border:1px solid var(--border); color:var(--text-muted); font:inherit; font-size:12px; padding:4px 12px; border-radius:999px; cursor:pointer; }
+  .dp-an-pill:hover { color:var(--text); }
+  .dp-an-pill.active { background:var(--accent, #818cf8); border-color:var(--accent, #818cf8); color:#fff; font-weight:600; }
   /* The items list is always this dropdown's first child (Clear link is the
      second). overflow:hidden on the dropdown itself was silently clipping
      any items beyond max-height with NO way to scroll to them — anything
@@ -1859,21 +1865,44 @@
   <div class="modal" style="max-width:920px;max-height:88vh;overflow-y:auto;">
     <div class="modal-header"><div class="modal-title">📊 DP/IRR Analysis</div><button class="modal-close" onclick="closeDPAnalysisModal()">✕</button></div>
     <div class="modal-body">
+      <div id="dpAnalysisTabs" style="display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--border);">
+        <button type="button" class="dp-an-tab" id="dpAnTabProduct" onclick="showDPAnalysisTab('product')">Product Level Analysis</button>
+        <button type="button" class="dp-an-tab" id="dpAnTabState" onclick="showDPAnalysisTab('state')">State Level Analysis</button>
+      </div>
+      <div id="dpAnalysisProductPanel">
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
-        <div class="form-group" style="margin:0;max-width:260px;flex:1;">
+        <div class="form-group" style="margin:0;max-width:200px;flex:1;">
           <label class="form-label">Scope</label>
-          <select class="form-select" id="dpAnalysisMonthFilter" onchange="renderDPAnalysisForSelectedMonth()"></select>
+          <div id="dpAnalysisMonthFilterWrap"></div>
         </div>
-        <div class="form-group" style="margin:0;max-width:260px;flex:1;">
+        <div class="form-group" style="margin:0;max-width:200px;flex:1;">
           <label class="form-label">Product</label>
           <div id="dpAnalysisProductFilterWrap"></div>
         </div>
-        <div class="form-group" style="margin:0;max-width:260px;flex:1;">
+        <div class="form-group" style="margin:0;max-width:200px;flex:1;">
           <label class="form-label">VF RM</label>
           <select class="form-select" id="dpAnalysisVfRmFilter" onchange="renderDPAnalysisForSelectedMonth()"></select>
         </div>
+        <div class="form-group" style="margin:0;max-width:200px;flex:1;">
+          <label class="form-label">State</label>
+          <div id="dpAnalysisStateFilterWrap"></div>
+        </div>
       </div>
       <div id="dpAnalysisBody"></div>
+      </div>
+      <div id="dpAnalysisStatePanel" style="display:none;">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+          <div class="form-group" style="margin:0;max-width:260px;flex:1;">
+            <label class="form-label">Scope</label>
+            <div id="dpStateAnalysisMonthFilterWrap"></div>
+          </div>
+          <div class="form-group" style="margin:0;max-width:200px;flex:1;">
+            <label class="form-label">VF RM</label>
+            <select class="form-select" id="dpStateAnalysisVfRmFilter" onchange="renderDPStateAnalysis()"></select>
+          </div>
+        </div>
+        <div id="dpStateAnalysisBody"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeDPAnalysisModal()">Close</button>
@@ -7979,8 +8008,9 @@ function getDPVisibleRows(seg, monthId) {
 // their own entries.
 function getAllVisibleDPEntries(monthId) {
   var out = [];
+  var ids = (monthId === null || monthId === undefined || monthId === '') ? null : [].concat(monthId);   // a month id, a list of them, or none = all months
   (_dpMonths.dp || []).forEach(function(m) {
-    if (monthId && m.id !== monthId) return;
+    if (ids && ids.length && ids.indexOf(m.id) === -1) return;
     out = out.concat(getDPVisibleRows('dp', m.id));
   });
   return out;
@@ -8078,14 +8108,15 @@ function computeDPCibilAnalysis(entries) {
 }
 
 function openDPAnalysisModal() {
-  var sel = document.getElementById('dpAnalysisMonthFilter');
   var months = _dpMonths.dp || [];
-  var opts = '<option value="__all__">All Time</option>' +
-    months.map(function(m){ return '<option value="'+escHtml(m.id)+'">'+escHtml(m.label)+'</option>'; }).join('');
-  sel.innerHTML = opts;
-  // Default to whichever month is currently active on the main dashboard.
+  // Default to whichever month is currently active on the main dashboard; no selection = All Time.
   var defaultMonth = _dpActiveMonth.dp;
-  sel.value = (defaultMonth && months.some(function(m){ return m.id === defaultMonth; })) ? defaultMonth : '__all__';
+  var startWith = (defaultMonth && months.some(function(m){ return m.id === defaultMonth; })) ? [defaultMonth] : [];
+  _dpScopeSel = { product: startWith.slice(), state: startWith.slice() };   // each tab keeps its own Scope
+  renderDPScopeFilter('product');
+  renderDPScopeFilter('state');
+  _dpStateSort = {};
+  _dpStateProfileProducts = [];
 
   _dpAnalysisSelectedProducts = []; // reset to "All Products" each time the modal opens
   _dpAnalysisExcludeWilling = false;
@@ -8099,9 +8130,294 @@ function openDPAnalysisModal() {
     vfRmNames.map(function(n){ return '<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>'; }).join('');
   vfRmSel.innerHTML = vfRmOpts;
   vfRmSel.value = '__all__';
+  var stVfRmSel = document.getElementById('dpStateAnalysisVfRmFilter');   // State Level Analysis: same VF RM choices, its own selection
+  stVfRmSel.innerHTML = vfRmOpts;
+  stVfRmSel.value = '__all__';
 
+  // State: the states that appear in the entries (compared ignoring case and spaces); entries with no state get their own choice.
+  var allEntries = getAllVisibleDPEntries(null), stateSeen = {}, hasBlankState = false;
+  allEntries.forEach(function(r) {
+    var st = String(dpVal(r.state)).trim();
+    if (!st) { hasBlankState = true; return; }
+    if (!stateSeen[st.toLowerCase()]) stateSeen[st.toLowerCase()] = st;
+  });
+  var stateNames = Object.keys(stateSeen).map(function(k){ return stateSeen[k]; }).sort(function(a, b){ return a.localeCompare(b); });
+  _dpAnalysisStateOptions = stateNames.map(function(n){ return { key: n.toLowerCase(), label: n }; });
+  if (hasBlankState) _dpAnalysisStateOptions.push({ key: '__none__', label: '(No state)' });
+  _dpAnalysisSelectedStates = [];                    // reset to "All States" each time the modal opens
+  renderDPAnalysisStateFilter();
+
+  _dpStateAnalysisProduct = '';                      // '' = the product with the most entries (chosen when drawing)
+
+  showDPAnalysisTab('product');
   renderDPAnalysisForSelectedMonth();
   document.getElementById('dpAnalysisOverlay').style.display = 'flex';
+}
+
+// ── Scope (month) multi-select, one for each tab of the Analysis window ──
+// Nothing selected = All Time; otherwise only entries from the ticked months are analysed.
+var _dpScopeSel = { product: [], state: [] };
+function dpScopeLabel(which) {
+  var sel = _dpScopeSel[which], months = _dpMonths.dp || [];
+  if (!sel.length) return 'All Time';
+  if (months.length > 1 && sel.length === months.length) return 'All months';
+  if (sel.length === 1) { var m = months.filter(function(x){ return x.id === sel[0]; })[0]; return m ? m.label : sel[0]; }
+  return sel.length + ' months selected';
+}
+function renderDPScopeFilter(which) {
+  var wrap = document.getElementById(which === 'state' ? 'dpStateAnalysisMonthFilterWrap' : 'dpAnalysisMonthFilterWrap');
+  if (!wrap) return;
+  var btnId = 'dpScope_' + which + '_Btn', ddId = 'dpScope_' + which + '_Dd';
+  wrap.innerHTML = '<div class="multi-filter-wrap" style="position:relative;">' +
+    '<div class="multi-filter-btn" id="' + btnId + '" onclick="toggleDPFilter(\'' + ddId + '\',\'' + btnId + '\')" style="width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+      escHtml(dpScopeLabel(which)) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>' +
+    '</div>' +
+    '<div class="multi-filter-dropdown" id="' + ddId + '" style="min-width:220px;max-height:none;">' +
+      '<input type="text" placeholder="Search..." oninput="filterDPDropdown(this,\'' + ddId + '\')" ' +
+        'style="margin:6px 8px 4px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;width:calc(100% - 16px);box-sizing:border-box;">' +
+      '<div id="' + ddId + '_items" style="max-height:200px;overflow-y:auto;">' +
+        (_dpMonths.dp || []).map(function(m) {
+          var checked = _dpScopeSel[which].indexOf(m.id) > -1;
+          return '<label class="multi-filter-item"><input type="checkbox" value="' + escHtml(m.id) + '" ' + (checked ? 'checked' : '') + ' onchange="onDPScopeChange(\'' + which + '\',this)"><span>' + escHtml(m.label) + '</span></label>';
+        }).join('') +
+      '</div>' +
+      '<div class="multi-filter-clear" onclick="selectAllDPScope(\'' + which + '\')">✓ Select all months</div>' +
+      '<div class="multi-filter-clear" onclick="clearDPScope(\'' + which + '\')">✕ Clear (All Time)</div>' +
+    '</div>' +
+  '</div>';
+}
+function dpScopeChanged(which) {
+  if (which === 'state') renderDPStateAnalysis(); else renderDPAnalysisForSelectedMonth();
+}
+function onDPScopeChange(which, cb) {
+  var sel = _dpScopeSel[which], i = sel.indexOf(cb.value);
+  if (cb.checked) { if (i === -1) sel.push(cb.value); } else if (i > -1) sel.splice(i, 1);
+  var btn = document.getElementById('dpScope_' + which + '_Btn');
+  if (btn) btn.innerHTML = escHtml(dpScopeLabel(which)) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
+  dpScopeChanged(which);
+}
+function selectAllDPScope(which) {
+  _dpScopeSel[which] = (_dpMonths.dp || []).map(function(m){ return m.id; });
+  renderDPScopeFilter(which);
+  var dd = document.getElementById('dpScope_' + which + '_Dd');
+  var bt = document.getElementById('dpScope_' + which + '_Btn');
+  if (dd) dd.classList.add('open');            // keep the list open so the ticks are visible
+  if (bt) bt.classList.add('active');
+  dpScopeChanged(which);
+}
+function clearDPScope(which) {
+  _dpScopeSel[which] = [];
+  renderDPScopeFilter(which);
+  dpScopeChanged(which);
+}
+
+function showDPAnalysisTab(which) {
+  var isState = which === 'state';
+  document.getElementById('dpAnalysisProductPanel').style.display = isState ? 'none' : '';
+  document.getElementById('dpAnalysisStatePanel').style.display = isState ? '' : 'none';
+  document.getElementById('dpAnTabProduct').classList.toggle('active', !isState);
+  document.getElementById('dpAnTabState').classList.toggle('active', isState);
+  if (isState) renderDPStateAnalysis();
+}
+
+// ── State Level Analysis ──
+// One row per state. Table 1: how many entries of each product. Table 2: the customer-type split. Table 3: Down Payment /
+// Discount / Effective DP, for ONE product at a time (chosen with the buttons above it), because a Turbo and a 3WP differ
+// so much in price that a single average across products would say nothing, so there is deliberately no combined view.
+var _dpStateAnalysisProduct = '';
+var _dpStateProfileProducts = [];   // table 2 product filter (product families ticked); empty = every product
+// Product families for the table 2 filter: Storm TR, Storm LR and any other Storm variant all count as "Storm".
+function dpProductFamily(p) { var t = String(p || '').trim(); return /^storm/i.test(t) ? 'Storm' : t; }
+function toggleDPStateProfileProduct(name) {
+  if (!name) { _dpStateProfileProducts = []; }
+  else {
+    var i = _dpStateProfileProducts.indexOf(name);
+    if (i === -1) _dpStateProfileProducts.push(name); else _dpStateProfileProducts.splice(i, 1);
+  }
+  renderDPStateAnalysis();
+}
+
+function dpNumbers(rows, field) {
+  var out = [];
+  rows.forEach(function(r) { var v = parseFloat(dpVal(r[field])); if (!isNaN(v)) out.push(v); });
+  return out;
+}
+function dpMean(nums) { return nums.length ? nums.reduce(function(a, b){ return a + b; }, 0) / nums.length : null; }
+function dpMedian(nums) {
+  if (!nums.length) return null;
+  var a = nums.slice().sort(function(x, y){ return x - y; }), m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+function dpRupeeCell(value, n) {
+  return value === null ? '<span style="color:var(--text-muted);">—</span>'
+    : '₹' + Math.round(value).toLocaleString('en-IN') + ' <span style="color:var(--text-muted);font-size:10.5px;">(n=' + n + ')</span>';
+}
+
+function setDPStateAnalysisProduct(p) {
+  _dpStateAnalysisProduct = p;
+  renderDPStateAnalysis();
+}
+
+// Click a column header to sort that table (first click: A-Z for State, highest first for numbers; click again to reverse).
+// "(No state)" always stays at the bottom just above the totals row, and blanks always sort last.
+var _dpStateSort = {};   // table id -> { col, dir }
+function setDPStateSort(tid, col) {
+  var cur = _dpStateSort[tid];
+  if (cur && cur.col === col) cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+  else _dpStateSort[tid] = { col: col, dir: col === 0 ? 'asc' : 'desc' };
+  renderDPStateAnalysis();
+}
+function dpSortedKeys(tid, keys, labelOf, valueAt) {
+  var st = _dpStateSort[tid];
+  if (!st) return keys;
+  var dir = st.dir === 'asc' ? 1 : -1;
+  var rest = keys.filter(function(k){ return k !== '__none__'; }), pinned = keys.filter(function(k){ return k === '__none__'; });
+  rest.sort(function(a, b) {
+    var x = valueAt(a, st.col), y = valueAt(b, st.col);
+    var xn = x === null || x === undefined, yn = y === null || y === undefined;
+    if (xn && yn) return labelOf[a].localeCompare(labelOf[b]);
+    if (xn) return 1;
+    if (yn) return -1;
+    var c = typeof x === 'string' ? x.localeCompare(y) : x - y;
+    return c ? c * dir : labelOf[a].localeCompare(labelOf[b]);
+  });
+  return rest.concat(pinned);
+}
+function dpSortTh(tid, col, label, style) {
+  var st = _dpStateSort[tid], on = !!st && st.col === col;
+  return '<th style="' + style + 'cursor:pointer;user-select:none;" onclick="setDPStateSort(\'' + tid + '\',' + col + ')" title="Click to sort" aria-sort="' + (on ? (st.dir === 'asc' ? 'ascending' : 'descending') : 'none') + '">' +
+    label + ' <span style="font-size:9px;' + (on ? 'color:#818cf8;' : 'opacity:.4;') + '">' + (on ? (st.dir === 'asc' ? '▲' : '▼') : '↕') + '</span></th>';
+}
+
+function renderDPStateAnalysis() {
+  var body = document.getElementById('dpStateAnalysisBody');
+  if (!body) return;
+  var entries = getAllVisibleDPEntries(_dpScopeSel.state);
+  var stVfRmSel = document.getElementById('dpStateAnalysisVfRmFilter');
+  var stVfRm = (stVfRmSel && stVfRmSel.value !== '__all__') ? stVfRmSel.value : null;
+  if (stVfRm) entries = entries.filter(function(r) { return String(dpVal(r.vfRm)).trim() === stVfRm; });
+  if (!entries.length) { body.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><div>No entries to analyze yet.</div></div>'; return; }
+
+  var NONE = '(No state)';
+  var prodOf = function(r) { return String(dpVal(r.product)).trim() || '(no product)'; };
+  // Group by state, ignoring case and spaces ("Kerala" and "kerala" are one state); entries with no state go last.
+  var groups = {}, labelOf = {};
+  entries.forEach(function(r) {
+    var st = String(dpVal(r.state)).trim(), key = st ? st.toLowerCase() : '__none__';
+    if (!groups[key]) { groups[key] = []; labelOf[key] = st || NONE; }
+    groups[key].push(r);
+  });
+  var keys = Object.keys(groups).sort(function(a, b) {
+    if (a === '__none__') return 1; if (b === '__none__') return -1;
+    return groups[b].length - groups[a].length || labelOf[a].localeCompare(labelOf[b]);
+  });
+
+  // Products: the managed list's order first, then anything else found in the data.
+  var present = {}; entries.forEach(function(r) { present[prodOf(r)] = true; });
+  var products = (_dpProducts || []).filter(function(p) { return present[p]; });
+  Object.keys(present).sort().forEach(function(p) { if (products.indexOf(p) === -1) products.push(p); });
+
+  var sectionStyle = 'margin-bottom:26px;', titleStyle = 'font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;', subStyle = 'font-size:12px;color:var(--text-muted);margin-bottom:10px;';
+  var tableStyle = 'width:100%;border-collapse:collapse;font-size:12px;';
+  var thStyle = 'padding:6px 10px;text-align:right;background:var(--surface2);color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap;';
+  var thL = thStyle.replace('text-align:right', 'text-align:left');
+  var tdStyle = 'padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;';
+  var tdL = tdStyle.replace('text-align:right', 'text-align:left');
+  var totStyle = 'font-weight:700;background:var(--surface2);';
+  var wrap = function(t) { return '<div style="overflow-x:auto;">' + t + '</div>'; };
+  var html = '';
+
+  // 1. Entries by product
+  var cnt = function(rows, f) { return rows.filter(f).length; };
+  var t1Keys = dpSortedKeys('t1', keys, labelOf, function(k, c) {
+    return c === 0 ? labelOf[k] : c === 1 ? groups[k].length : cnt(groups[k], function(r){ return prodOf(r) === products[c - 2]; });
+  });
+  var t1 = '<table style="' + tableStyle + '"><thead><tr>' + dpSortTh('t1', 0, 'State', thL) + dpSortTh('t1', 1, 'Total', thStyle) +
+    products.map(function(p, i) { return dpSortTh('t1', i + 2, escHtml(p), thStyle); }).join('') + '</tr></thead><tbody>';
+  t1Keys.forEach(function(k) {
+    t1 += '<tr><td style="' + tdL + '">' + escHtml(labelOf[k]) + '</td><td style="' + tdStyle + 'font-weight:600;">' + groups[k].length + '</td>' +
+      products.map(function(p) { var n = groups[k].filter(function(r){ return prodOf(r) === p; }).length; return '<td style="' + tdStyle + (n ? '' : 'color:var(--text-muted);') + '">' + (n || '–') + '</td>'; }).join('') + '</tr>';
+  });
+  t1 += '<tr style="' + totStyle + '"><td style="' + tdL + '">All states</td><td style="' + tdStyle + '">' + entries.length + '</td>' +
+    products.map(function(p) { return '<td style="' + tdStyle + '">' + entries.filter(function(r){ return prodOf(r) === p; }).length + '</td>'; }).join('') + '</tr></tbody></table>';
+  html += '<div style="' + sectionStyle + '"><div style="' + titleStyle + '">1. Entries by Product</div><div style="' + subStyle + '">' + keys.length + ' state' + (keys.length === 1 ? '' : 's') + ', ' + entries.length + ' entries.</div>' + wrap(t1) + '</div>';
+
+  // 2. Customer profile split (Customer Type). % is of the entries that HAVE a type, as in the product-level analysis.
+  // Product filter: tick one or more product families (Storm TR and Storm LR count as Storm); none ticked = all products.
+  var famOf = function(r) { return dpProductFamily(prodOf(r)); };
+  var famPresent = {}; entries.forEach(function(r) { famPresent[famOf(r)] = true; });
+  var families = ['Turbo', 'Storm', '3WC', '3WP'].filter(function(f) { return famPresent[f]; });
+  Object.keys(famPresent).sort().forEach(function(f) { if (families.indexOf(f) === -1) families.push(f); });
+  _dpStateProfileProducts = _dpStateProfileProducts.filter(function(f) { return famPresent[f]; });   // drop picks that have no entries in this selection
+  var famPicked = _dpStateProfileProducts.slice();
+  var inFam = function(r) { return !famPicked.length || famPicked.indexOf(famOf(r)) > -1; };
+  var entries2 = entries.filter(inFam);
+  var g2 = {}; keys.forEach(function(k) { var rows = groups[k].filter(inFam); if (rows.length) g2[k] = rows; });
+  var keys2 = keys.filter(function(k) { return !!g2[k]; });
+  var famChips = '<button type="button" class="dp-an-pill' + (famPicked.length ? '' : ' active') + '" onclick="toggleDPStateProfileProduct(\'\')">All Products</button> ' +
+    families.map(function(f) {
+      return '<button type="button" class="dp-an-pill' + (famPicked.indexOf(f) > -1 ? ' active' : '') + '" data-product="' + escHtml(f) + '" onclick="toggleDPStateProfileProduct(this.getAttribute(\'data-product\'))">' + escHtml(f) + '</button>';
+    }).join(' ');
+  var types = DP_CUSTOMER_TYPE_OPTS.slice();   // columns stay the same whichever products are ticked
+  entries.forEach(function(r) { var c = String(dpVal(r.customerType)).trim(); if (c && types.indexOf(c) === -1) types.push(c); });
+  var ctOf = function(r) { return String(dpVal(r.customerType)).trim(); };
+  var capOf = function(k) { return g2[k].filter(function(r){ return ctOf(r) !== ''; }); };
+  var t2Keys = dpSortedKeys('t2', keys2, labelOf, function(k, c) {
+    if (c === 0) return labelOf[k];
+    if (c === 1) return capOf(k).length;
+    if (c === types.length + 2) return g2[k].length - capOf(k).length;
+    return cnt(capOf(k), function(r){ return ctOf(r) === types[c - 2]; });
+  });
+  var t2 = '<table style="' + tableStyle + '"><thead><tr>' + dpSortTh('t2', 0, 'State', thL) + dpSortTh('t2', 1, 'Captured', thStyle) +
+    types.map(function(c, i) { return dpSortTh('t2', i + 2, escHtml(c), thStyle); }).join('') + dpSortTh('t2', types.length + 2, 'Not captured', thStyle) + '</tr></thead><tbody>';
+  var splitRow = function(label, rows, isTotal) {
+    var cap = rows.filter(function(r){ return ctOf(r) !== ''; });
+    return '<tr' + (isTotal ? ' style="' + totStyle + '"' : '') + '><td style="' + tdL + '">' + escHtml(label) + '</td><td style="' + tdStyle + '">' + cap.length + '</td>' +
+      types.map(function(c) {
+        var n = cap.filter(function(r){ return ctOf(r) === c; }).length;
+        return '<td style="' + tdStyle + (n ? '' : 'color:var(--text-muted);') + '">' + (n ? n + ' <span style="color:var(--text-muted);font-size:10.5px;font-weight:400;">(' + (n / cap.length * 100).toFixed(0) + '%)</span>' : '–') + '</td>';
+      }).join('') +
+      '<td style="' + tdStyle + 'color:var(--text-muted);">' + (rows.length - cap.length || '–') + '</td></tr>';
+  };
+  t2Keys.forEach(function(k) { t2 += splitRow(labelOf[k], g2[k], false); });
+  t2 += splitRow('All states', entries2, true) + '</tbody></table>';
+  html += '<div style="' + sectionStyle + '"><div style="' + titleStyle + '">2. Customer Profile Split</div><div style="' + subStyle + '">Share is of the entries that have a Customer Type; entries without one are counted under "Not captured". Tick one or more products to filter; Storm includes Storm TR and Storm LR.</div>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">' + famChips + '</div>' + wrap(t2) + '</div>';
+
+  // 3. DP metrics, one product at a time
+  var chosen = _dpStateAnalysisProduct;
+  if (products.indexOf(chosen) === -1) {
+    chosen = products.slice().sort(function(a, b) {
+      return entries.filter(function(r){ return prodOf(r) === b; }).length - entries.filter(function(r){ return prodOf(r) === a; }).length;
+    })[0];
+  }
+  var pills = products.map(function(p) {
+    return '<button type="button" class="dp-an-pill' + (p === chosen ? ' active' : '') + '" data-product="' + escHtml(p) + '" onclick="setDPStateAnalysisProduct(this.getAttribute(\'data-product\'))">' + escHtml(p) + '</button>';
+  }).join(' ');
+  var inScope = function(rows) { return rows.filter(function(r){ return prodOf(r) === chosen; }); };
+  var metricsOf = function(rows) {
+    var dp = dpNumbers(rows, 'downPayment'), dc = dpNumbers(rows, 'discount'), ed = dpNumbers(rows, 'effectiveDp');
+    return { n: rows.length, dp: dp, dc: dc, ed: ed, vals: [rows.length, dpMean(dp), dpMedian(dp), dpMean(dc), dpMean(ed), dpMedian(ed)] };
+  };
+  var metricRow = function(label, rows, isTotal) {
+    var m = metricsOf(rows);
+    return '<tr' + (isTotal ? ' style="' + totStyle + '"' : '') + '><td style="' + tdL + '">' + escHtml(label) + '</td><td style="' + tdStyle + '">' + m.n + '</td>' +
+      '<td style="' + tdStyle + '">' + dpRupeeCell(m.vals[1], m.dp.length) + '</td><td style="' + tdStyle + '">' + dpRupeeCell(m.vals[2], m.dp.length) + '</td>' +
+      '<td style="' + tdStyle + '">' + dpRupeeCell(m.vals[3], m.dc.length) + '</td>' +
+      '<td style="' + tdStyle + '">' + dpRupeeCell(m.vals[4], m.ed.length) + '</td><td style="' + tdStyle + '">' + dpRupeeCell(m.vals[5], m.ed.length) + '</td></tr>';
+  };
+  var t3Metrics = {}, t3Keys = keys.filter(function(k) { var rows = inScope(groups[k]); if (rows.length) t3Metrics[k] = metricsOf(rows); return rows.length > 0; });
+  t3Keys = dpSortedKeys('t3', t3Keys, labelOf, function(k, c) { return c === 0 ? labelOf[k] : t3Metrics[k].vals[c - 1]; });
+  var t3Heads = ['State', 'Entries', 'Avg DP (₹)', 'Median DP (₹)', 'Avg Discount (₹)', 'Avg Effective DP (₹)', 'Median Effective DP (₹)'];
+  var t3 = '<table style="' + tableStyle + '"><thead><tr>' + t3Heads.map(function(h, i) { return dpSortTh('t3', i, h, i === 0 ? thL : thStyle); }).join('') + '</tr></thead><tbody>';
+  t3Keys.forEach(function(k) { t3 += metricRow(labelOf[k], inScope(groups[k]), false); });
+  t3 += metricRow('All states', inScope(entries), true) + '</tbody></table>';
+  html += '<div style="' + sectionStyle + '"><div style="' + titleStyle + '">3. Down Payment, Discount and Effective DP</div>' +
+    '<div style="' + subStyle + '">Shown for one product at a time, since a Turbo and a 3WP differ too much in price to average together. DP is the Down Payment before Discount; Effective DP is after it. Averages and medians use only entries that have a value (n).</div>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">' + pills + '</div>' +
+    wrap(t3) + '</div>';
+
+  body.innerHTML = html;
 }
 
 // Multi-select Product filter for the Analysis modal — lets the user pick
@@ -8110,6 +8426,8 @@ function openDPAnalysisModal() {
 // Monthly Entries filter bar, but with its own state since this modal isn't
 // tied to a single month.
 var _dpAnalysisSelectedProducts = [];
+var _dpAnalysisSelectedStates = [];         // lower-cased state names, or '__none__' for entries with no state; empty = all states
+var _dpAnalysisStateOptions = [];           // [{key, label}] for the State dropdown
 var _dpAnalysisExcludeWilling = false;      // option under table 1: leave out willingly-paid high-DP entries (adds table 1A)
 
 function renderDPAnalysisProductFilter() {
@@ -8136,6 +8454,49 @@ function renderDPAnalysisProductFilter() {
   '</div>';
 }
 
+function renderDPAnalysisStateFilter() {
+  var wrap = document.getElementById('dpAnalysisStateFilterWrap');
+  if (!wrap) return;
+  var n = _dpAnalysisSelectedStates.length;
+  var labelOf = function(k) { var o = _dpAnalysisStateOptions.filter(function(x){ return x.key === k; })[0]; return o ? o.label : k; };
+  var btnLabel = n === 0 ? 'All States' : (n === 1 ? labelOf(_dpAnalysisSelectedStates[0]) : n + ' selected');
+  wrap.innerHTML = '<div class="multi-filter-wrap" style="position:relative;">' +
+    '<div class="multi-filter-btn" id="dpAnalysisStateBtn" onclick="toggleDPFilter(\'dpAnalysisStateDd\',\'dpAnalysisStateBtn\')" style="width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+      escHtml(btnLabel) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>' +
+    '</div>' +
+    '<div class="multi-filter-dropdown" id="dpAnalysisStateDd" style="min-width:220px;">' +
+      '<input type="text" placeholder="Search..." oninput="filterDPDropdown(this,\'dpAnalysisStateDd\')" ' +
+        'style="margin:6px 8px 4px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;width:calc(100% - 16px);box-sizing:border-box;">' +
+      '<div id="dpAnalysisStateDd_items" style="max-height:200px;overflow-y:auto;">' +
+        _dpAnalysisStateOptions.map(function(o){
+          var checked = _dpAnalysisSelectedStates.indexOf(o.key) > -1;
+          return '<label class="multi-filter-item"><input type="checkbox" value="'+escHtml(o.key)+'" '+(checked?'checked':'')+' onchange="onDPAnalysisStateChange(this)"><span>'+escHtml(o.label)+'</span></label>';
+        }).join('') +
+      '</div>' +
+      '<div class="multi-filter-clear" onclick="clearDPAnalysisStateFilter()">✕ Clear (All States)</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function onDPAnalysisStateChange(cb) {
+  var val = cb.value;
+  if (cb.checked) { if (_dpAnalysisSelectedStates.indexOf(val) === -1) _dpAnalysisSelectedStates.push(val); }
+  else { var i = _dpAnalysisSelectedStates.indexOf(val); if (i > -1) _dpAnalysisSelectedStates.splice(i, 1); }
+  var btn = document.getElementById('dpAnalysisStateBtn');
+  if (btn) {
+    var n = _dpAnalysisSelectedStates.length;
+    var lbl = n === 0 ? 'All States' : (n === 1 ? (_dpAnalysisStateOptions.filter(function(x){ return x.key === _dpAnalysisSelectedStates[0]; })[0] || {}).label : n + ' selected');
+    btn.innerHTML = escHtml(lbl) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
+  }
+  renderDPAnalysisForSelectedMonth();
+}
+
+function clearDPAnalysisStateFilter() {
+  _dpAnalysisSelectedStates = [];
+  renderDPAnalysisStateFilter();
+  renderDPAnalysisForSelectedMonth();
+}
+
 function onDPAnalysisProductChange(cb) {
   var val = cb.value;
   if (cb.checked) { if (_dpAnalysisSelectedProducts.indexOf(val) === -1) _dpAnalysisSelectedProducts.push(val); }
@@ -8157,9 +8518,7 @@ function clearDPAnalysisProductFilter() {
 }
 
 function renderDPAnalysisForSelectedMonth() {
-  var sel = document.getElementById('dpAnalysisMonthFilter');
-  var monthId = (sel.value === '__all__') ? null : sel.value;
-  var entries = getAllVisibleDPEntries(monthId);
+  var entries = getAllVisibleDPEntries(_dpScopeSel.product);
 
   if (_dpAnalysisSelectedProducts.length) {
     entries = entries.filter(function(r) { return _dpAnalysisSelectedProducts.indexOf(String(dpVal(r.product)).trim()) > -1; });
@@ -8169,6 +8528,13 @@ function renderDPAnalysisForSelectedMonth() {
   var vfRm = (vfRmSel && vfRmSel.value !== '__all__') ? vfRmSel.value : null;
   if (vfRm) {
     entries = entries.filter(function(r) { return String(dpVal(r.vfRm)).trim() === vfRm; });
+  }
+
+  if (_dpAnalysisSelectedStates.length) {
+    entries = entries.filter(function(r) {
+      var st = String(dpVal(r.state)).trim().toLowerCase();
+      return _dpAnalysisSelectedStates.indexOf(st === '' ? '__none__' : st) > -1;
+    });
   }
 
   document.getElementById('dpAnalysisBody').innerHTML = renderDPAnalysisHtml(entries);
