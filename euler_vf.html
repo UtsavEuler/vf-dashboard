@@ -1887,6 +1887,10 @@
           <label class="form-label">State</label>
           <div id="dpAnalysisStateFilterWrap"></div>
         </div>
+        <div class="form-group" style="margin:0;max-width:200px;flex:1;">
+          <label class="form-label">Customer Type</label>
+          <div id="dpAnalysisCustTypeFilterWrap"></div>
+        </div>
       </div>
       <div id="dpAnalysisBody"></div>
       </div>
@@ -8147,6 +8151,13 @@ function openDPAnalysisModal() {
   _dpAnalysisSelectedStates = [];                    // reset to "All States" each time the modal opens
   renderDPAnalysisStateFilter();
 
+  // Customer Type: the standard types, any other type found in the data, and "(Not captured)" for entries without one.
+  var ctSeen = DP_CUSTOMER_TYPE_OPTS.slice();
+  allEntries.forEach(function(r) { var c = String(dpVal(r.customerType)).trim(); if (c && ctSeen.indexOf(c) === -1) ctSeen.push(c); });
+  _dpAnalysisCustTypeOptions = ctSeen.map(function(c){ return { key: c, label: c }; }).concat([{ key: '__none__', label: '(Not captured)' }]);
+  _dpAnalysisSelectedCustTypes = [];                 // reset to "All Customer Types" each time the modal opens
+  renderDPAnalysisCustTypeFilter();
+
   _dpStateAnalysisProduct = '';                      // '' = the product with the most entries (chosen when drawing)
 
   showDPAnalysisTab('product');
@@ -8427,6 +8438,8 @@ function renderDPStateAnalysis() {
 // tied to a single month.
 var _dpAnalysisSelectedProducts = [];
 var _dpAnalysisSelectedStates = [];         // lower-cased state names, or '__none__' for entries with no state; empty = all states
+var _dpAnalysisSelectedCustTypes = [];      // customer types ticked in the Product Level tab, or '__none__' for entries without one; empty = all
+var _dpAnalysisCustTypeOptions = [];        // [{key, label}] for the Customer Type dropdown
 var _dpAnalysisStateOptions = [];           // [{key, label}] for the State dropdown
 var _dpAnalysisExcludeWilling = false;      // option under table 1: leave out willingly-paid high-DP entries (adds table 1A)
 
@@ -8476,6 +8489,45 @@ function renderDPAnalysisStateFilter() {
       '<div class="multi-filter-clear" onclick="clearDPAnalysisStateFilter()">✕ Clear (All States)</div>' +
     '</div>' +
   '</div>';
+}
+
+function dpCustTypeBtnLabel() {
+  var n = _dpAnalysisSelectedCustTypes.length;
+  if (n === 0) return 'All Customer Types';
+  if (n === 1) { var o = _dpAnalysisCustTypeOptions.filter(function(x){ return x.key === _dpAnalysisSelectedCustTypes[0]; })[0]; return o ? o.label : _dpAnalysisSelectedCustTypes[0]; }
+  return n + ' selected';
+}
+function renderDPAnalysisCustTypeFilter() {
+  var wrap = document.getElementById('dpAnalysisCustTypeFilterWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="multi-filter-wrap" style="position:relative;">' +
+    '<div class="multi-filter-btn" id="dpAnalysisCustTypeBtn" onclick="toggleDPFilter(\'dpAnalysisCustTypeDd\',\'dpAnalysisCustTypeBtn\')" style="width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+      escHtml(dpCustTypeBtnLabel()) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>' +
+    '</div>' +
+    '<div class="multi-filter-dropdown" id="dpAnalysisCustTypeDd" style="min-width:220px;max-height:none;">' +
+      '<input type="text" placeholder="Search..." oninput="filterDPDropdown(this,\'dpAnalysisCustTypeDd\')" ' +
+        'style="margin:6px 8px 4px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;width:calc(100% - 16px);box-sizing:border-box;">' +
+      '<div id="dpAnalysisCustTypeDd_items" style="max-height:200px;overflow-y:auto;">' +
+        _dpAnalysisCustTypeOptions.map(function(o){
+          var checked = _dpAnalysisSelectedCustTypes.indexOf(o.key) > -1;
+          return '<label class="multi-filter-item"><input type="checkbox" value="'+escHtml(o.key)+'" '+(checked?'checked':'')+' onchange="onDPAnalysisCustTypeChange(this)"><span>'+escHtml(o.label)+'</span></label>';
+        }).join('') +
+      '</div>' +
+      '<div class="multi-filter-clear" onclick="clearDPAnalysisCustTypeFilter()">✕ Clear (All Customer Types)</div>' +
+    '</div>' +
+  '</div>';
+}
+function onDPAnalysisCustTypeChange(cb) {
+  var val = cb.value, i = _dpAnalysisSelectedCustTypes.indexOf(val);
+  if (cb.checked) { if (i === -1) _dpAnalysisSelectedCustTypes.push(val); } else if (i > -1) _dpAnalysisSelectedCustTypes.splice(i, 1);
+  var btn = document.getElementById('dpAnalysisCustTypeBtn');
+  if (btn) btn.innerHTML = escHtml(dpCustTypeBtnLabel()) + ' <span style="font-size:10px;color:var(--text-muted);">▾</span>';
+  renderDPAnalysisForSelectedMonth();
+}
+function clearDPAnalysisCustTypeFilter() {
+  _dpAnalysisSelectedCustTypes = [];
+  renderDPAnalysisCustTypeFilter();
+  renderDPAnalysisForSelectedMonth();
 }
 
 function onDPAnalysisStateChange(cb) {
@@ -8534,6 +8586,13 @@ function renderDPAnalysisForSelectedMonth() {
     entries = entries.filter(function(r) {
       var st = String(dpVal(r.state)).trim().toLowerCase();
       return _dpAnalysisSelectedStates.indexOf(st === '' ? '__none__' : st) > -1;
+    });
+  }
+
+  if (_dpAnalysisSelectedCustTypes.length) {
+    entries = entries.filter(function(r) {
+      var c = String(dpVal(r.customerType)).trim();
+      return _dpAnalysisSelectedCustTypes.indexOf(c === '' ? '__none__' : c) > -1;
     });
   }
 
@@ -8613,6 +8672,12 @@ function renderDPAnalysisHtml(entries) {
     });
     return { avg: n ? sum / n : null, count: n };
   }
+  // Same idea for the median (same blanks rule); returned in the same shape so fmtRupeeCell can show it.
+  function dpMedStat(rows, field) {
+    var nums = [];
+    rows.forEach(function(r) { var v = parseFloat(dpVal(r[field])); if (!isNaN(v)) nums.push(v); });
+    return { avg: dpMedian(nums), count: nums.length };
+  }
 
   function fmtPctCell(stat) {
     return stat.avg !== null
@@ -8641,9 +8706,10 @@ function renderDPAnalysisHtml(entries) {
         irr: dpAvg(rows, 'irr'),
         orp: dpAvg(rows, 'orp'),
         downPayment: dpAvg(rows, 'downPayment'),
+        medianDownPayment: dpMedStat(rows, 'downPayment'),
         discount: dpAvg(rows, 'discount'),
         effectiveDp: dpAvg(rows, 'effectiveDp'),
-        ltv: dpAvg(rows, 'ltv'),
+        medianEffectiveDp: dpMedStat(rows, 'effectiveDp'),
       };
     }).sort(function(a,b){ return b.count - a.count; });
   }
@@ -8652,8 +8718,9 @@ function renderDPAnalysisHtml(entries) {
     return '<div style="overflow-x:auto;"><table style="'+tableStyle+'"><thead><tr><th style="'+thStyle+'">Product</th><th style="'+thStyle+'">Count</th>' +
       (excludedByProduct ? '<th style="'+thStyle+'">Excluded</th>' : '') + '<th style="'+thStyle+'">%</th>' +
       '<th style="'+thStyle+'">Avg IRR (%)</th><th style="'+thStyle+'">Avg ORP (₹)</th><th style="'+thStyle+'">Avg Down Payment (₹)</th>' +
+      '<th style="'+thStyle+'">Median Down Payment (₹)</th>' +
       '<th style="'+thStyle+'">Avg Discount (₹)</th><th style="'+thStyle+'">Avg Effective DP (₹)</th>' +
-      '<th style="'+thStyle+'">Avg LTV (₹)</th></tr></thead><tbody>' +
+      '<th style="'+thStyle+'">Median Effective DP (₹)</th></tr></thead><tbody>' +
       productRows.map(function(r){
         return '<tr><td style="'+tdStyle+'">'+escHtml(r.name)+'</td><td style="'+tdStyle+'">'+r.count+'</td>' +
           (excludedByProduct ? '<td style="'+tdStyle+'color:var(--text-muted);">'+(excludedByProduct[r.name]||0)+'</td>' : '') +
@@ -8661,9 +8728,10 @@ function renderDPAnalysisHtml(entries) {
           '<td style="'+tdStyle+'">'+fmtPctCell(r.irr)+'</td>' +
           '<td style="'+tdStyle+'">'+fmtRupeeCell(r.orp)+'</td>' +
           '<td style="'+tdStyle+'">'+fmtRupeeCell(r.downPayment)+'</td>' +
+          '<td style="'+tdStyle+'">'+fmtRupeeCell(r.medianDownPayment)+'</td>' +
           '<td style="'+tdStyle+'">'+fmtRupeeCell(r.discount)+'</td>' +
           '<td style="'+tdStyle+'">'+fmtRupeeCell(r.effectiveDp)+'</td>' +
-          '<td style="'+tdStyle+'">'+fmtRupeeCell(r.ltv)+'</td></tr>';
+          '<td style="'+tdStyle+'">'+fmtRupeeCell(r.medianEffectiveDp)+'</td></tr>';
       }).join('') +
       '</tbody></table></div>';
   }
