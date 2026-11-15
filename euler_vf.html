@@ -2014,6 +2014,32 @@
   </div>
 </div>
 
+<!-- DP/IRR Export: choose the months to download -->
+<div class="modal-overlay" id="dpExportOverlay" style="display:none;">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header"><div class="modal-title">⬇ Export to Excel</div><button class="modal-close" onclick="closeDPExportModal()">✕</button></div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-size:12.5px;font-weight:600;color:var(--text);">Select the months to export</div>
+        <div style="font-size:12px;"><a href="#" onclick="dpExportSelectAll(true);return false;" style="color:var(--accent,#818cf8);">Select all</a> &nbsp;·&nbsp; <a href="#" onclick="dpExportSelectAll(false);return false;" style="color:var(--accent,#818cf8);">Clear</a></div>
+      </div>
+      <div id="dpExportMonths" style="max-height:230px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:4px 0;"></div>
+      <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--text);margin-top:14px;cursor:pointer;">
+        <input type="checkbox" id="dpExportApplyFilters" style="margin-top:2px;" checked onchange="updateDPExportSummary()">
+        <span>Apply the filters and search set on this screen <span id="dpExportFilterNote" style="color:var(--text-muted);"></span></span>
+      </label>
+      <div style="font-size:12.5px;color:var(--text);margin-top:14px;margin-bottom:6px;">Layout (when more than one month is chosen)</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text);cursor:pointer;margin-bottom:4px;"><input type="radio" name="dpExportLayout" value="perMonth" checked> One sheet for each month</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text);cursor:pointer;"><input type="radio" name="dpExportLayout" value="single"> All months on one sheet (adds a Month column)</label>
+      <div id="dpExportSummary" style="font-size:12px;color:var(--text-muted);margin-top:14px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDPExportModal()">Cancel</button>
+      <button class="btn btn-primary" id="dpExportBtn" onclick="runDPExport()">⬇ Export</button>
+    </div>
+  </div>
+</div>
+
 <!-- DP/IRR Generic Confirm Modal (product/model delete) -->
 <div class="modal-overlay" id="dpConfirmOverlay" style="display:none;">
   <div class="modal" style="max-width:380px;">
@@ -9781,9 +9807,12 @@ function clearAllDPFilters(monthId) {
   renderDPTable(seg, monthId);
 }
 
-function applyDPFilters(rows, monthId) {
-  var filters = getDPFilters(monthId);
-  var searchEl = document.getElementById('dpSearch_'+monthId);
+// filterMonthId (optional): take the filters and search box of that month's screen instead of monthId's own. The multi-month
+// export uses it to apply what is set on the screen the person is looking at to every month they ticked.
+function applyDPFilters(rows, monthId, filterMonthId) {
+  var fid = filterMonthId || monthId;
+  var filters = getDPFilters(fid);
+  var searchEl = document.getElementById('dpSearch_'+fid);
   var search = searchEl ? searchEl.value.toLowerCase() : '';
   return rows.filter(function(r) {
     if (search && !Object.values(r).some(function(v){ return String(v||'').toLowerCase().includes(search); })) return false;
@@ -10600,30 +10629,134 @@ function runDPConfirm() {
   if (fn) fn();
 }
 
+// ── Export: the Export button opens a window to choose one or more months ──
+var _dpExportCtx = null;   // { seg, monthId } of the screen the Export button was clicked on
+
+function dpActiveFilterNames(monthId) {
+  var f = getDPFilters(monthId);
+  var names = { dealer: 'Dealer', product: 'Product', model: 'Model', financier: 'Financier', salesRm: 'RM', vfRm: 'VF', vfStatus: 'VF Status', createdBy: 'Created By', selfFinance: 'Self Finance', customerType: 'Customer Type' };
+  var out = Object.keys(names).filter(function(k){ return f[k] && f[k].length; }).map(function(k){ return names[k]; });
+  var se = document.getElementById('dpSearch_' + monthId);
+  if (se && se.value) out.push('Search');
+  return out;
+}
+
 function exportDPView(seg, monthId) {
+  _dpExportCtx = { seg: seg, monthId: monthId };
+  var months = _dpMonths[seg] || [];
+  var box = document.getElementById('dpExportMonths');
+  box.innerHTML = months.map(function(m) {
+    var n = getDPVisibleRows(seg, m.id).length;
+    return '<label style="display:flex;align-items:center;gap:10px;padding:7px 12px;font-size:13px;color:var(--text);cursor:pointer;">' +
+      '<input type="checkbox" class="dpExportMonthCb" value="' + escHtml(m.id) + '"' + (m.id === monthId ? ' checked' : '') + ' onchange="updateDPExportSummary()">' +
+      '<span style="flex:1;">' + escHtml(m.label) + (m.id === monthId ? ' <span style="color:var(--text-muted);font-size:11px;">(this screen)</span>' : '') + '</span>' +
+      '<span style="color:var(--text-muted);font-size:11.5px;">' + n + (n === 1 ? ' entry' : ' entries') + '</span></label>';
+  }).join('') || '<div style="padding:12px;font-size:12.5px;color:var(--text-muted);">No months yet.</div>';
+  var names = dpActiveFilterNames(monthId);
+  var applyCb = document.getElementById('dpExportApplyFilters');
+  applyCb.checked = true;
+  applyCb.disabled = !names.length;
+  document.getElementById('dpExportFilterNote').textContent = names.length ? '(' + names.join(', ') + ')' : '(none set right now)';
+  document.querySelector('input[name="dpExportLayout"][value="perMonth"]').checked = true;
+  document.getElementById('dpExportOverlay').style.display = 'flex';
+  updateDPExportSummary();
+}
+
+function closeDPExportModal() {
+  document.getElementById('dpExportOverlay').style.display = 'none';
+  _dpExportCtx = null;
+}
+
+function dpExportSelectedMonths() {
+  return [].slice.call(document.querySelectorAll('#dpExportMonths .dpExportMonthCb')).filter(function(c){ return c.checked; }).map(function(c){ return c.value; });
+}
+
+function dpExportSelectAll(on) {
+  [].slice.call(document.querySelectorAll('#dpExportMonths .dpExportMonthCb')).forEach(function(c){ c.checked = !!on; });
+  updateDPExportSummary();
+}
+
+// The rows to export for each ticked month (in the order the months are listed), after the optional screen filters.
+function dpExportPlan() {
+  var ctx = _dpExportCtx; if (!ctx) return [];
+  var ids = dpExportSelectedMonths();
+  var useFilters = document.getElementById('dpExportApplyFilters').checked && !document.getElementById('dpExportApplyFilters').disabled;
+  return (_dpMonths[ctx.seg] || []).filter(function(m){ return ids.indexOf(m.id) > -1; }).map(function(m) {
+    var rows = getDPVisibleRows(ctx.seg, m.id);
+    if (useFilters) rows = applyDPFilters(rows, m.id, ctx.monthId);
+    return { month: m, rows: rows };
+  });
+}
+
+function updateDPExportSummary() {
+  var plan = dpExportPlan(), n = plan.reduce(function(t, p){ return t + p.rows.length; }, 0);
+  var el = document.getElementById('dpExportSummary'), btn = document.getElementById('dpExportBtn');
+  if (!plan.length) { el.textContent = 'Tick at least one month.'; btn.disabled = true; return; }
+  el.textContent = n + (n === 1 ? ' entry' : ' entries') + ' from ' + plan.length + (plan.length === 1 ? ' month' : ' months') + ' will be exported.';
+  if (!n) el.textContent = 'There are no entries to export for this choice.';
+  btn.disabled = !n;
+}
+
+// Builds the sheets to write: [{ name, aoa }]. One per month, or a single sheet with a Month column.
+function buildDPExportSheets(seg, plan, singleSheet) {
   var isAdmin = getDPUserIsAdmin();
-  var rows = applyDPFilters(getDPVisibleRows(seg, monthId), monthId);
-  var header = ['Sr. No.'].concat(isAdmin ? ['Created By'] : []);
-  DP_COLS.forEach(function(c){
-    header.push(c.label);
-    if (c.key === 'financier') header.push('Self Finance');
-    if (c.key === 'effectiveDp') header.push('High DP by Customer');
-  });
-  var aoa = [header];
-  rows.forEach(function(r, i){
-    var line = [i+1].concat(isAdmin ? [dpVal(r.createdBy)] : []);
+  var withMonth = !!singleSheet && plan.length > 1;
+  function header() {
+    var h = (withMonth ? ['Month'] : []).concat(['Sr. No.']).concat(isAdmin ? ['Created By'] : []);
     DP_COLS.forEach(function(c){
-      line.push(dpVal(r[c.key]));
-      if (c.key === 'financier') line.push(String(dpVal(r.isSelfFinance)) === 'true' ? 'Yes' : 'No');
-      if (c.key === 'effectiveDp') { var hdpX = String(dpVal(r.highDpByCustomer)); line.push(hdpX === 'true' ? 'Yes' : (hdpX === 'false' ? 'No' : (dpHighDpApplies(dpVal(r.product), dpVal(r.effectiveDp)) ? 'Pending' : ''))); }
+      h.push(c.label);
+      if (c.key === 'financier') h.push('Self Finance');
+      if (c.key === 'effectiveDp') h.push('High DP by Customer');
     });
-    aoa.push(line);
+    return h;
+  }
+  function line(r, i, monthLabel) {
+    var l = (withMonth ? [monthLabel] : []).concat([i + 1]).concat(isAdmin ? [dpVal(r.createdBy)] : []);
+    DP_COLS.forEach(function(c){
+      l.push(dpVal(r[c.key]));
+      if (c.key === 'financier') l.push(String(dpVal(r.isSelfFinance)) === 'true' ? 'Yes' : 'No');
+      if (c.key === 'effectiveDp') { var hdpX = String(dpVal(r.highDpByCustomer)); l.push(hdpX === 'true' ? 'Yes' : (hdpX === 'false' ? 'No' : (dpHighDpApplies(dpVal(r.product), dpVal(r.effectiveDp)) ? 'Pending' : ''))); }
+    });
+    return l;
+  }
+  var used = {};
+  function sheetName(base) {   // Excel: at most 31 characters, none of  \ / ? * [ ] :  and every name different
+    var n = base.replace(/[\\\/?*\[\]:]/g, '-').slice(0, 31), k = 2, cand = n;
+    while (used[cand.toLowerCase()]) { var suf = ' (' + k++ + ')'; cand = n.slice(0, 31 - suf.length) + suf; }
+    used[cand.toLowerCase()] = true;
+    return cand;
+  }
+  if (withMonth) {
+    var aoa = [header()], i = 0;
+    plan.forEach(function(p){ p.rows.forEach(function(r){ aoa.push(line(r, i++, p.month.label)); }); });
+    return [{ name: sheetName(seg.toUpperCase() + ' All Months'), aoa: aoa }];
+  }
+  return plan.filter(function(p){ return p.rows.length; }).map(function(p) {
+    var aoa = [header()];
+    p.rows.forEach(function(r, i){ aoa.push(line(r, i, p.month.label)); });
+    return { name: sheetName(seg.toUpperCase() + ' ' + p.month.label), aoa: aoa };
   });
-  var wb = XLSX.utils.book_new();
-  var monthLabel = (_dpMonths[seg].find(function(m){ return m.id===monthId; })||{}).label || monthId;
-  var sheetName = (seg.toUpperCase() + ' ' + monthLabel).slice(0,31);
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), sheetName);
-  XLSX.writeFile(wb, 'Euler_DPIRR_' + seg + '_' + monthLabel.replace(/\s+/g,'_') + '.xlsx');
+}
+
+function runDPExport() {
+  var ctx = _dpExportCtx; if (!ctx) return;
+  var plan = dpExportPlan();
+  var total = plan.reduce(function(t, p){ return t + p.rows.length; }, 0);
+  if (!plan.length || !total) { toast('Nothing to export for this choice.'); return; }
+  var single = document.querySelector('input[name="dpExportLayout"]:checked').value === 'single';
+  try {
+    var sheets = buildDPExportSheets(ctx.seg, plan, single);
+    var wb = XLSX.utils.book_new();
+    sheets.forEach(function(sh){ XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sh.aoa), sh.name); });
+    var file = plan.length === 1
+      ? 'Euler_DPIRR_' + ctx.seg + '_' + plan[0].month.label.replace(/\s+/g, '_') + '.xlsx'
+      : 'Euler_DPIRR_' + ctx.seg + '_' + plan.length + '_months.xlsx';
+    XLSX.writeFile(wb, file);
+    closeDPExportModal();
+    toast('✅ Exported ' + total + (total === 1 ? ' entry' : ' entries') + (plan.length > 1 ? ' from ' + plan.length + ' months' : ''));
+  } catch (e) {
+    toast('⚠ Export failed: ' + (e && e.message ? e.message : e));
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
