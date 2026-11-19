@@ -1034,7 +1034,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
         <div class="form-group" style="margin:0;"><label class="form-label">Dealer Code <span style="color:var(--flag);">*</span></label><input type="text" class="form-select" id="dm_dealerCode" placeholder="e.g. DL-1023" maxlength="30"></div>
         <div class="form-group" style="margin:0;"><label class="form-label">Dealer Name <span style="color:var(--flag);">*</span></label><input type="text" class="form-select" id="dm_dealerName" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Retailing Date <span style="color:var(--flag);">*</span></label><input type="date" class="form-select" id="dm_retailingDate" min="2000-01-01" max="2100-12-31"></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Retailing Date <span style="color:var(--flag);">*</span></label><input type="month" class="form-select" id="dm_retailingDate" min="2000-01" max="2100-12" placeholder="YYYY-MM"></div>
         <div class="form-group" style="margin:0;"><label class="form-label">Dealer Principle Name <span class="dm-new-req" style="color:var(--flag);display:none;">*</span></label><input type="text" class="form-select" id="dm_dealerPrinciple" placeholder=""></div>
         <div class="form-group" style="margin:0;"><label class="form-label">Dealer Email ID <span class="dm-new-req" style="color:var(--flag);display:none;">*</span></label><input type="text" class="form-select" id="dm_dealerEmail" placeholder=""></div>
         <div class="form-group" style="margin:0;"><label class="form-label">Dealer Phone No <span class="dm-new-req" style="color:var(--flag);display:none;">*</span></label><input type="text" class="form-select" id="dm_dealerPhone" placeholder=""></div>
@@ -4372,7 +4372,7 @@ function renderDealerMaster(skipDropdowns) {
       cell(d.zone) + cell(d.state) + cell(d.location) +
       cell(d.dealerCode) +
       '<td style="font-weight:600;font-size:13px;white-space:nowrap;min-width:160px;">' + escHtml(d.dealerName||"—") + '</td>' +
-      cell(dmFmtDate(d.retailingDate)) +
+      cell(dmFmtMonth(d.retailingDate)) +
       cell(d.dealerPrinciple, 140) + cell(d.dealerEmail, 150) + cell(d.dealerPhone) +
       '<td><span class="badge badge-count">' + escHtml(d.dodoCocoType||"—") + '</span></td>' +
       '<td><span class="badge" style="' + statusStyle(d.dealerStatus) + '">' + escHtml(d.dealerStatus||"—") + '</span></td>' +
@@ -4436,31 +4436,34 @@ var DM_MOBILE_KEYS = ['vfPocMobile', 'zmMobile', 'rmMobile', 'asmMobile'];      
 var DM_PHONE_KEYS  = ['dealerPhone'];                                                 // 10 digits (may also be a landline with STD code)
 var DM_NAME_KEYS   = ['state', 'location', 'dealerName', 'dealerPrinciple', 'vfPoc', 'zmSales', 'rmSales', 'asmSales'];
 var DM_PLACEHOLDER_RE = /^(na|n\/a|n\.a\.?|nil|none|null|nan|tbd|tba|test|dummy|unknown|xx+|\.+|-+|\?+|_+)$/i;
-// Retailing date: the form (a date picker) gives yyyy-mm-dd, and that is what is stored. Values typed straight into the sheet
-// (15/11/2026, 15-Nov-2026, 15 November 2026 ...) are understood too, day first for slash/dash numbers, as in India.
+// Retailing date: only the MONTH and YEAR are captured. The form's month picker gives yyyy-mm, and that is what is stored.
+// Whatever else may be in the sheet (a full date from before, 11/2026, Nov 2026, 15/11/2026 ...) is understood and shown as a month.
 var DM_MONTHS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-function dmIsoOf(y, m, d) {
-  y = +y; m = +m; d = +d;
-  var dt = new Date(Date.UTC(y, m - 1, d));
-  if (isNaN(dt.getTime()) || dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return '';
-  return (y < 1000 ? ('000' + y).slice(-4) : String(y)) + '-' + ('0' + m).slice(-2) + '-' + ('0' + d).slice(-2);
+function dmMonthKey(y, m) {
+  y = +y; m = +m;
+  if (!(m >= 1 && m <= 12) || !(y >= 1000 && y <= 9999)) return '';
+  return y + '-' + ('0' + m).slice(-2);
 }
-function dmToISODate(v) {
+function dmDayOk(y, m, d) { var dt = new Date(Date.UTC(+y, +m - 1, +d)); return dt.getUTCFullYear() === +y && dt.getUTCMonth() === +m - 1 && dt.getUTCDate() === +d; }
+function dmMonthIndex(name) { return DM_MONTHS.indexOf(String(name).slice(0, 3).toLowerCase()); }
+function dmToMonth(v) {
   var t = String(v == null ? '' : v).trim(), m;
   if (!t) return '';
-  if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/.exec(t))) return dmIsoOf(m[1], m[2], m[3]);
-  if ((m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/.exec(t))) return dmIsoOf(m[3], m[2], m[1]);
-  if ((m = /^(\d{1,2})[\s\-\/]([A-Za-z]{3,9})[\s\-\/,]*(\d{4})$/.exec(t))) {
-    var mi = DM_MONTHS.indexOf(m[2].slice(0, 3).toLowerCase());
-    return mi > -1 ? dmIsoOf(m[3], mi + 1, m[1]) : '';
+  if ((m = /^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?(?:[T\s].*)?$/.exec(t))) return (m[3] && !dmDayOk(m[1], m[2], m[3])) ? '' : dmMonthKey(m[1], m[2]);
+  if ((m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/.exec(t))) return dmDayOk(m[3], m[2], m[1]) ? dmMonthKey(m[3], m[2]) : '';   // dd/mm/yyyy, day first
+  if ((m = /^(\d{1,2})[\/\-.](\d{4})$/.exec(t))) return dmMonthKey(m[2], m[1]);                                                    // mm/yyyy
+  if ((m = /^([A-Za-z]{3,9})[\s\-\/,.]*(\d{4})$/.exec(t))) { var i1 = dmMonthIndex(m[1]); return i1 > -1 ? dmMonthKey(m[2], i1 + 1) : ''; }   // Nov 2026
+  if ((m = /^(\d{1,2})[\s\-\/]([A-Za-z]{3,9})[\s\-\/,]*(\d{4})$/.exec(t))) {                                                      // 15 Nov 2026
+    var i2 = dmMonthIndex(m[2]);
+    return (i2 > -1 && dmDayOk(m[3], i2 + 1, m[1])) ? dmMonthKey(m[3], i2 + 1) : '';
   }
   return '';
 }
-function dmFmtDate(v) {                       // 2026-11-15 -> 15 Nov 2026; anything unreadable is shown as it is
-  var iso = dmToISODate(v);
-  if (!iso) return String(v == null ? '' : v);
-  var p = iso.split('-');
-  return +p[2] + ' ' + DM_MONTHS[+p[1] - 1].replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + p[0];
+function dmFmtMonth(v) {                      // 2026-11 -> Nov 2026; anything unreadable is shown as it is
+  var k = dmToMonth(v);
+  if (!k) return String(v == null ? '' : v);
+  var p = k.split('-');
+  return DM_MONTHS[+p[1] - 1].replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + p[0];
 }
 function dmCleanText(v) { return String(v || '').replace(/\s+/g, ' ').trim(); }
 function dmDigits(v) { return String(v || '').replace(/[\s\-]/g, ''); }
@@ -4473,10 +4476,10 @@ function dmCheckValue(key, v) {
     return DM_PLACEHOLDER_RE.test(v) ? 'cannot be a placeholder like NA, - or TBD' : '';
   }
   if (key === 'retailingDate') {
-    var iso = dmToISODate(v);
-    if (!iso) return 'must be a valid date';
-    var yr = +iso.slice(0, 4);
-    return (yr < 2000 || yr > 2100) ? 'must be a date between the years 2000 and 2100' : '';
+    var mk = dmToMonth(v);
+    if (!mk) return 'must be a valid month and year, like Nov 2026';
+    var yr = +mk.slice(0, 4);
+    return (yr < 2000 || yr > 2100) ? 'must be a month between the years 2000 and 2100' : '';
   }
   if (DM_EMAIL_KEYS.indexOf(key) > -1) {
     return /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/.test(v) ? '' : 'must be one valid email address, like name@company.com';
@@ -4499,7 +4502,7 @@ function dmCheckValue(key, v) {
 }
 // Tidies a value that has passed its check: email lower-cased, phone digits only, text with single spaces.
 function dmNormalizeValue(key, v) {
-  if (key === 'retailingDate') return dmToISODate(v) || v;
+  if (key === 'retailingDate') return dmToMonth(v) || v;
   if (DM_EMAIL_KEYS.indexOf(key) > -1) return v.toLowerCase();
   if (DM_MOBILE_KEYS.indexOf(key) > -1 || DM_PHONE_KEYS.indexOf(key) > -1) return dmDigits(v);
   return dmCleanText(v);
@@ -4543,7 +4546,7 @@ function openEditDealerMasterModal(idx) {
   clearDealerMasterModal();
   DM_FIELDS.forEach(function(key) {
     var el = document.getElementById("dm_" + key);
-    if (el) el.value = key === 'retailingDate' ? dmToISODate(d[key]) : (d[key] || "");
+    if (el) el.value = key === 'retailingDate' ? dmToMonth(d[key]) : (d[key] || "");
   });
   document.getElementById("dealerMasterModalTitle").textContent = "Edit Dealer";
   document.getElementById("dealerMasterModalSub").textContent = d.dealerName + (d.location ? " · " + d.location : "") + " · name and location cannot be changed · Dealer Code and Retailing Date are mandatory";
@@ -6018,7 +6021,7 @@ function exportDealerMaster() {
     "ASM Sales","ASM Email","ASM Mobile"];
   const list = getDealerMasterList();
   const rows = [headers, ...list.map(d => [
-    d.zone||"", d.state||"", d.location||"", d.dealerCode||"", d.dealerName||"", dmFmtDate(d.retailingDate), d.dealerPrinciple||"",
+    d.zone||"", d.state||"", d.location||"", d.dealerCode||"", d.dealerName||"", dmFmtMonth(d.retailingDate), d.dealerPrinciple||"",
     d.dealerEmail||"", d.dealerPhone||"", d.dodoCocoType||"", d.dealerStatus||"",
     d.vfPoc||"", d.vfPocEmail||"", d.vfPocMobile||"",
     d.zmSales||"", d.zmEmail||"", d.zmMobile||"",
