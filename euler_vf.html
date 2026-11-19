@@ -4632,15 +4632,7 @@ function saveDealerMaster() {
     return;
   }
 
-  // A dealer code belongs to one dealer only.
-  var codeKey = dmCleanText(record.dealerCode).toLowerCase();
-  var codeOwner = !codeKey ? null : state.dealersMaster.filter(function(d, i) { return i !== editingDealerIdx && dmCleanText(d.dealerCode).toLowerCase() === codeKey; })[0];
-  if (codeOwner) {
-    toast('⚠ Dealer Code "' + record.dealerCode + '" is already used by ' + codeOwner.dealerName + (codeOwner.location ? ' (' + codeOwner.location + ')' : '') + '.');
-    document.getElementById("dm_dealerCode").style.borderColor = 'var(--flag)';
-    document.getElementById("dm_dealerCode").focus();
-    return;
-  }
+  // Dealer Code is NOT unique: one entity can run several dealerships under the same code. (Dealer Name + Location is what identifies a dealer.)
 
   if (editingDealerIdx !== null) {
     state.dealersMaster[editingDealerIdx] = record;
