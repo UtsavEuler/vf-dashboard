@@ -1032,9 +1032,9 @@
 
       <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Dealer Info</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Code <span style="color:var(--flag);">*</span></label><input type="text" class="form-select" id="dm_dealerCode" placeholder="e.g. DL-1023" maxlength="30"></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Code <span class="dm-cd-req" style="color:var(--flag);display:none;">*</span></label><input type="text" class="form-select" id="dm_dealerCode" placeholder="e.g. DL-1023" maxlength="30"></div>
         <div class="form-group" style="margin:0;"><label class="form-label">Dealer Name <span style="color:var(--flag);">*</span></label><input type="text" class="form-select" id="dm_dealerName" placeholder=""></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Retailing Date <span style="color:var(--flag);">*</span></label><input type="month" class="form-select" id="dm_retailingDate" min="2000-01" max="2100-12" placeholder="YYYY-MM"></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Dealer Retailing Date <span class="dm-cd-req" style="color:var(--flag);display:none;">*</span></label><input type="month" class="form-select" id="dm_retailingDate" min="2000-01" max="2100-12" placeholder="YYYY-MM"></div>
         <div class="form-group" style="margin:0;"><label class="form-label">Dealer Principle Name <span class="dm-new-req" style="color:var(--flag);display:none;">*</span></label><input type="text" class="form-select" id="dm_dealerPrinciple" placeholder=""></div>
         <div class="form-group" style="margin:0;"><label class="form-label">Dealer Email ID <span class="dm-new-req" style="color:var(--flag);display:none;">*</span></label><input type="text" class="form-select" id="dm_dealerEmail" placeholder=""></div>
         <div class="form-group" style="margin:0;"><label class="form-label">Dealer Phone No <span class="dm-new-req" style="color:var(--flag);display:none;">*</span></label><input type="text" class="form-select" id="dm_dealerPhone" placeholder=""></div>
@@ -4427,9 +4427,11 @@ var DM_REQUIRED_WHEN_NEW = [
 // with a legacy value (say a phone typed with a comma) can still be edited and saved without first fixing that value.
 // Dealer Code and Dealer Retailing Date are mandatory every time: when adding AND when editing (an older dealer without them
 // has to get them filled in the next time it is edited).
-var DM_REQUIRED_ALWAYS = [['dealerCode', 'Dealer Code'], ['retailingDate', 'Dealer Retailing Date']];
+// Dealer Code and Retailing Date are mandatory ONLY for a DODO dealer whose status is Retailing.
+// COCO dealers, and DODO dealers in any other status, may leave both blank.
+var DM_CODE_DATE_FIELDS = [['dealerCode', 'Dealer Code'], ['retailingDate', 'Dealer Retailing Date']];
 var DM_LABELS = { zone: 'Zone', state: 'State', location: 'Location', dealerName: 'Dealer Name' };
-DM_REQUIRED_ALWAYS.forEach(function(f){ DM_LABELS[f[0]] = f[1]; });
+DM_CODE_DATE_FIELDS.forEach(function(f){ DM_LABELS[f[0]] = f[1]; });
 DM_REQUIRED_WHEN_NEW.forEach(function(f){ DM_LABELS[f[0]] = f[1]; });
 var DM_EMAIL_KEYS  = ['dealerEmail', 'vfPocEmail', 'zmEmail', 'rmEmail', 'asmEmail'];
 var DM_MOBILE_KEYS = ['vfPocMobile', 'zmMobile', 'rmMobile', 'asmMobile'];            // Indian mobile: 10 digits, starts with 6-9
@@ -4520,18 +4522,31 @@ function dmLockIdentity(lock, d) {
     el.title = on ? 'Cannot be changed once the dealer is added' : '';
   });
 }
+function dmCodeDateRequired() {
+  var t = document.getElementById('dm_dodoCocoType'), st = document.getElementById('dm_dealerStatus');
+  return !!t && !!st && String(t.value || '').trim().toUpperCase() === 'DODO' && String(st.value || '').trim() === 'Retailing';
+}
+function dmRefreshCodeDateAsterisks() {
+  var on = dmCodeDateRequired();
+  document.querySelectorAll('#dealerMasterModalOverlay .dm-cd-req').forEach(function(sp){ sp.style.display = on ? '' : 'none'; });
+}
 function dmShowNewAsterisks(show) {
   document.querySelectorAll('#dealerMasterModalOverlay .dm-new-req').forEach(function(sp){ sp.style.display = show ? '' : 'none'; });
 }
 (function(){ var o = document.getElementById('dealerMasterModalOverlay');
-  if (o) { var clr = function(e){ if (e.target && e.target.style) e.target.style.borderColor = ''; }; o.addEventListener('input', clr); o.addEventListener('change', clr); } })();
+  if (o) { var clr = function(e){ if (e.target && e.target.style) e.target.style.borderColor = ''; }; o.addEventListener('input', clr); o.addEventListener('change', clr);
+    o.addEventListener('change', function(e){ if (e.target && (e.target.id === 'dm_dodoCocoType' || e.target.id === 'dm_dealerStatus')) {
+      dmRefreshCodeDateAsterisks();
+      if (!dmCodeDateRequired()) ['dm_dealerCode', 'dm_retailingDate'].forEach(function(id){ var el = document.getElementById(id); if (el) el.style.borderColor = ''; });
+    } }); } })();
 
 function openAddDealerMasterModal() {
   editingDealerIdx = null;
   clearDealerMasterModal();
   document.getElementById("dealerMasterModalTitle").textContent = "Add Dealer";
-  document.getElementById("dealerMasterModalSub").textContent = "All fields are mandatory";
+  document.getElementById("dealerMasterModalSub").textContent = "All fields are mandatory except Dealer Code and Retailing Date, which are mandatory only for a DODO dealer in Retailing status";
   dmShowNewAsterisks(true);
+  dmRefreshCodeDateAsterisks();
   dmLockIdentity(false);
   document.getElementById("dealerMasterSaveBtn").textContent = "Add Dealer";
   document.getElementById("dealerMasterModalOverlay").classList.add("show");
@@ -4549,8 +4564,9 @@ function openEditDealerMasterModal(idx) {
     if (el) el.value = key === 'retailingDate' ? dmToMonth(d[key]) : (d[key] || "");
   });
   document.getElementById("dealerMasterModalTitle").textContent = "Edit Dealer";
-  document.getElementById("dealerMasterModalSub").textContent = d.dealerName + (d.location ? " · " + d.location : "") + " · name and location cannot be changed · Dealer Code and Retailing Date are mandatory";
+  document.getElementById("dealerMasterModalSub").textContent = d.dealerName + (d.location ? " · " + d.location : "") + " · name and location cannot be changed · Dealer Code and Retailing Date are mandatory only for a DODO dealer in Retailing status";
   dmShowNewAsterisks(false);
+  dmRefreshCodeDateAsterisks();
   dmLockIdentity(true, d);
   document.getElementById("dealerMasterSaveBtn").textContent = "Save Changes";
   document.getElementById("dealerMasterModalOverlay").classList.add("show");
@@ -4572,15 +4588,16 @@ function saveDealerMaster() {
   if (!loc)   { toast("⚠ Location is required.");    document.getElementById("dm_location").focus();   return; }
   if (!name)  { toast("⚠ Dealer Name is required."); document.getElementById("dm_dealerName").focus(); return; }
 
-  var dmAlwaysMissing = DM_REQUIRED_ALWAYS.filter(function(f) {
+  var dmCdReq = dmCodeDateRequired();
+  var dmAlwaysMissing = DM_CODE_DATE_FIELDS.filter(function(f) {
     var el = document.getElementById("dm_" + f[0]);
-    var empty = !el || !el.value.trim();
+    var empty = dmCdReq && (!el || !el.value.trim());
     if (el) el.style.borderColor = empty ? 'var(--flag)' : '';
     return empty;
   });
   if (dmAlwaysMissing.length) {
     var alEl = document.getElementById("dm_" + dmAlwaysMissing[0][0]); if (alEl) alEl.focus();
-    toast("⚠ " + dmAlwaysMissing.map(function(f){ return f[1]; }).join(" and ") + (dmAlwaysMissing.length === 1 ? " is" : " are") + " required.");
+    toast("⚠ " + dmAlwaysMissing.map(function(f){ return f[1]; }).join(" and ") + (dmAlwaysMissing.length === 1 ? " is" : " are") + " required for a DODO dealer in Retailing status.");
     return;
   }
 
