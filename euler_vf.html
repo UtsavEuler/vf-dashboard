@@ -4284,10 +4284,11 @@ function renderDealerMaster(skipDropdowns) {
   var dmSelPocs = typeof _dmPocFilter !== 'undefined' ? _dmPocFilter : [];
 
   const filtered = list.filter(function(d) {
-    if (search && !(d.dealerName||"").toLowerCase().includes(search) &&
-        !(d.dealerCode||"").toLowerCase().includes(search) &&
-        !(d.location||"").toLowerCase().includes(search) &&
-        !(d.state||"").toLowerCase().includes(search)) return false;
+    // Sheets can hand back a numeric Dealer Code (e.g. 1023), so every searched field is turned into text first.
+    if (search && !String(d.dealerName||"").toLowerCase().includes(search) &&
+        !String(d.dealerCode==null?"":d.dealerCode).toLowerCase().includes(search) &&
+        !String(d.location||"").toLowerCase().includes(search) &&
+        !String(d.state||"").toLowerCase().includes(search)) return false;
     if (_dmZoneFilter.length   && _dmZoneFilter.indexOf(d.zone||'')         === -1) return false;
     if (_dmStateFilter.length  && _dmStateFilter.indexOf(d.state||'')        === -1) return false;
     if (_dmStatusFilter.length && _dmStatusFilter.indexOf(d.dealerStatus||'') === -1) return false;
